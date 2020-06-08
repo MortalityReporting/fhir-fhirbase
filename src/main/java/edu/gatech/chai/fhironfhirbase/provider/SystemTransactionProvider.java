@@ -22,226 +22,454 @@ import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.Condition;
+import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
+import org.hl7.fhir.r4.model.Bundle.BundleEntryRequestComponent;
+import org.hl7.fhir.r4.model.Bundle.BundleEntryResponseComponent;
+import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.Bundle.HTTPVerb;
+import org.hl7.fhir.r4.model.Patient;
+import org.hl7.fhir.r4.model.Practitioner;
+import org.hl7.fhir.r4.model.Procedure;
+import org.hl7.fhir.r4.model.Reference;
+import org.springframework.http.HttpStatus;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.Identifier;
+import org.hl7.fhir.r4.model.ListResource;
+import org.hl7.fhir.r4.model.ListResource.ListEntryComponent;
+import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Resource;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.annotation.Transaction;
 import ca.uhn.fhir.rest.annotation.TransactionParam;
+import ca.uhn.fhir.rest.api.MethodOutcome;
+import ca.uhn.fhir.rest.client.api.IGenericClient;
 import edu.gatech.chai.fhironfhirbase.model.MyBundle;
-import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 public class SystemTransactionProvider {
 
-	private int preferredPageSize = 30;
-	private Map<String, Object> supportedProvider = new HashMap<String, Object>();
+	private FhirContext ctx;
+	private String caseNumber;
+	private Map<String, String> referenceIds;
+
+	public SystemTransactionProvider() {
+		ctx = FhirContext.forR4();
+	}
 
 	public static String getType() {
 		return "Bundle";
 	}
 
-	public void addSupportedProvider(String resourceName, Object resourceMapper) {
-		supportedProvider.put(resourceName, resourceMapper);
+	public Class<? extends Resource> getResourceClass(String resourceName) {
+		if ("Patient".equals(resourceName)) {
+			return Patient.class;
+		} else if ("Observation".equals(resourceName)) {
+			return Observation.class;
+		} else if ("Condition".equals(resourceName)) {
+			return Condition.class;
+		} else if ("Procedure".equals(resourceName)) {
+			return Procedure.class;
+		} else {
+			return null;
+		}
 	}
 
-	public SystemTransactionProvider() {
-	}
+	private void processDelete(IGenericClient client, List<BundleEntryComponent> entries) {
+		for (BundleEntryComponent entry : entries) {
+			BundleEntryResponseComponent response = entry.getResponse();
+			if (response != null && !response.isEmpty()) {
+				// We have already processed this.
+				continue;
+			}
 
-	@SuppressWarnings("unchecked")
-	private void addToList(Map<HTTPVerb, Object> transactionEntries, MyBundle theBundle, HTTPVerb verb) {
-		List<Resource> postList = (List<Resource>) transactionEntries.get(HTTPVerb.POST);
-		List<Resource> putList = (List<Resource>) transactionEntries.get(HTTPVerb.PUT);
-		List<String> deleteList = (List<String>) transactionEntries.get(HTTPVerb.DELETE);
-		List<String> getList = (List<String>) transactionEntries.get(HTTPVerb.GET);
+			BundleEntryRequestComponent request = entry.getRequest();
+			HTTPVerb requestMethod = request.getMethod();
 
-		List<BundleEntryComponent> entries = theBundle.getEntry();
-
-		BundleEntryComponent entry = null;
-
-		int sizeOfEntries = entries.size();
-		for (int i = 1; i < sizeOfEntries; i++) {
-			entry = entries.get(i);
-			if (verb != null || (entry.getRequest() != null && !entry.getRequest().isEmpty())) {
-				if (verb == HTTPVerb.POST || entry.getRequest().getMethod() == HTTPVerb.POST) {
-					postList.add(entry.getResource());
-				} else if (verb == HTTPVerb.PUT || entry.getRequest().getMethod() == HTTPVerb.PUT) {
-					// This is to update. Get URL
-					String urlString = entry.getRequest().getUrl();
-					IdType idType = new IdType(urlString);
-					// We must be able to get Id as Long as OMOP only handles Long Id.
-					entry.getResource().setId(idType);
-					putList.add(entry.getResource());
+			// We only handles DELETE from the entries.
+			if (requestMethod.equals(HTTPVerb.DELETE)) {
+				response = entry.getResponse();
+				if (request.hasUrl()) {
+					String[] url = request.getUrl().split("/");
+					if (url.length != 2) {
+						response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value())
+								+ HttpStatus.BAD_REQUEST.getReasonPhrase());
+					} else {
+						MethodOutcome fhirResponse = (MethodOutcome) client.delete().resourceById(url[0], url[1])
+								.execute();
+						OperationOutcome outcome = (OperationOutcome) fhirResponse.getOperationOutcome();
+						if (outcome != null) {
+							response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
+									+ outcome.getIssueFirstRep().getDetails().getCodingFirstRep().getCode());
+						} else {
+							response.setStatus(String.valueOf(HttpStatus.OK.value()));
+						}
+//						String resourceName = url[0];
+//						String id = url[1];
+//						Class<? extends Resource> resourceClass = getResourceClass(resourceName);
+//						if (resourceClass == null || id == null || id.isEmpty()) {
+//							response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value())
+//									+ HttpStatus.BAD_REQUEST.getReasonPhrase());
+//						} else {
+//							fhirbaseMapping.delete(resourceName.toLowerCase(), id, resourceClass);
+//							response.setStatus(String.valueOf(HttpStatus.OK.value()));
+//						}
+					}
 				} else {
-					ThrowFHIRExceptions.unprocessableEntityException("We support POST and PUT for Messages");
+					response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()));
+				}
+
+				entry.setRequest(null);
+			}
+		}
+	}
+
+	private void processPostPatient(IGenericClient client, List<BundleEntryComponent> entries) {
+		for (BundleEntryComponent entry : entries) {
+			BundleEntryResponseComponent response = entry.getResponse();
+			if (response != null && !response.isEmpty()) {
+				// We have already processed this.
+				continue;
+			}
+
+			Resource resource = entry.getResource();
+			if (resource instanceof Patient) {
+				Patient patient = (Patient) resource;
+				String patientId = null;
+				for (Identifier identifier : patient.getIdentifier()) {
+					Bundle responseBundle = client
+							.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly()
+									.systemAndCode(identifier.getSystem(), identifier.getValue()))
+							.returnBundle(Bundle.class).execute();
+
+					int total = responseBundle.getTotal();
+					if (total > 0) {
+						patientId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+						caseNumber = identifier.getValue();
+
+						System.out.println(">>>>>>>>>>>>>>>>" + caseNumber + ", patientId:"+patientId);
+						break;
+					}
+				}
+
+				if (patientId != null && !patientId.isEmpty()) {
+					referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+					// Now we need to write this to fhirbase.
+					patient.setIdElement(new IdType("Patient", patientId));
+//					patient.setId("Patient/"+patientId);
+					MethodOutcome outcome = client.update().resource(patient).execute();
+					if (outcome.getCreated()) {
+						response.setStatus(
+								String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
+						response.setLocation(PatientResourceProvider.getType() + "/" + patientId);
+
+						entry.setFullUrl(client.getServerBase() + "Patient/" + patientId);
+						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+							entry.setResource((Resource) outcome.getResource());
+						}
+					} else {
+						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
+								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
+						entry.setResource(null);
+					}
+				} else {
+					MethodOutcome outcome = client.create().resource(patient).prettyPrint().encodedJson().execute();
+					if (outcome.getCreated()) {
+						patientId = outcome.getId().getIdPart();
+						referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+						response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
+								+ HttpStatus.CREATED.getReasonPhrase());
+						response.setLocation(PatientResourceProvider.getType() + "/" + patientId);
+
+						entry.setFullUrl(client.getServerBase() + "Patient/" + patientId);
+						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+							entry.setResource((Resource) outcome.getResource());
+						} else {
+							patient.setId(patientId);
+						}
+					} else {
+						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
+								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
+						entry.setResource(null);
+					}
+				}
+				
+				entry.setRequest(null);
+			}
+		}
+	}
+
+	private void processPostPractitioner(IGenericClient client, List<BundleEntryComponent> entries) {
+		for (BundleEntryComponent entry : entries) {
+			BundleEntryResponseComponent response = entry.getResponse();
+			if (response != null && !response.isEmpty()) {
+				// We have already processed this.
+				continue;
+			}
+
+			Resource resource = entry.getResource();
+			if (resource instanceof Practitioner) {
+				Practitioner practitioner = (Practitioner) resource;
+				String practitionerId = null;
+				for (Identifier identifier : practitioner.getIdentifier()) {
+					Bundle responseBundle = client
+							.search().forResource(Patient.class).where(Practitioner.IDENTIFIER.exactly()
+									.systemAndCode(identifier.getSystem(), identifier.getValue()))
+							.returnBundle(Bundle.class).execute();
+
+					int total = responseBundle.getTotal();
+					if (total > 0) {
+						practitionerId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+						break;
+					}
+				}
+
+				if (practitionerId != null && !practitionerId.isEmpty()) {
+					referenceIds.put(entry.getFullUrl(), "Practitioner/" + practitionerId);
+
+					// Now we need to write this to fhirbase.
+					practitioner.setId(new IdType("Practitioner", practitionerId));
+					MethodOutcome outcome = client.update().resource(practitioner).prettyPrint().encodedJson()
+							.execute();
+					if (outcome.getCreated()) {
+						response.setStatus(
+								String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
+						response.setLocation(PractitionerResourceProvider.getType() + "/" + practitionerId);
+
+						entry.setFullUrl(client.getServerBase() + "Practitioner/" + practitionerId);
+						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+							entry.setResource((Resource) outcome.getResource());
+						}
+					} else {
+						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
+								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
+						entry.setResource(null);
+					}
+				} else {
+					MethodOutcome outcome = client.create().resource(practitioner).prettyPrint().encodedJson()
+							.execute();
+					if (outcome.getCreated()) {
+						practitionerId = outcome.getId().getIdPart();
+						referenceIds.put(entry.getFullUrl(), "Practitioner/" + practitionerId);
+
+						response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
+								+ HttpStatus.CREATED.getReasonPhrase());
+						response.setLocation(PractitionerResourceProvider.getType() + "/" + practitionerId);
+
+						entry.setFullUrl(client.getServerBase() + "Practitioner/" + practitionerId);
+						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+							entry.setResource((Resource) outcome.getResource());
+						}
+						entry.setRequest(null);
+					} else {
+						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
+								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
+						entry.setResource(null);
+					}
+				}
+				
+				entry.setRequest(null);
+			}
+		}
+	}
+
+	private void updateReference(Reference reference) {
+		if (reference == null || reference.isEmpty())
+			return;
+
+		if (reference.getReferenceElement().isIdPartValid()) {
+			String originalId = reference.getReferenceElement().getIdPart();
+			String newId = referenceIds.get(originalId);
+
+			if (newId != null && !newId.isEmpty()) {
+				String[] resourceId = newId.split("/");
+				if (resourceId.length == 2) {
+					reference.setReferenceElement(new IdType(resourceId[0], resourceId[1]));
+				} else {
+					reference.setReferenceElement(new IdType(newId));
 				}
 			}
 		}
 	}
 
-	//TODO: Do this later
+	private void processPost(IGenericClient client, List<BundleEntryComponent> entries) {
+		for (BundleEntryComponent entry : entries) {
+			BundleEntryResponseComponent response = entry.getResponse();
+			if (response != null && !response.isEmpty()) {
+				// We have already processed this.
+				continue;
+			}
+
+			BundleEntryRequestComponent request = entry.getRequest();
+
+			HTTPVerb requestMethod;
+			if (request == null || request.isEmpty()) {
+				requestMethod = HTTPVerb.POST;
+			} else {
+				requestMethod = request.getMethod();
+			}
+
+			if (requestMethod.equals(HTTPVerb.POST) || requestMethod.equals(HTTPVerb.PUT)
+					|| requestMethod.equals(HTTPVerb.PATCH)) {
+				response = entry.getResponse();
+				Resource resource = entry.getResource();
+				if (resource != null && !resource.isEmpty()) {
+					if (resource instanceof Observation) {
+						Observation res = (Observation) resource;
+						updateReference(res.getSubject());
+						updateReference(res.getPerformerFirstRep());
+					} else if (resource instanceof Condition) {
+						Condition res = (Condition) resource;
+						updateReference(res.getSubject());
+						updateReference(res.getAsserter());
+					} else if (resource instanceof Procedure) {
+						Procedure res = (Procedure) resource;
+						updateReference(res.getSubject());
+						updateReference(res.getAsserter());
+					} else if (resource instanceof ListResource) {
+						ListResource res = (ListResource) resource;
+						for (ListEntryComponent listEntry : res.getEntry()) {
+							updateReference(listEntry.getItem());
+						}
+					} else if (resource instanceof DocumentReference) {
+						DocumentReference res = (DocumentReference) resource;
+						updateReference(res.getSubject());
+					}
+
+					MethodOutcome outcome = client.create().resource(resource).prettyPrint().encodedJson().execute();
+					if (outcome.getCreated()) {
+						String newId = outcome.getId().getIdPart();
+						if (newId != null && !newId.isEmpty()) {
+							response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
+									+ HttpStatus.CREATED.getReasonPhrase());
+							response.setLocation(resource.getResourceType().toString() + "/" + newId);
+							
+							entry.setFullUrl(client.getServerBase() + resource.getResourceType().toString() + "/" + newId);
+							if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+								entry.setResource((Resource) outcome.getResource());
+							} else {
+								resource.setId(newId);
+							}
+						} else {
+							entry.setResource(null);
+							response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value())
+									+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
+						}
+					} else {
+						entry.setResource(null);
+						response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()) + " "
+								+ HttpStatus.BAD_REQUEST.getReasonPhrase());						
+					}
+				} else {
+					entry.setResource(null);
+					response.setStatus(
+							String.valueOf(HttpStatus.BAD_REQUEST.value()) + " " + HttpStatus.BAD_REQUEST.getReasonPhrase());
+				}
+
+				entry.setRequest(null);
+			}
+		}
+	}
+
+//	private void processGet(String requestUrl, List<BundleEntryComponent> entries) {
+//		// TODO: finish this up
+//		IGenericClient client = ctx.newRestfulGenericClient(requestUrl);
+//
+//		for (BundleEntryComponent entry : entries) {
+//			BundleEntryResponseComponent response = entry.getResponse();
+//			if (response != null && !response.isEmpty()) {
+//				// We have already processed this.
+//				continue;
+//			}
+//
+//			BundleEntryRequestComponent request = entry.getRequest();
+//			HTTPVerb requestMethod = request.getMethod();
+//			if (requestMethod.equals(HTTPVerb.GET) || requestMethod.equals(HTTPVerb.HEAD)) {
+//				response = entry.getResponse();
+//				Resource resource = entry.getResource();
+//				if (resource != null && !resource.isEmpty()) {
+//
+//					String newId = null; // fhirbaseMapping.create(resource);
+//					if (newId != null && !newId.isEmpty()) {
+//						response.setStatus(
+//								String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
+//						response.setLocation(resource.getResourceType().toString() + "/" + newId);
+//					} else {
+//						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value())
+//								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
+//					}
+//				} else {
+//					response.setStatus(
+//							String.valueOf(HttpStatus.BAD_REQUEST.value()) + HttpStatus.BAD_REQUEST.getReasonPhrase());
+//				}
+//
+//				entry.setRequest(null);
+//			}
+//		}
+//	}
+
 	/**
+	 * 
+	 * @param theBundle
+	 * @param theRequest
+	 * @return
 	 */
 	@Transaction
 	public Bundle transaction(@TransactionParam MyBundle theBundle, HttpServletRequest theRequest) {
 		validateResource(theBundle);
 
-		Bundle retVal = new Bundle();
-//		List<Resource> postList = new ArrayList<Resource>();
-//		List<Resource> putList = new ArrayList<Resource>();
-//		List<String> deleteList = new ArrayList<String>();
-//		List<String> getList = new ArrayList<String>();
-//
-//		Map<HTTPVerb, Object> transactionEntries = new HashMap<HTTPVerb, Object>();
-//		transactionEntries.put(HTTPVerb.POST, postList);
-//		transactionEntries.put(HTTPVerb.PUT, putList);
-//		transactionEntries.put(HTTPVerb.DELETE, deleteList);
-//		transactionEntries.put(HTTPVerb.GET, getList);
-//
-////		Resource resource = null;
-////		BundleEntryComponent entry = null;
-//
-//		try {
-//			Resource resource;
-//			switch (theBundle.getType()) {
-//			case DOCUMENT:
-//				// https://www.hl7.org/fhir/documents.html#bundle
-//				// Ignore the fact that the bundle is a document and process all of the
-//				// resources that it contains as individual resources. Clients SHOULD not expect
-//				// that a server that receives a document submitted using this method will be
-//				// able to reassemble the document exactly. (Even if the server can reassemble
-//				// the document (see below), the result cannot be expected to be in the same
-//				// order, etc. Thus a document signature will very likely be invalid.)
-//				
-//				List<BundleEntryComponent> entries = theBundle.getEntry();
-//				int index = 0;
-//				for (BundleEntryComponent entry: entries) {
-//					resource = entry.getResource();
-//					
-//					// First entry is Composition
-//					if (index == 0) {
-//						if (resource.getResourceType() == ResourceType.Composition) {
-//							// First check the patient 
-//							Composition composition = (Composition) resource;
-//							
-//						} else {
-//							// First entry must be Composition resource.
-//							ThrowFHIRExceptions
-//									.unprocessableEntityException("First entry in "
-//											+ "Bundle document type should be Composition");
-//						}
-//					} else {
-//						// 
-//					}
-//					
-//					index++;
-//				}
-//				
-//				
-////				entry = theBundle.getEntryFirstRep();
-////				resource = entry.getResource();
-////				if (resource.getResourceType() == ResourceType.Composition) {
-////					Composition composition = (Composition) resource;
-////					// Find out from composition if we can proceed.
-////					// For now, we do not care what type of this document is.
-////					// We just parse all the entries and do what we need to do.
-////
-////					addToList(transactionEntries, theBundle, HTTPVerb.POST);
-////
-////					List<BundleEntryComponent> responseTransaction = myMapper.executeRequests(transactionEntries);
-////					if (responseTransaction != null && responseTransaction.size() > 0) {
-////						retVal.setEntry(responseTransaction);
-////						retVal.setType(BundleType.TRANSACTIONRESPONSE);
-////					} else {
-////						ThrowFHIRExceptions.unprocessableEntityException(
-////								"Faied process the bundle, " + theBundle.getType().toString());
-////					}
-////				} else {
-////					// First entry must be Composition resource.
-////					ThrowFHIRExceptions
-////							.unprocessableEntityException("First entry in Bundle document type should be Composition");
-////				}
-//			case TRANSACTION:
-//				System.out.println("We are at the transaction");
-//				for (BundleEntryComponent nextEntry : theBundle.getEntry()) {
-//					resource = nextEntry.getResource();
-//					BundleEntryRequestComponent request = nextEntry.getRequest();
-//
-//					// We require a transaction to have a request so that we can
-//					// handle the transaction. Without it, we have nothing to
-//					// do.
-//					if (request == null)
-//						continue;
-//
-//					if (!request.isEmpty()) {
-//						// First check the Resource to see if we can support
-//						// this. resourceName =
-//						// resource.getResourceType().toString();
-//
-//						// Now we have a request that we support. Add this into
-//						// the entry to process.
-//						HTTPVerb method = request.getMethod();
-//						if (method == HTTPVerb.POST) {
-//							postList.add(resource);
-//						} else if (method == HTTPVerb.PUT) {
-//							putList.add(resource);
-//						} else if (method == HTTPVerb.DELETE) {
-//							deleteList.add(request.getUrl());
-//						} else if (method == HTTPVerb.GET) {
-//							// TODO: getList.add(new ParameterWrapper());
-//							// create parameter here.
-//						} else {
-//							continue;
-//						}
-//					}
-//				}
-//
-//				break;
-//			case MESSAGE:
-////				entry = theBundle.getEntryFirstRep();
-////				resource = entry.getResource();
-////				if (resource.getResourceType() == ResourceType.MessageHeader) {
-////					MessageHeader messageHeader = (MessageHeader) resource;
-////					// We handle observation-type.
-////					// TODO: Add other types later.
-////					Coding event = messageHeader.getEvent();
-////					if ("R01".equals(event.getCode())) {
-////						// This is lab report. they are all to be added to the server.
-////						addToList(transactionEntries, theBundle, HTTPVerb.POST);
-////					} else {
-////						ThrowFHIRExceptions
-////								.unprocessableEntityException("We currently support only HL7 v2 R01 Message");
-////					}
-////				} else {
-////					// First entry must be message header.
-////					ThrowFHIRExceptions
-////							.unprocessableEntityException("First entry in Bundle message type should be MessageHeader");
-////				}
-//				break;
-//			default:
-//				ThrowFHIRExceptions.unprocessableEntityException("Unsupported Bundle Type, "
-//						+ theBundle.getType().toString() + ". We support DOCUMENT, TRANSACTION, and MESSAGE");
-//			}
-//
-//			List<BundleEntryComponent> responseTransaction; // = myMapper.executeRequests(transactionEntries);
-//			if (responseTransaction != null && responseTransaction.size() > 0) {
-//				retVal.setEntry(responseTransaction);
-//				retVal.setType(BundleType.TRANSACTIONRESPONSE);
-//			} else {
-//				ThrowFHIRExceptions
-//						.unprocessableEntityException("Faied process the bundle, " + theBundle.getType().toString());
-//			}
-//
-//		} catch (FHIRException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//
-		return retVal;
+		List<BundleEntryComponent> entries = theBundle.getEntry();
+
+		if (entries.size() == 0)
+			return null;
+
+		String requestUrl = theRequest.getRequestURL().toString();
+		IGenericClient client = ctx.newRestfulGenericClient(requestUrl);
+
+		// First save this bundle to fhirbase if POST/PUT
+//		client.create().resource(theBundle).prettyPrint().encodedJson().execute();
+
+		referenceIds = new HashMap<String, String>();
+
+		switch (theBundle.getType()) {
+		case BATCH:
+			// We process for the following order as suggested by FHIR spec
+			// https://hl7.org/FHIR/http.html#transaction
+			// 1. Delete
+			// 2. Post
+			// 3. Put or Patch
+			// 4. Get or Head
+			// 5. Conditional Reference
+
+			processPostPatient(client, entries);
+			processPostPractitioner(client, entries);
+			processDelete(client, entries);
+			processPost(client, entries);
+//			processGet(theRequest.getRequestURL().toString(), entries);
+			theBundle.setType(BundleType.BATCHRESPONSE);
+
+			break;
+		default:
+
+		}
+
+		return theBundle;
 	}
 
-	// TODO: Add more validation code here.
 	private void validateResource(MyBundle theBundle) {
+		// We must have request for each entry
+//		OperationOutcome outcome = new OperationOutcome();
+//		CodeableConcept detailCode = new CodeableConcept();
+//		for (BundleEntryComponent entry : theBundle.getEntry()) {
+//			BundleEntryRequestComponent request = entry.getRequest();
+//			if (request == null || request.isEmpty()) {
+//				detailCode.setText(entry.getFullUrl() + " does not have a request.");
+//				outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+//				throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+//			}
+//		}
 	}
 
 }

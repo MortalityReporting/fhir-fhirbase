@@ -107,7 +107,7 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readOrganization(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "organization");
 	}
 
 	/**
@@ -122,7 +122,7 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 	public MethodOutcome updateOrganization(@IdParam IdType theId, @ResourceParam Organization theOrganization) {
 		validateResource(theOrganization);
 
-		return update(theId, theOrganization);
+		return update(theId, theOrganization, getResourceType());
 	}
 
 	@Delete()

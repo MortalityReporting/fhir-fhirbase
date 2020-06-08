@@ -17,6 +17,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.context.RuntimeResourceDefinition;
 import ca.uhn.fhir.parser.IParser;
 import edu.gatech.chai.fhironfhirbase.database.DatabaseConfiguration;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
@@ -71,7 +72,7 @@ public class FhirbaseMapping implements IResourceMapping {
 		String retVal = null;
 
 		IParser parser = ctx.newJsonParser();
-		String serialized = parser.encodeResourceToString(fhirResource);
+		String serialized = parser.encodeResourceToString(fhirResource).replace("'", "''");
 
 		Connection connection = databaseConfiguration.getDataSource().getConnection();
 
@@ -93,19 +94,21 @@ public class FhirbaseMapping implements IResourceMapping {
 	}
 
 	@Override
-	public IBaseResource read(IdType id, Class<? extends Resource> fhirClass) throws Exception {
+	public IBaseResource read(IdType id, Class<? extends Resource> fhirClass, String tableName) throws Exception {
 		IBaseResource retVal = null;
 
 		Connection connection = databaseConfiguration.getDataSource().getConnection();
-		String query = "SELECT resource FROM " + getTableName() + " where id = ? limit 1";
+		String query = "SELECT resource FROM " + tableName + " where id = ? limit 1";
 
+		System.out.println("READ: "+query);
 		String idString = id.getIdPart();
 		PreparedStatement stmt = connection.prepareStatement(query);
-		stmt.setString(0, idString);
+		stmt.setString(1, idString);
 
 		ResultSet rs = stmt.executeQuery();
 		if (rs.next()) {
 			String resource = rs.getString("resource");
+			System.out.println("READ RESOURCE: "+resource);
 			IParser parser = ctx.newJsonParser();
 			retVal = parser.parseResource(fhirClass, resource);
 		}
@@ -114,27 +117,30 @@ public class FhirbaseMapping implements IResourceMapping {
 	}
 
 	@Override
-	public IBaseResource update(IBaseResource fhirResource) throws Exception {
+	public IBaseResource update(IBaseResource fhirResource, Class<? extends Resource> fhirClass) throws Exception {
 		IBaseResource retVal = null;
 
 		IParser parser = ctx.newJsonParser();
-		String serialized = parser.encodeResourceToString(fhirResource);
+		String serialized = parser.encodeResourceToString(fhirResource).replace("'", "''");
 
 		Connection connection = databaseConfiguration.getDataSource().getConnection();
 
-		String query = "SELECT fhirbase_update('"+serialized+"'::jsonb);";
+		String query = "SELECT fhirbase_create('"+serialized+"'::jsonb);";
 		PreparedStatement stmt = connection.prepareStatement(query);
+
+		System.out.println("<<<<<<<<<<<<< SQL:"+query);
 
 		ResultSet rs = stmt.executeQuery();
 		if (rs.next()) {
-			String updatedResource = rs.getString("fhirbase_update");
+			String updatedResource = rs.getString("fhirbase_create");
 			if (updatedResource == null || updatedResource.isEmpty()) {
 				connection.close();
 				throw ThrowFHIRExceptions
 						.internalErrorException("Not Existing Resource or Incorrect Resource Content for Update");
 			}
 
-			retVal = parser.parseResource(getFhirClass(), updatedResource);
+			System.out.println("<<<<<<<<<<<<<"+updatedResource);
+			retVal = parser.parseResource(fhirClass, updatedResource);
 		}
 
 		connection.close();
@@ -210,6 +216,33 @@ public class FhirbaseMapping implements IResourceMapping {
 		ResultSet rs = stmt.executeQuery();
 		if (rs.next()) {
 			retVal = rs.getInt("count");
+		}
+
+		connection.close();
+
+		return retVal;
+	}
+
+	@Override
+	public IBaseResource delete(String tableName, String id, Class<? extends Resource> fhirClass) throws Exception {
+		IBaseResource retVal = null;
+		IParser parser = ctx.newJsonParser();
+
+		Connection connection = databaseConfiguration.getDataSource().getConnection();
+
+		String query = "SELECT fhirbase_delete('" + tableName + "', '" + id + "');";
+		PreparedStatement stmt = connection.prepareStatement(query);
+
+		ResultSet rs = stmt.executeQuery();
+		if (rs.next()) {
+			String deletedResource = rs.getString("fhirbase_delete");
+			if (deletedResource == null || deletedResource.isEmpty()) {
+				connection.close();
+				throw ThrowFHIRExceptions
+						.internalErrorException("Not Existing Resource or Incorrect Resource Content for Delete");
+			}
+
+			retVal = parser.parseResource(fhirClass, deletedResource);
 		}
 
 		connection.close();

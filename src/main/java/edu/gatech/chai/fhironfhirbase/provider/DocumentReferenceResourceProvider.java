@@ -89,14 +89,14 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 	
 	@Read()
 	public IBaseResource readDocumentReference(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "documentreference");
 	}
 
 	@Update()
 	public MethodOutcome updateDocumentReference(@IdParam IdType theId, @ResourceParam DocumentReference theDocumentReference) {
 		validateResource(theDocumentReference);
 
-		return update(theId, theDocumentReference);
+		return update(theId, theDocumentReference, getResourceType());
 	}
 
 	@Search()

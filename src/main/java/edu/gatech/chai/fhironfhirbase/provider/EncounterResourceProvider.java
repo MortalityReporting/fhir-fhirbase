@@ -98,7 +98,7 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 	@Read()
 	public IBaseResource readEncounter(@IdParam IdType theId) {
 
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "encounter");
 	}
 
 	/**
@@ -113,7 +113,7 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 	public MethodOutcome updateEncounter(@IdParam IdType theId, @ResourceParam Encounter theEncounter) {
 		validateResource(theEncounter);
 
-		return update(theId, theEncounter);
+		return update(theId, theEncounter, getResourceType());
 	}
 
 	@Delete()

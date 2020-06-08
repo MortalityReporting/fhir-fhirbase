@@ -203,7 +203,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readObservation(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "observation");
 	}
 
 	/**
@@ -218,7 +218,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	public MethodOutcome updateObservation(@IdParam IdType theId, @ResourceParam Observation theObservation) {
 		validateResource(theObservation);
 
-		return update(theId, theObservation);
+		return update(theId, theObservation, getResourceType());
 	}
 
 	// TODO: Add more validation code here.
@@ -228,21 +228,21 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 		if (theObservation.getCode().isEmpty()) {
 			detailCode.setText("No code is provided.");
 			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forDstu3(), outcome);
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
 		Reference subjectReference = theObservation.getSubject();
 		if (subjectReference == null || subjectReference.isEmpty()) {
-			detailCode.setText("Subject cannot be empty for OmopOnFHIR");
+			detailCode.setText("Subject cannot be empty");
 			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forDstu3(), outcome);
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
 		String subjectResource = subjectReference.getReferenceElement().getResourceType();
 		if (!subjectResource.contentEquals("Patient")) {
-			detailCode.setText("Subject (" + subjectResource + ") must be Patient resource for OmopOnFHIR");
+			detailCode.setText("Subject (" + subjectResource + ") must be Patient");
 			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forDstu3(), outcome);
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 	}
 

@@ -94,14 +94,14 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 
 	@Read()
 	public IBaseResource readPatient(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "device");
 	}
 
 	@Update()
 	public MethodOutcome updateDevice(@IdParam IdType theId, @ResourceParam MyDevice theDevice) {
 		validateResource(theDevice);
 
-		return update(theId, theDevice);
+		return update(theId, theDevice, getResourceType());
 	}
 
 	@Delete()

@@ -118,7 +118,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readPatient(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "patient");
 	}
 
 	/**
@@ -133,7 +133,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 	public MethodOutcome updatePatient(@IdParam IdType theId, @ResourceParam USCorePatient thePatient) {
 		validateResource(thePatient);
 
-		return update(theId, thePatient);
+		return update(theId, thePatient, getResourceType());
 	}
 
 	@Delete()
@@ -347,7 +347,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 
 		List<IBaseResource> resources = new ArrayList<IBaseResource>();
 		try {
-			resources.add(getFhirbaseMapping().read(thePatientId, getResourceType()));
+			resources.add(getFhirbaseMapping().read(thePatientId, getResourceType(), "patient"));
 		} catch (Exception e) {
 			e.printStackTrace();
 			ThrowFHIRExceptions.internalErrorException("Failed to read the patient Id");
@@ -408,7 +408,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			CodeableConcept detailCode = new CodeableConcept();
 			detailCode.setText("No family name provided, Patient resources must have at least one family name.");
 			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forDstu3(), outcome);
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 	}
 

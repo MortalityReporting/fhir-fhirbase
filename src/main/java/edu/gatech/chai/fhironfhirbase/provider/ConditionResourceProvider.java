@@ -114,7 +114,7 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readCondition(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "condition");
 	}
 
 	/**
@@ -129,7 +129,7 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 	public MethodOutcome updateCondition(@IdParam IdType theId, @ResourceParam Condition theCondition) {
 		validateResource(theCondition);
 
-		return update(theId, theCondition);
+		return update(theId, theCondition, getResourceType());
 	}
 
 	@Search()

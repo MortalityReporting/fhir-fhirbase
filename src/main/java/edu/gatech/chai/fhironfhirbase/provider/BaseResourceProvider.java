@@ -104,11 +104,11 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return new MethodOutcome(new IdType(idString));
 	}
 
-	protected IBaseResource read(IdType theId, Class<? extends Resource> fhirClass) {
+	protected IBaseResource read(IdType theId, Class<? extends Resource> fhirClass, String tableName) {
 		IBaseResource retval = null;
 
 		try {
-			retval = fhirbaseMapping.read(theId, fhirClass);
+			retval = fhirbaseMapping.read(theId, fhirClass, tableName);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -120,11 +120,11 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return retval;
 	}
 
-	protected MethodOutcome update(IdType theId, IBaseResource thePatient) {
+	protected MethodOutcome update(IdType theId, IBaseResource thePatient, Class<? extends Resource> fhirClass) {
 		IBaseResource retVal = null;
 
 		try {
-			retVal = fhirbaseMapping.update(thePatient);
+			retVal = fhirbaseMapping.update(thePatient, fhirClass);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -132,8 +132,9 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		if (retVal == null) {
 			throw new ResourceNotFoundException(theId);
 		}
-
-		return new MethodOutcome(retVal.getIdElement());
+		MethodOutcome mo = new MethodOutcome(retVal.getIdElement(), true);
+		mo.setResource(retVal);
+		return mo;
 	}
 
 	protected void delete(IdType theId) {

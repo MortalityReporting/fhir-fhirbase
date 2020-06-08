@@ -191,7 +191,7 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readPractitioner(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "patient");
 	}
 
 	/**
@@ -206,7 +206,7 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	public MethodOutcome updatePractitioner(@IdParam IdType theId, @ResourceParam Practitioner thePractitioner) {
 		validateResource(thePractitioner);
 
-		return update(theId, thePractitioner);
+		return update(theId, thePractitioner, getResourceType());
 	}
 
 	/**

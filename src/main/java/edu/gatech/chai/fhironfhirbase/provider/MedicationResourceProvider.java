@@ -70,7 +70,7 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 
 	@Read()
 	public IBaseResource readMedication(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "medication");
 	}
 
 	@Search()

@@ -98,12 +98,12 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 			@ResourceParam MedicationStatement theMedicationStatement) {
 		validateResource(theMedicationStatement);
 
-		return update(theId, theMedicationStatement);
+		return update(theId, theMedicationStatement, getResourceType());
 	}
 
 	@Read()
 	public IBaseResource readMedicationStatement(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "medicationstatement");
 	}
 
 	@Search()

@@ -99,7 +99,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 	public MethodOutcome updateProcedure(@IdParam IdType theId, @ResourceParam Procedure theProcedure) {
 		validateResource(theProcedure);
 
-		return update(theId, theProcedure);
+		return update(theId, theProcedure, getResourceType());
 	}
 
 	@Delete()
@@ -124,7 +124,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readProcedure(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "patient");
 	}
 
 	@Search()

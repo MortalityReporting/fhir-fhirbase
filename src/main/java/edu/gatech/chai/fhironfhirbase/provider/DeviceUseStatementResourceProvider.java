@@ -114,7 +114,7 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 
 	@Read()
 	public IBaseResource readPatient(@IdParam IdType theId) {
-		return read(theId, getResourceType());
+		return read(theId, getResourceType(), "deviceusestatement");
 	}
 
 	@Update()
@@ -122,7 +122,7 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 			@ResourceParam MyDeviceUseStatement theDeviceUseStatement) {
 		validateResource(theDeviceUseStatement);
 
-		return update(theId, theDeviceUseStatement);
+		return update(theId, theDeviceUseStatement, getResourceType());
 	}
 
 	@Delete()

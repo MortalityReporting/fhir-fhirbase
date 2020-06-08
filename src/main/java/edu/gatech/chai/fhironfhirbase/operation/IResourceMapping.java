@@ -23,10 +23,12 @@ import org.hl7.fhir.r4.model.Resource;
 
 public interface IResourceMapping {
 	public String create(IBaseResource fhirResource) throws Exception;
-	public IBaseResource read(IdType id, Class<? extends Resource> fhirClass) throws Exception;
-	public IBaseResource update (IBaseResource fhirResource)  throws Exception;
+	public IBaseResource read(IdType id, Class<? extends Resource> fhirClass, String tableName) throws Exception;
+	public IBaseResource update (IBaseResource fhirResource, Class<? extends Resource> fhirClass)  throws Exception;
 	public IBaseResource delete (IdType id) throws Exception;
 	
 	public List<IBaseResource> search(String sql, Class<? extends Resource> fhirClass) throws Exception;
 	public int getSize(String sql) throws Exception;
+	public IBaseResource delete (String tableName, String id, Class<? extends Resource> fhirClass) throws Exception;
+
 }
