@@ -26,6 +26,7 @@ import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.IdType;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
@@ -56,6 +57,7 @@ import ca.uhn.fhir.rest.param.TokenParam;
  * works.
  */
 @Service
+@Scope("prototype")
 public class ConditionResourceProvider extends BaseResourceProvider {
 	private int preferredPageSize = 30;
 

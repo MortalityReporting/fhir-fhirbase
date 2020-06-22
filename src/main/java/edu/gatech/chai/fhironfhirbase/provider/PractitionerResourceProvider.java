@@ -26,6 +26,7 @@ import javax.annotation.PostConstruct;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Practitioner;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
@@ -54,6 +55,7 @@ import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
  * but it is useful to help illustrate how to build a fully-functional server.
  */
 @Service
+@Scope("prototype")
 public class PractitionerResourceProvider extends BaseResourceProvider {
 
 	private int preferredPageSize = 30;

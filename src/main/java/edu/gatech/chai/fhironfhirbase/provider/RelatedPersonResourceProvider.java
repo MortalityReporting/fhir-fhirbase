@@ -9,6 +9,7 @@ import javax.annotation.PostConstruct;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.RelatedPerson;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
@@ -29,6 +30,7 @@ import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
 
 @Service
+@Scope("prototype")
 public class RelatedPersonResourceProvider extends BaseResourceProvider {
 	protected FhirbaseMapping fhirbaseMapping;
 	private int preferredPageSize = 30;

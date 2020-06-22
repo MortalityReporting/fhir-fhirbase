@@ -18,6 +18,7 @@ import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.UriType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Scope;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -36,6 +37,7 @@ import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 
 @Service
+@Scope("prototype")
 public class ConceptMapResourceProvider extends BaseResourceProvider {
 	private static final Logger logger = LoggerFactory.getLogger(ConceptMapResourceProvider.class);
 	private int preferredPageSize = 30;

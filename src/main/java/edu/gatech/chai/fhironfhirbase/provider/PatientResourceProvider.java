@@ -36,6 +36,7 @@ import org.hl7.fhir.r4.model.InstantType;
 import org.hl7.fhir.r4.model.IntegerType;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.hl7.fhir.r4.model.Organization;
 
@@ -72,6 +73,7 @@ import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
  * but it is useful to help illustrate how to build a fully-functional server.
  */
 @Service
+@Scope("prototype")
 public class PatientResourceProvider extends BaseResourceProvider {
 
 	public PatientResourceProvider(FhirContext ctx) {
