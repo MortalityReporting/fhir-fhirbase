@@ -15,6 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.operation;
 
+import java.sql.SQLException;
 import java.util.List;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
@@ -22,13 +23,12 @@ import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Resource;
 
 public interface IResourceMapping {
-	public String create(IBaseResource fhirResource) throws Exception;
-	public IBaseResource read(IdType id, Class<? extends Resource> fhirClass, String tableName) throws Exception;
-	public IBaseResource update (IBaseResource fhirResource, Class<? extends Resource> fhirClass)  throws Exception;
-	public IBaseResource delete (IdType id) throws Exception;
+	public IBaseResource create(IBaseResource fhirResource, Class<? extends Resource> fhirClass) throws SQLException;
+	public IBaseResource read(IdType id, Class<? extends Resource> fhirClass, String tableName) throws SQLException;
+	public IBaseResource update (IBaseResource fhirResource, Class<? extends Resource> fhirClass)  throws SQLException;
+	public IBaseResource delete (IdType id, Class<? extends Resource> fhirClass, String tableName) throws SQLException;
 	
 	public List<IBaseResource> search(String sql, Class<? extends Resource> fhirClass) throws Exception;
+	
 	public int getSize(String sql) throws Exception;
-	public IBaseResource delete (String tableName, String id, Class<? extends Resource> fhirClass) throws Exception;
-
 }

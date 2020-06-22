@@ -15,6 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -56,17 +57,15 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 
 	private int preferredPageSize = 30;
 
-	public DeviceUseStatementResourceProvider() {
-		super();
+	public DeviceUseStatementResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
 
 	@PostConstruct
-    private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(MyDeviceUseStatement.class);
-		getFhirbaseMapping().setTableName(DeviceUseStatementResourceProvider.getType().toLowerCase());
+	private void postConstruct() {
+		setTableName(DeviceUseStatementResourceProvider.getType().toLowerCase());
 		setMyResourceType(DeviceUseStatementResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	@Override
@@ -90,31 +89,31 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 	@Create()
 	public MethodOutcome createDeviceUseStatement(@ResourceParam MyDeviceUseStatement theDeviceUseStatement) {
 		validateResource(theDeviceUseStatement);
-
-		// We need to check if this resource has device resource embedded.
-		// TODO: revisit tihs later.
-//		List<Resource> containeds = theDeviceUseStatement.getContained();
-//		
-//		boolean deviceFound = false;
-//		for (Resource contained: containeds) {
-//			ResourceType resourceType = contained.getResourceType();
-//			if (resourceType == ResourceType.Device) {
-//				deviceFound = true;
-//				deviceId = contained.getId();
-//				break;
-//			}
-//		}
-//		
-//		if (deviceFound == false) {
-//			errorProcessing("Device must be contained in the resource in order to create resource");
-//		}
-
-		return create(theDeviceUseStatement);
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource createdDeviceUseStatement = getFhirbaseMapping().create(theDeviceUseStatement, getResourceType());
+			retVal.setId(createdDeviceUseStatement.getIdElement());
+			retVal.setResource(createdDeviceUseStatement);
+			retVal.setCreated(true);
+		} catch (SQLException e) {
+			retVal.setCreated(false);
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Read()
 	public IBaseResource readPatient(@IdParam IdType theId) {
-		return read(theId, getResourceType(), "deviceusestatement");
+		IBaseResource retVal = null;
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Update()
@@ -122,12 +121,27 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 			@ResourceParam MyDeviceUseStatement theDeviceUseStatement) {
 		validateResource(theDeviceUseStatement);
 
-		return update(theId, theDeviceUseStatement, getResourceType());
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource updatedDeviceUseStatement = getFhirbaseMapping().update(theDeviceUseStatement, getResourceType());
+			retVal.setId(updatedDeviceUseStatement.getIdElement());
+			retVal.setResource(updatedDeviceUseStatement);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Delete()
 	public void deleteDeviceUseStatement(@IdParam IdType theId) {
-		delete(theId);
+		try {
+			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Search()
@@ -205,6 +219,8 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int theFromIndex, int theToIndex) {
+			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
+			
 			// _Include
 			// TODO: do the include later
 			List<String> includes = new ArrayList<String>();
@@ -216,7 +232,13 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 				query += " LIMIT " + (theToIndex - theFromIndex) + " OFFSET " + theFromIndex;
 			}
 
-			return search(query, getResourceType());
+			try {
+				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			
+			return retVal;
 		}
 
 	}

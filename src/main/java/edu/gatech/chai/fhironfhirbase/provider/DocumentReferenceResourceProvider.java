@@ -15,6 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -26,6 +27,7 @@ import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.IdType;
 import org.springframework.stereotype.Service;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
@@ -53,17 +55,16 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 
 	private int preferredPageSize = 30;
 
-	public DocumentReferenceResourceProvider() {
-		super();
+	public DocumentReferenceResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
-	
+
 	@PostConstruct
-    private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(DocumentReference.class);
-		getFhirbaseMapping().setTableName(DocumentReferenceResourceProvider.getType().toLowerCase());
+	private void postConstruct() {
+		setTableName(DocumentReferenceResourceProvider.getType().toLowerCase());
 		setMyResourceType(DocumentReferenceResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	public static String getType() {
@@ -74,43 +75,73 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 	public Class<DocumentReference> getResourceType() {
 		return DocumentReference.class;
 	}
-	
+
 	@Create()
 	public MethodOutcome createDocumentReference(@ResourceParam DocumentReference theDocumentReference) {
 		validateResource(theDocumentReference);
-
-		return create(theDocumentReference);
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource createdDocumentReference = getFhirbaseMapping().create(theDocumentReference, getResourceType());
+			retVal.setId(createdDocumentReference.getIdElement());
+			retVal.setResource(createdDocumentReference);
+			retVal.setCreated(true);
+		} catch (SQLException e) {
+			retVal.setCreated(false);
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
-	
+
 	@Delete()
 	public void deleteDocumentReference(@IdParam IdType theId) {
-		delete(theId);
+		try {
+			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
-	
+
 	@Read()
 	public IBaseResource readDocumentReference(@IdParam IdType theId) {
-		return read(theId, getResourceType(), "documentreference");
+		IBaseResource retVal = null;
+		
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Update()
-	public MethodOutcome updateDocumentReference(@IdParam IdType theId, @ResourceParam DocumentReference theDocumentReference) {
+	public MethodOutcome updateDocumentReference(@IdParam IdType theId,
+			@ResourceParam DocumentReference theDocumentReference) {
 		validateResource(theDocumentReference);
 
-		return update(theId, theDocumentReference, getResourceType());
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource updatedDocumentReference = getFhirbaseMapping().update(theDocumentReference, getResourceType());
+			retVal.setId(updatedDocumentReference.getIdElement());
+			retVal.setResource(updatedDocumentReference);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Search()
 	public IBundleProvider findDocumentReferenceByIds(
-			@RequiredParam(name=DocumentReference.SP_RES_ID) TokenOrListParam theDocumentReferenceIds,
-			
-			@IncludeParam(allow={"DocumentReference:patient", "DocumentReference:subject", 
-			"DocumentReference:encounter"})
-			final Set<Include> theIncludes,
-			
-			@IncludeParam(reverse=true)
-            final Set<Include> theReverseIncludes
-			) {
-		
+			@RequiredParam(name = DocumentReference.SP_RES_ID) TokenOrListParam theDocumentReferenceIds,
+
+			@IncludeParam(allow = { "DocumentReference:patient", "DocumentReference:subject",
+					"DocumentReference:encounter" }) final Set<Include> theIncludes,
+
+			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
 
 		if (theDocumentReferenceIds == null) {
 			return null;
@@ -122,7 +153,7 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
-		
+
 		String queryCount = "SELECT count(*) FROM documentreference r " + whereStatement;
 		String query = "SELECT * FROM documentreference r " + whereStatement;
 
@@ -131,34 +162,33 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
 		return myBundleProvider;
 	}
-	
+
 	@Search()
 	public IBundleProvider findDocumentReferenceByParams(
-			@OptionalParam(name=DocumentReference.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME }) ReferenceOrListParam thePatients,
-			@OptionalParam(name=DocumentReference.SP_SUBJECT, chainWhitelist = { "", USCorePatient.SP_NAME }) ReferenceOrListParam theSubjects,
-			@OptionalParam(name=DocumentReference.SP_ENCOUNTER) ReferenceParam theEncounter,
-			@OptionalParam(name=DocumentReference.SP_TYPE) TokenOrListParam theOrTypes,
-			@OptionalParam(name=DocumentReference.SP_DATE) DateParam theDate,
-			@Sort SortSpec theSort,
-			@IncludeParam(allow={"DocumentReference:patient", "DocumentReference:subject", 
-					"DocumentReference:encounter"})
-			final Set<Include> theIncludes,
-			
-			@IncludeParam(reverse=true)
-            final Set<Include> theReverseIncludes
-			) {
+			@OptionalParam(name = DocumentReference.SP_PATIENT, chainWhitelist = { "",
+					USCorePatient.SP_NAME }) ReferenceOrListParam thePatients,
+			@OptionalParam(name = DocumentReference.SP_SUBJECT, chainWhitelist = { "",
+					USCorePatient.SP_NAME }) ReferenceOrListParam theSubjects,
+			@OptionalParam(name = DocumentReference.SP_ENCOUNTER) ReferenceParam theEncounter,
+			@OptionalParam(name = DocumentReference.SP_TYPE) TokenOrListParam theOrTypes,
+			@OptionalParam(name = DocumentReference.SP_DATE) DateParam theDate, @Sort SortSpec theSort,
+			@IncludeParam(allow = { "DocumentReference:patient", "DocumentReference:subject",
+					"DocumentReference:encounter" }) final Set<Include> theIncludes,
+
+			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
 
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "documentreference dr";
 		if (theOrTypes != null) {
-			String where = constructTypeWhereParameter(theOrTypes, fromStatement, "dr.resource->'type'");
+			fromStatement = constructFromStatement(theOrTypes, fromStatement, "types", "dr.resource->'type'");
+			String where = constructTypeWhereParameter(theOrTypes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
 		}
 
 		if (theDate != null) {
-			String where = constructDateWhereParameter(theDate, fromStatement, "dr", "date");
+			String where = constructDateWhereParameter(theDate, "dr", "date");
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
@@ -186,23 +216,22 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 			whereParameters.add("dr.resource->'context'->>'encounter' like '%" + theEncounter.getValue() + "%'");
 		}
 
-		String whereStatement = constructWhereStatement(whereParameters, theSort);		
-		
+		String whereStatement = constructWhereStatement(whereParameters, theSort);
+
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
 
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, theReverseIncludes);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
-		return myBundleProvider;		
+		return myBundleProvider;
 	}
-	
+
 	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 
-		public MyBundleProvider(String query, Set<Include> theIncludes,
-				Set<Include> theReverseIncludes) {
+		public MyBundleProvider(String query, Set<Include> theIncludes, Set<Include> theReverseIncludes) {
 			super(query);
 			setPreferredPageSize(preferredPageSize);
 			this.theIncludes = theIncludes;
@@ -211,6 +240,8 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
+			
 			// _Include
 			List<String> includes = new ArrayList<String>();
 
@@ -230,10 +261,16 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
-			return search(query, getResourceType());
+			try {
+				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			
+			return retVal;
 		}
 	}
-	
+
 	// TODO: Add more validation code here.
 	private void validateResource(DocumentReference theDocumentReference) {
 	}

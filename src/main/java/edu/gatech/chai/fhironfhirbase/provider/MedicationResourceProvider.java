@@ -15,6 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,17 +47,15 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 
 	private int preferredPageSize = 30;
 
-	public MedicationResourceProvider() {
-		super();
+	public MedicationResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
-	
+
 	@PostConstruct
-    private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(Medication.class);
-		getFhirbaseMapping().setTableName(MedicationResourceProvider.getType().toLowerCase());
+	private void postConstruct() {
+		setTableName(MedicationResourceProvider.getType().toLowerCase());
 		setMyResourceType(MedicationResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	@Override
@@ -70,14 +69,21 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 
 	@Read()
 	public IBaseResource readMedication(@IdParam IdType theId) {
-		return read(theId, getResourceType(), "medication");
+		IBaseResource retVal = null;
+		
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Search()
 	public IBundleProvider findMedicationById(
-			@RequiredParam(name = Medication.SP_RES_ID) TokenOrListParam theMedicationIds
-			) {
-		
+			@RequiredParam(name = Medication.SP_RES_ID) TokenOrListParam theMedicationIds) {
+
 		if (theMedicationIds == null) {
 			return null;
 		}
@@ -95,20 +101,19 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
-		
+
 		return myBundleProvider;
 	}
-	
+
 	@Search()
-	public IBundleProvider findMedicationByParams(
-			@OptionalParam(name = Medication.SP_CODE) TokenOrListParam theOrCodes,
-			@Sort SortSpec theSort
-			) {
+	public IBundleProvider findMedicationByParams(@OptionalParam(name = Medication.SP_CODE) TokenOrListParam theOrCodes,
+			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "medication m";
 		if (theOrCodes != null) {
-			String where = constructCodeWhereParameter(theOrCodes, fromStatement, "m.resource->'code'");
+			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes", "m.resource->'code'");
+			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
@@ -122,7 +127,7 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
-		
+
 		return myBundleProvider;
 	}
 
@@ -138,13 +143,12 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 	 * This method just provides simple business validation for resources we are
 	 * storing.
 	 * 
-	 * @param theMedication
-	 *            The medication to validate
+	 * @param theMedication The medication to validate
 	 */
 	private void validateResource(Medication theMedication) {
 		/*
-		 * Our server will have a rule that patients must have a family name or
-		 * we will reject them
+		 * Our server will have a rule that patients must have a family name or we will
+		 * reject them
 		 */
 		// if (thePatient.getNameFirstRep().getFamily().isEmpty()) {
 		// OperationOutcome outcome = new OperationOutcome();
@@ -165,6 +169,8 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
+			
 			// _Include
 			List<String> includes = new ArrayList<String>();
 
@@ -172,7 +178,13 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
-			return search(query, getResourceType());
+			try {
+				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			
+			return retVal;
 		}
 
 	}

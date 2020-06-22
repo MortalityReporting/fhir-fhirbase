@@ -16,6 +16,7 @@
 
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +28,7 @@ import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.springframework.stereotype.Service;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
@@ -56,17 +58,15 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 
 	private int preferredPageSize = 30;
 
-	public PractitionerResourceProvider() {
-		super();
+	public PractitionerResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
 
 	@PostConstruct
-    private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(Practitioner.class);
-		getFhirbaseMapping().setTableName(PractitionerResourceProvider.getType().toLowerCase());
+	private void postConstruct() {
+		setTableName(PractitionerResourceProvider.getType().toLowerCase());
 		setMyResourceType(PractitionerResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	public static String getType() {
@@ -89,12 +89,28 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	@Create()
 	public MethodOutcome createPractitioner(@ResourceParam Practitioner thePractitioner) {
 		validateResource(thePractitioner);
-		return create(thePractitioner);
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource createdPractitioner = getFhirbaseMapping().create(thePractitioner, getResourceType());
+			retVal.setId(createdPractitioner.getIdElement());
+			retVal.setResource(createdPractitioner);
+			retVal.setCreated(true);
+		} catch (SQLException e) {
+			retVal.setCreated(false);
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Delete()
 	public void deletePractitioner(@IdParam IdType theId) {
-		delete(theId);
+		try {
+			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -120,8 +136,7 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Practitioner.SP_FAMILY) StringParam theFamilyName,
 			@OptionalParam(name = Practitioner.SP_GIVEN) StringParam theGivenName,
 			@OptionalParam(name = Practitioner.SP_NAME) StringParam theName,
-			@OptionalParam(name = Practitioner.SP_GENDER) StringParam theGender,
-			@Sort SortSpec theSort,
+			@OptionalParam(name = Practitioner.SP_GENDER) StringParam theGender, @Sort SortSpec theSort,
 			@IncludeParam(allow = {}) final Set<Include> theIncludes,
 			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
 
@@ -191,7 +206,15 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readPractitioner(@IdParam IdType theId) {
-		return read(theId, getResourceType(), "patient");
+		IBaseResource retVal = null;
+		
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	/**
@@ -205,8 +228,17 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	@Update()
 	public MethodOutcome updatePractitioner(@IdParam IdType theId, @ResourceParam Practitioner thePractitioner) {
 		validateResource(thePractitioner);
-
-		return update(theId, thePractitioner, getResourceType());
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource updatedPractitioner = getFhirbaseMapping().update(thePractitioner, getResourceType());
+			retVal.setId(updatedPractitioner.getIdElement());
+			retVal.setResource(updatedPractitioner);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	/**
@@ -239,13 +271,21 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
+			
 			List<String> includes = new ArrayList<String>();
 
 			if (toIndex - fromIndex > 0) {
 				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
-			return search(query, getResourceType());
+			try {
+				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			
+			return retVal;
 		}
 	}
 }

@@ -15,6 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -59,17 +60,15 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 
 	private int preferredPageSize = 30;
 
-	public MedicationRequestResourceProvider() {
-		super();
+	public MedicationRequestResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
 
 	@PostConstruct
-    private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(MedicationRequest.class);
-		getFhirbaseMapping().setTableName(MedicationRequestResourceProvider.getType().toLowerCase());
+	private void postConstruct() {
+		setTableName(MedicationRequestResourceProvider.getType().toLowerCase());
 		setMyResourceType(MedicationRequestResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	public static String getType() {
@@ -88,26 +87,60 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 	@Create()
 	public MethodOutcome createMedicationRequest(@ResourceParam MedicationRequest theMedicationRequest) {
 		validateResource(theMedicationRequest);
+		MethodOutcome retVal = new MethodOutcome();
 
-		return create(theMedicationRequest);
+		try {
+			IBaseResource createdMedicationRequest = getFhirbaseMapping().create(theMedicationRequest,
+					getResourceType());
+			retVal.setId(createdMedicationRequest.getIdElement());
+			retVal.setResource(createdMedicationRequest);
+			retVal.setCreated(true);
+		} catch (SQLException e) {
+			retVal.setCreated(false);
+			e.printStackTrace();
+		}
+
+		return retVal;
 	}
 
 	@Delete()
 	public void deleteMedicationRequest(@IdParam IdType theId) {
-		delete(theId);
+		try {
+			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Update()
 	public MethodOutcome updateMedicationRequest(@IdParam IdType theId,
 			@ResourceParam MedicationRequest theMedicationRequest) {
 		validateResource(theMedicationRequest);
+		MethodOutcome retVal = new MethodOutcome();
 
-		return update(theId, theMedicationRequest, getResourceType());
+		try {
+			IBaseResource updatedMedicationRequest = getFhirbaseMapping().update(theMedicationRequest,
+					getResourceType());
+			retVal.setId(updatedMedicationRequest.getIdElement());
+			retVal.setResource(updatedMedicationRequest);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return retVal;
 	}
 
 	@Read()
 	public IBaseResource readMedicationRequest(@IdParam IdType theId) {
-		return read(theId, getResourceType(), "medicationrequest");
+		IBaseResource retVal = null;
+
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return retVal;
 	}
 
 	@Search()
@@ -161,7 +194,8 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "medicationrequest mr";
 		if (theOrCodes != null) {
-			String where = constructCodeWhereParameter(theOrCodes, fromStatement, "mr");
+			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes", "mr");
+			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
@@ -172,15 +206,16 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 		}
 
 		if (theDate != null) {
-			String where = constructDateWhereParameter(theDate, fromStatement, "mr", "authoredOn");
+			String where = constructDateWhereParameter(theDate, "mr", "authoredOn");
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
 		}
 
 		if (theMedicationOrCodes != null) {
-			String where = constructCodeWhereParameter(theOrCodes, fromStatement,
+			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes",
 					"mr.resource->'medicationCodeableConcept'");
+			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
@@ -251,6 +286,8 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
+
 			// _Include
 			List<String> includes = new ArrayList<String>();
 
@@ -262,7 +299,13 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
-			return search(query, getResourceType());
+			try {
+				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+
+			return retVal;
 		}
 	}
 }

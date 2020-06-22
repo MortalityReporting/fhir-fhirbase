@@ -3,21 +3,19 @@ package edu.gatech.chai.fhironfhirbase.operation;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Resource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
 import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.context.RuntimeResourceDefinition;
 import ca.uhn.fhir.parser.IParser;
 import edu.gatech.chai.fhironfhirbase.database.DatabaseConfiguration;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
@@ -25,40 +23,13 @@ import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 @Component
 public class FhirbaseMapping implements IResourceMapping {
+	private static final Logger logger = LoggerFactory.getLogger(FhirbaseMapping.class);
 
 	@Autowired
 	DatabaseConfiguration databaseConfiguration;
 
 	protected FhirContext ctx;
-	protected Class<? extends Resource> fhirClass;
-	protected String tableName;
 
-//	public FhirbaseMapping() {
-//	}
-//	
-//	public FhirbaseMapping(Class<? extends Resource> fhirClass, String tableName) {
-//		ctx = FhirContext.forR4();
-//
-//		setFhirClass(fhirClass);
-//		setTableName(tableName);
-//	}
-
-	public Class<? extends Resource> getFhirClass() {
-		return fhirClass;
-	}
-
-	public void setFhirClass(Class<? extends Resource> fhirClass) {
-		this.fhirClass = fhirClass;
-	}
-
-	public String getTableName() {
-		return tableName;
-	}
-
-	public void setTableName(String tableName) {
-		this.tableName = tableName;
-	}
-	
 	public FhirContext getCtx() {
 		return this.ctx;
 	}
@@ -68,8 +39,8 @@ public class FhirbaseMapping implements IResourceMapping {
 	}
 
 	@Override
-	public String create(IBaseResource fhirResource) throws Exception {
-		String retVal = null;
+	public IBaseResource create(IBaseResource fhirResource, Class<? extends Resource> fhirClass) throws SQLException {
+		IBaseResource retVal = null;
 
 		IParser parser = ctx.newJsonParser();
 		String serialized = parser.encodeResourceToString(fhirResource).replace("'", "''");
@@ -77,15 +48,17 @@ public class FhirbaseMapping implements IResourceMapping {
 		Connection connection = databaseConfiguration.getDataSource().getConnection();
 
 		String query = "SELECT fhirbase_create('"+serialized+"'::jsonb);";
-		System.out.println("\n\n\n"+query+"\n\n\n");
+		logger.debug("Query to create: " + query);
 		PreparedStatement stmt = connection.prepareStatement(query);
 
 		ResultSet rs = stmt.executeQuery();
 		if (rs.next()) {
 			String createdResource = rs.getString("fhirbase_create");
-			JsonObject jsonObject = new JsonParser().parse(createdResource).getAsJsonObject();
-			JsonElement idValue = jsonObject.get("id");
-			retVal = idValue.getAsString();
+			retVal = parser.parseResource(fhirClass, createdResource);
+//			
+//			JsonObject jsonObject = new JsonParser().parse(createdResource).getAsJsonObject();
+//			JsonElement idValue = jsonObject.get("id");
+//			retVal = idValue.getAsString();
 		}
 
 		connection.close();
@@ -94,13 +67,13 @@ public class FhirbaseMapping implements IResourceMapping {
 	}
 
 	@Override
-	public IBaseResource read(IdType id, Class<? extends Resource> fhirClass, String tableName) throws Exception {
+	public IBaseResource read(IdType id, Class<? extends Resource> fhirClass, String tableName) throws SQLException {
 		IBaseResource retVal = null;
 
 		Connection connection = databaseConfiguration.getDataSource().getConnection();
 		String query = "SELECT resource FROM " + tableName + " where id = ? limit 1";
 
-		System.out.println("READ: "+query);
+		logger.debug("Query to read: "+query);
 		String idString = id.getIdPart();
 		PreparedStatement stmt = connection.prepareStatement(query);
 		stmt.setString(1, idString);
@@ -108,16 +81,17 @@ public class FhirbaseMapping implements IResourceMapping {
 		ResultSet rs = stmt.executeQuery();
 		if (rs.next()) {
 			String resource = rs.getString("resource");
-			System.out.println("READ RESOURCE: "+resource);
 			IParser parser = ctx.newJsonParser();
 			retVal = parser.parseResource(fhirClass, resource);
 		}
 
+		connection.close();
+		
 		return retVal;
 	}
 
 	@Override
-	public IBaseResource update(IBaseResource fhirResource, Class<? extends Resource> fhirClass) throws Exception {
+	public IBaseResource update(IBaseResource fhirResource, Class<? extends Resource> fhirClass) throws SQLException {
 		IBaseResource retVal = null;
 
 		IParser parser = ctx.newJsonParser();
@@ -128,7 +102,7 @@ public class FhirbaseMapping implements IResourceMapping {
 		String query = "SELECT fhirbase_create('"+serialized+"'::jsonb);";
 		PreparedStatement stmt = connection.prepareStatement(query);
 
-		System.out.println("<<<<<<<<<<<<< SQL:"+query);
+		logger.debug("Query to update:"+query);
 
 		ResultSet rs = stmt.executeQuery();
 		if (rs.next()) {
@@ -149,7 +123,7 @@ public class FhirbaseMapping implements IResourceMapping {
 	};
 
 	@Override
-	public IBaseResource delete(IdType id) throws Exception {
+	public IBaseResource delete(IdType id, Class<? extends Resource> fhirClass, String tableName) throws SQLException {
 		IBaseResource retVal = null;
 		IParser parser = ctx.newJsonParser();
 
@@ -157,7 +131,7 @@ public class FhirbaseMapping implements IResourceMapping {
 
 		Connection connection = databaseConfiguration.getDataSource().getConnection();
 
-		String query = "SELECT fhirbase_delete('" + getTableName() + "', '" + idString + "');";
+		String query = "SELECT fhirbase_delete('" + tableName + "', '" + idString + "');";
 		PreparedStatement stmt = connection.prepareStatement(query);
 
 		ResultSet rs = stmt.executeQuery();
@@ -169,7 +143,7 @@ public class FhirbaseMapping implements IResourceMapping {
 						.internalErrorException("Not Existing Resource or Incorrect Resource Content for Delete");
 			}
 
-			retVal = parser.parseResource(getFhirClass(), deletedResource);
+			retVal = parser.parseResource(fhirClass, deletedResource);
 		}
 
 		connection.close();
@@ -178,7 +152,7 @@ public class FhirbaseMapping implements IResourceMapping {
 	}
 
 	@Override
-	public List<IBaseResource> search(String sql, Class<? extends Resource> fhirClass) throws Exception {
+	public List<IBaseResource> search(String sql, Class<? extends Resource> fhirClass) throws SQLException {
 		List<IBaseResource> retVal = new ArrayList<IBaseResource>();
 		IParser parser = ctx.newJsonParser();
 
@@ -204,7 +178,7 @@ public class FhirbaseMapping implements IResourceMapping {
 	}
 
 	@Override
-	public int getSize(String sql) throws Exception {
+	public int getSize(String sql) throws SQLException {
 		int retVal = 0;
 		
 		if (databaseConfiguration == null) {
@@ -216,33 +190,6 @@ public class FhirbaseMapping implements IResourceMapping {
 		ResultSet rs = stmt.executeQuery();
 		if (rs.next()) {
 			retVal = rs.getInt("count");
-		}
-
-		connection.close();
-
-		return retVal;
-	}
-
-	@Override
-	public IBaseResource delete(String tableName, String id, Class<? extends Resource> fhirClass) throws Exception {
-		IBaseResource retVal = null;
-		IParser parser = ctx.newJsonParser();
-
-		Connection connection = databaseConfiguration.getDataSource().getConnection();
-
-		String query = "SELECT fhirbase_delete('" + tableName + "', '" + id + "');";
-		PreparedStatement stmt = connection.prepareStatement(query);
-
-		ResultSet rs = stmt.executeQuery();
-		if (rs.next()) {
-			String deletedResource = rs.getString("fhirbase_delete");
-			if (deletedResource == null || deletedResource.isEmpty()) {
-				connection.close();
-				throw ThrowFHIRExceptions
-						.internalErrorException("Not Existing Resource or Incorrect Resource Content for Delete");
-			}
-
-			retVal = parser.parseResource(fhirClass, deletedResource);
 		}
 
 		connection.close();

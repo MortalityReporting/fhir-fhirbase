@@ -38,21 +38,16 @@ import ca.uhn.fhir.rest.api.server.RequestDetails;
 @Service
 public class ConceptMapResourceProvider extends BaseResourceProvider {
 	private static final Logger logger = LoggerFactory.getLogger(ConceptMapResourceProvider.class);
-
-	private FhirContext fhirContext;
 	private int preferredPageSize = 30;
 
-	public ConceptMapResourceProvider() {
-		super();
+	public ConceptMapResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
-	
+
 	@PostConstruct
     private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(ConceptMap.class);
-		getFhirbaseMapping().setTableName(ConceptMapResourceProvider.getType().toLowerCase());
-		setMyResourceType(ConceptMapResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+		setMyResourceType(ConceptMapResourceProvider.getType());		
+		getTotalSize("SELECT count(*) FROM "+ConceptMapResourceProvider.getType().toLowerCase()+";");
 	}
 
 	@Override
@@ -62,10 +57,6 @@ public class ConceptMapResourceProvider extends BaseResourceProvider {
 
 	public static String getType() {
 		return "ConceptMap";
-	}
-
-	public void setFhirContext(FhirContext fhirContext) {
-		this.fhirContext = fhirContext;
 	}
 
 	@Read()
@@ -132,7 +123,7 @@ public class ConceptMapResourceProvider extends BaseResourceProvider {
 						
 						if (response.getStatusCode().equals(HttpStatus.OK)) {
 							String result = response.getBody();
-							IParser fhirJsonParser = fhirContext.newJsonParser();
+							IParser fhirJsonParser = getFhirContext().newJsonParser();
 							Parameters parameters = fhirJsonParser.parseResource(Parameters.class, result);
 							if (parameters != null && !parameters.isEmpty()) {
 								logger.debug("$translate: responding parameters from external server, " + remoteMappingTerminologyUrl);

@@ -1,18 +1,3 @@
-/*******************************************************************************
- * Copyright (c) 2019 Georgia Tech Research Institute
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.sql.SQLException;
@@ -24,11 +9,13 @@ import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.IdType;
-import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
-import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
@@ -36,7 +23,6 @@ import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
 import ca.uhn.fhir.rest.annotation.IdParam;
-import ca.uhn.fhir.rest.annotation.IncludeParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.RequiredParam;
@@ -56,41 +42,36 @@ import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 
 @Service
-public class ObservationResourceProvider extends BaseResourceProvider {
+public class CompositionResourceProvider extends BaseResourceProvider {
+	private static final Logger logger = LoggerFactory.getLogger(CompositionResourceProvider.class);
 
-	private int preferredPageSize = 30;
-
-	public ObservationResourceProvider(FhirContext ctx) {
+	public CompositionResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(ObservationResourceProvider.getType().toLowerCase());
-		setMyResourceType(ObservationResourceProvider.getType());
+		setTableName(CompositionResourceProvider.getType().toLowerCase());
+		setMyResourceType(CompositionResourceProvider.getType());
 		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	public static String getType() {
-		return "Observation";
+		return "Composition";
 	}
 
 	@Override
-	public Class<Observation> getResourceType() {
-		return Observation.class;
+	public Class<Composition> getResourceType() {
+		return Composition.class;
 	}
 
-	/**
-	 * The "@Create" annotation indicates that this method implements "create=type",
-	 * which adds a new instance of a resource to the server.
-	 */
 	@Create()
-	public MethodOutcome createObservation(@ResourceParam Observation theObservation) {
-		validateResource(theObservation);
+	public MethodOutcome createComposition(@ResourceParam Composition theComposition) {
+		validateResource(theComposition);
 		MethodOutcome retVal = new MethodOutcome();
-		
+
 		try {
-			IBaseResource createdObservation = getFhirbaseMapping().create(theObservation, getResourceType());
+			IBaseResource createdObservation = getFhirbaseMapping().create(theComposition, getResourceType());
 			retVal.setId(createdObservation.getIdElement());
 			retVal.setResource(createdObservation);
 			retVal.setCreated(true);
@@ -98,12 +79,12 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 			retVal.setCreated(false);
 			e.printStackTrace();
 		}
-		
+
 		return retVal;
 	}
 
 	@Delete()
-	public void deleteObservation(@IdParam IdType theId) {
+	public void deleteComposition(@IdParam IdType theId) {
 		try {
 			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
 		} catch (SQLException e) {
@@ -112,64 +93,52 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	}
 
 	@Search()
-	public IBundleProvider findObservationsById(
-			@RequiredParam(name = Observation.SP_RES_ID) TokenOrListParam theObservationIds, @Sort SortSpec theSort,
+	public IBundleProvider findCompositionsById(
+			@RequiredParam(name = Composition.SP_RES_ID) TokenOrListParam theCompositionIds, 
+			@Sort SortSpec theSort) {
 
-			@IncludeParam(allow = { "Observation:based-on", "Observation:context", "Observation:device",
-					"Observation:encounter", "Observation:patient", "Observation:performer",
-					"Observation:related-target", "Observation:specimen",
-					"Observation:subject" }) final Set<Include> theIncludes,
-
-			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
-		if (theObservationIds == null) {
+		if (theCompositionIds == null) {
 			return null;
 		}
 
 		String whereStatement = "WHERE ";
-		for (TokenParam theObservation : theObservationIds.getValuesAsQueryTokens()) {
-			whereStatement += "o.id = " + theObservation.getValue() + " OR ";
+		for (TokenParam theObservation : theCompositionIds.getValuesAsQueryTokens()) {
+			whereStatement += "comp.id = " + theObservation.getValue() + " OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
 
-		String queryCount = "SELECT count(*) FROM observation o " + whereStatement;
-		String query = "SELECT * FROM observation o " + whereStatement;
+		String queryCount = "SELECT count(*) FROM " + getTableName() + " comp " + whereStatement;
+		String query = "SELECT * FROM " + getTableName() + " comp " + whereStatement;
 
-		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, theReverseIncludes);
+		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
 		return myBundleProvider;
 	}
 
 	@Search()
-	public IBundleProvider findObservationsByParams(
-			@OptionalParam(name = Observation.SP_CODE) TokenOrListParam theOrCodes,
-			@OptionalParam(name = Observation.SP_DATE) DateParam theDate,
-			@OptionalParam(name = Observation.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME,
+	public IBundleProvider findCompositionsByParams(
+			@OptionalParam(name = Composition.SP_TYPE) TokenOrListParam theOrTypes,
+			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
+			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME,
 					USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam thePatients,
-			@OptionalParam(name = Observation.SP_SUBJECT, chainWhitelist = {
-					"", USCorePatient.SP_NAME, USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam theSubjects,
-			@Sort SortSpec theSort,
-
-			@IncludeParam(allow = { "Observation:based-on", "Observation:context", "Observation:device",
-					"Observation:encounter", "Observation:patient", "Observation:performer",
-					"Observation:related-target", "Observation:specimen",
-					"Observation:subject" }) final Set<Include> theIncludes,
-
-			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
+			@OptionalParam(name = Composition.SP_SUBJECT, chainWhitelist = { "", USCorePatient.SP_NAME,
+					USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam theSubjects,
+			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
-		String fromStatement = "observation o";
-		if (theOrCodes != null) {
-			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes", "o.resource->'code'");
-			String where = constructCodeWhereParameter(theOrCodes);
+		String fromStatement = getTableName() + " comp";
+		if (theOrTypes != null) {
+			fromStatement = constructFromStatement(theOrTypes, fromStatement, "types", "comp.resource->'type'");
+			String where = constructTypeWhereParameter(theOrTypes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
 		}
 
 		if (theDate != null) {
-			String where = constructDateWhereParameter(theDate, "o", "effectiveDateTime");
+			String where = constructDateWhereParameter(theDate, "comp", "date");
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
@@ -177,7 +146,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 
 		if (theSubjects != null) {
 			for (ReferenceParam theSubject : theSubjects.getValuesAsQueryTokens()) {
-				String where = constructSubjectWhereParameter(theSubject, "o");
+				String where = constructSubjectWhereParameter(theSubject, "comp");
 				if (where != null && !where.isEmpty()) {
 					whereParameters.add(where);
 				}
@@ -186,7 +155,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 
 		if (thePatients != null) {
 			for (ReferenceParam thePatient : thePatients.getValuesAsQueryTokens()) {
-				String where = constructPatientWhereParameter(thePatient, "o");
+				String where = constructPatientWhereParameter(thePatient, "comp");
 				if (where != null && !where.isEmpty()) {
 					whereParameters.add(where);
 				}
@@ -198,7 +167,9 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
 
-		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, theReverseIncludes);
+		logger.debug("query count:" + queryCount + "\nquery:" + query);
+		
+		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
 		return myBundleProvider;
@@ -219,13 +190,13 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	@Read()
 	public IBaseResource readObservation(@IdParam IdType theId) {
 		IBaseResource retVal = null;
-		
+
 		try {
 			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
-		
+
 		return retVal;
 	}
 
@@ -238,32 +209,32 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	 * @return This method returns a "MethodOutcome"
 	 */
 	@Update()
-	public MethodOutcome updateObservation(@IdParam IdType theId, @ResourceParam Observation theObservation) {
-		validateResource(theObservation);
+	public MethodOutcome updateComposition(@IdParam IdType theId, @ResourceParam Composition theComposition) {
+		validateResource(theComposition);
 		MethodOutcome retVal = new MethodOutcome();
-		
+
 		try {
-			IBaseResource updatedObservation = getFhirbaseMapping().update(theObservation, getResourceType());
+			IBaseResource updatedObservation = getFhirbaseMapping().update(theComposition, getResourceType());
 			retVal.setId(updatedObservation.getIdElement());
 			retVal.setResource(updatedObservation);
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
-		
+
 		return retVal;
 	}
 
 	// TODO: Add more validation code here.
-	private void validateResource(Observation theObservation) {
+	private void validateResource(Composition theComposition) {
 		OperationOutcome outcome = new OperationOutcome();
 		CodeableConcept detailCode = new CodeableConcept();
-		if (theObservation.getCode().isEmpty()) {
-			detailCode.setText("No code is provided.");
+		if (theComposition.getType().isEmpty()) {
+			detailCode.setText("No type is provided.");
 			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
-		Reference subjectReference = theObservation.getSubject();
+		Reference subjectReference = theComposition.getSubject();
 		if (subjectReference == null || subjectReference.isEmpty()) {
 			detailCode.setText("Subject cannot be empty");
 			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
@@ -295,42 +266,6 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 			
 			// _Include
 			List<String> includes = new ArrayList<String>();
-
-			if (theIncludes.contains(new Include("Observation:based-on"))) {
-				includes.add("Observation:based-on");
-			}
-
-			if (theIncludes.contains(new Include("Observation:context"))) {
-				includes.add("Observation:context");
-			}
-
-			if (theIncludes.contains(new Include("Observation:device"))) {
-				includes.add("Observation:device");
-			}
-
-			if (theIncludes.contains(new Include("Observation:encounter"))) {
-				includes.add("Observation:encounter");
-			}
-
-			if (theIncludes.contains(new Include("Observation:patient"))) {
-				includes.add("Observation:patient");
-			}
-
-			if (theIncludes.contains(new Include("Observation:performer"))) {
-				includes.add("Observation:performer");
-			}
-
-			if (theIncludes.contains(new Include("Observation:related-target"))) {
-				includes.add("Observation:related-target");
-			}
-
-			if (theIncludes.contains(new Include("Observation:specimen"))) {
-				includes.add("Observation:specimen");
-			}
-
-			if (theIncludes.contains(new Include("Observation:subject"))) {
-				includes.add("Observation:subject");
-			}
 
 			if (toIndex - fromIndex > 0) {
 				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;

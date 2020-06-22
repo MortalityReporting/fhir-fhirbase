@@ -8,7 +8,7 @@ import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
-import org.hl7.fhir.r4.model.Location;
+import org.hl7.fhir.r4.model.RelatedPerson;
 import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
@@ -29,50 +29,50 @@ import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
 
 @Service
-public class LocationResourceProvider extends BaseResourceProvider {
+public class RelatedPersonResourceProvider extends BaseResourceProvider {
 	protected FhirbaseMapping fhirbaseMapping;
 	private int preferredPageSize = 30;
 
-	public LocationResourceProvider(FhirContext ctx) {
+	public RelatedPersonResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(LocationResourceProvider.getType().toLowerCase());
-		setMyResourceType(LocationResourceProvider.getType());
+		setTableName(RelatedPersonResourceProvider.getType().toLowerCase());
+		setMyResourceType(RelatedPersonResourceProvider.getType());
 		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	public static String getType() {
-		return "Location";
+		return "RelatedPerson";
 	}
 
 	@Override
-	public Class<Location> getResourceType() {
-		return Location.class;
+	public Class<RelatedPerson> getResourceType() {
+		return RelatedPerson.class;
 	}
 
 	@Create()
-	public MethodOutcome createLocation(@ResourceParam Location location) {
-		validateResource(location);
+	public MethodOutcome createRelatedPerson(@ResourceParam RelatedPerson relatedPerson) {
+		validateResource(relatedPerson);
 		MethodOutcome retVal = new MethodOutcome();
-		
+
 		try {
-			IBaseResource createdLocation = getFhirbaseMapping().create(location, getResourceType());
-			retVal.setId(createdLocation.getIdElement());
-			retVal.setResource(createdLocation);
+			IBaseResource createdRelatedPerson = getFhirbaseMapping().create(relatedPerson, getResourceType());
+			retVal.setId(createdRelatedPerson.getIdElement());
+			retVal.setResource(createdRelatedPerson);
 			retVal.setCreated(true);
 		} catch (SQLException e) {
 			retVal.setCreated(false);
 			e.printStackTrace();
 		}
-		
+
 		return retVal;
 	}
 
 	@Delete()
-	public void deleteLocation(@IdParam IdType theId) {
+	public void deleteRelatedPerson(@IdParam IdType theId) {
 		try {
 			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
 		} catch (SQLException e) {
@@ -81,50 +81,50 @@ public class LocationResourceProvider extends BaseResourceProvider {
 	}
 
 	@Read()
-	public IBaseResource readLocation(@IdParam IdType theId) {
+	public IBaseResource readRelatedPerson(@IdParam IdType theId) {
 		IBaseResource retVal = null;
-		
+
 		try {
 			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
-		
+
 		return retVal;
 	}
 
 	@Update()
-	public MethodOutcome updateLocation(@IdParam IdType theId, @ResourceParam Location location) {
-		validateResource(location);
+	public MethodOutcome updateRelatedPerson(@IdParam IdType theId, @ResourceParam RelatedPerson relatedPerson) {
+		validateResource(relatedPerson);
 		MethodOutcome retVal = new MethodOutcome();
-		
+
 		try {
-			IBaseResource updatedLocation = getFhirbaseMapping().update(location, getResourceType());
-			retVal.setId(updatedLocation.getIdElement());
-			retVal.setResource(updatedLocation);
+			IBaseResource updatedRelatedPerson = getFhirbaseMapping().update(relatedPerson, getResourceType());
+			retVal.setId(updatedRelatedPerson.getIdElement());
+			retVal.setResource(updatedRelatedPerson);
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
-		
+
 		return retVal;
 	}
 
 	@Search()
-	public IBundleProvider findLocationByIds(
-			@RequiredParam(name = Location.SP_RES_ID) TokenOrListParam theLocationIds) {
-		if (theLocationIds == null) {
+	public IBundleProvider findRelatedPersonnByIds(
+			@RequiredParam(name = RelatedPerson.SP_RES_ID) TokenOrListParam theRelatedPersonIds) {
+		if (theRelatedPersonIds == null) {
 			return null;
 		}
 
 		String whereStatement = "WHERE ";
-		for (TokenParam theCondition : theLocationIds.getValuesAsQueryTokens()) {
-			whereStatement += "lo.id = " + theCondition.getValue() + " OR ";
+		for (TokenParam theCondition : theRelatedPersonIds.getValuesAsQueryTokens()) {
+			whereStatement += "rp.id = " + theCondition.getValue() + " OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
 
-		String queryCount = "SELECT count(*) FROM location lo " + whereStatement;
-		String query = "SELECT * FROM location lo " + whereStatement;
+		String queryCount = "SELECT count(*) FROM " + getTableName() + " rp " + whereStatement;
+		String query = "SELECT * FROM " + getTableName() + " rp " + whereStatement;
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
@@ -133,10 +133,10 @@ public class LocationResourceProvider extends BaseResourceProvider {
 	}
 
 	@Search()
-	public IBundleProvider findLocationByParams(@Sort SortSpec theSort) {
+	public IBundleProvider findRelatedPersonByParams(@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
-		String fromStatement = "location lo";
+		String fromStatement = getTableName() + " lo";
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
@@ -151,7 +151,7 @@ public class LocationResourceProvider extends BaseResourceProvider {
 	}
 
 	// TODO: Add more validation code here.
-	private void validateResource(Location location) {
+	private void validateResource(RelatedPerson relatedPerson) {
 	}
 
 	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
@@ -163,7 +163,7 @@ public class LocationResourceProvider extends BaseResourceProvider {
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
-			
+
 			// _Include
 			// TODO: do this later
 			List<String> includes = new ArrayList<String>();
@@ -177,7 +177,7 @@ public class LocationResourceProvider extends BaseResourceProvider {
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			return retVal;
 		}
 

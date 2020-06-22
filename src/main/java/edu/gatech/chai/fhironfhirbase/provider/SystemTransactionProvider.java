@@ -29,15 +29,22 @@ import org.hl7.fhir.r4.model.Bundle.BundleEntryRequestComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryResponseComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.Bundle.HTTPVerb;
+import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Composition;
+import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.Procedure;
 import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.RelatedPerson;
 import org.springframework.http.HttpStatus;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Identifier;
 import org.hl7.fhir.r4.model.ListResource;
 import org.hl7.fhir.r4.model.ListResource.ListEntryComponent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Resource;
@@ -47,18 +54,25 @@ import ca.uhn.fhir.rest.annotation.Transaction;
 import ca.uhn.fhir.rest.annotation.TransactionParam;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
+import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
+import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
 import edu.gatech.chai.fhironfhirbase.model.MyBundle;
 
 public class SystemTransactionProvider {
+	private static final Logger logger = LoggerFactory.getLogger(SystemTransactionProvider.class);
 
 	private FhirContext ctx;
 	private String caseNumber;
+	private String patientId;
 	private Map<String, String> referenceIds;
 
 	public SystemTransactionProvider() {
-		ctx = FhirContext.forR4();
 	}
 
+	public SystemTransactionProvider(FhirContext ctx) {
+		this.ctx = ctx;
+	}
+	
 	public static String getType() {
 		return "Bundle";
 	}
@@ -137,7 +151,7 @@ public class SystemTransactionProvider {
 			Resource resource = entry.getResource();
 			if (resource instanceof Patient) {
 				Patient patient = (Patient) resource;
-				String patientId = null;
+				patientId = null;
 				for (Identifier identifier : patient.getIdentifier()) {
 					Bundle responseBundle = client
 							.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly()
@@ -149,7 +163,7 @@ public class SystemTransactionProvider {
 						patientId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
 						caseNumber = identifier.getValue();
 
-						System.out.println(">>>>>>>>>>>>>>>>" + caseNumber + ", patientId:"+patientId);
+						System.out.println(">>>>>>>>>>>>>>>>" + caseNumber + ", patientId:" + patientId);
 						break;
 					}
 				}
@@ -160,9 +174,9 @@ public class SystemTransactionProvider {
 					patient.setIdElement(new IdType("Patient", patientId));
 //					patient.setId("Patient/"+patientId);
 					MethodOutcome outcome = client.update().resource(patient).execute();
-					if (outcome.getCreated()) {
+					if (outcome.getId() != null && !outcome.getId().isEmpty()) {
 						response.setStatus(
-								String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
+								String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
 						response.setLocation(PatientResourceProvider.getType() + "/" + patientId);
 
 						entry.setFullUrl(client.getServerBase() + "Patient/" + patientId);
@@ -195,7 +209,7 @@ public class SystemTransactionProvider {
 						entry.setResource(null);
 					}
 				}
-				
+
 				entry.setRequest(null);
 			}
 		}
@@ -269,7 +283,7 @@ public class SystemTransactionProvider {
 						entry.setResource(null);
 					}
 				}
-				
+
 				entry.setRequest(null);
 			}
 		}
@@ -336,17 +350,21 @@ public class SystemTransactionProvider {
 					} else if (resource instanceof DocumentReference) {
 						DocumentReference res = (DocumentReference) resource;
 						updateReference(res.getSubject());
+					} else if (resource instanceof RelatedPerson) {
+						RelatedPerson res = (RelatedPerson) resource;
+						updateReference(res.getPatient());
 					}
 
 					MethodOutcome outcome = client.create().resource(resource).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated()) {
+					if (outcome.getCreated() != null && outcome.getCreated()) {
 						String newId = outcome.getId().getIdPart();
 						if (newId != null && !newId.isEmpty()) {
 							response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
 									+ HttpStatus.CREATED.getReasonPhrase());
 							response.setLocation(resource.getResourceType().toString() + "/" + newId);
-							
-							entry.setFullUrl(client.getServerBase() + resource.getResourceType().toString() + "/" + newId);
+
+							entry.setFullUrl(
+									client.getServerBase() + resource.getResourceType().toString() + "/" + newId);
 							if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 								entry.setResource((Resource) outcome.getResource());
 							} else {
@@ -360,17 +378,59 @@ public class SystemTransactionProvider {
 					} else {
 						entry.setResource(null);
 						response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()) + " "
-								+ HttpStatus.BAD_REQUEST.getReasonPhrase());						
+								+ HttpStatus.BAD_REQUEST.getReasonPhrase());
 					}
 				} else {
 					entry.setResource(null);
-					response.setStatus(
-							String.valueOf(HttpStatus.BAD_REQUEST.value()) + " " + HttpStatus.BAD_REQUEST.getReasonPhrase());
+					response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()) + " "
+							+ HttpStatus.BAD_REQUEST.getReasonPhrase());
 				}
 
 				entry.setRequest(null);
 			}
 		}
+	}
+
+	private void createComposition(IGenericClient client, List<BundleEntryComponent> entries) {
+		// Check if we already have a composition for the same patient
+		Bundle responseBundle = client.search().forResource(Composition.class)
+				.where(Composition.SUBJECT.hasAnyOfIds(patientId))
+				.and(Composition.TYPE.exactly().systemAndCode("http://loinc.org", "64297-5")).returnBundle(Bundle.class)
+				.execute();
+
+		Composition composition;
+		boolean create = true;
+		if (responseBundle.getTotal() > 0) {
+			composition = (Composition) responseBundle.getEntryFirstRep().getResource();
+			create = false; // we should update
+		} else {
+			// Create a composition for this batch write.
+			composition = new Composition();
+			composition.setType(new CodeableConcept(new Coding("http://loinc.org", "64297-5", "Death certificate")));
+		}
+
+		// Walk through the entries again and add the entries to composition	
+		SectionComponent sectionComponent = new SectionComponent();
+		for (BundleEntryComponent entry : entries) {
+			Resource resource = entry.getResource();
+			if (resource instanceof Patient) {
+				composition.setSubject(new Reference(resource.getIdElement()));
+			} 
+			sectionComponent.addEntry(new Reference(resource));
+		}
+		
+		composition.getSection().add(sectionComponent);
+		MethodOutcome mo;
+		if (create) {
+			mo = client.create().resource(composition).encodedJson().prettyPrint().execute();
+		} else {
+			mo = client.update().resource(composition).encodedJson().prettyPrint().execute();
+		}
+		
+		if (mo.getId() == null) {
+			logger.debug("Failed to create a composition for the batch upload.");
+		}
+		
 	}
 
 //	private void processGet(String requestUrl, List<BundleEntryComponent> entries) {
@@ -428,6 +488,17 @@ public class SystemTransactionProvider {
 		String requestUrl = theRequest.getRequestURL().toString();
 		IGenericClient client = ctx.newRestfulGenericClient(requestUrl);
 
+		String authBasic = System.getenv("AUTH_BASIC");
+		String authBearer = System.getenv("AUTH_BEARER");
+		if (authBasic != null && !authBasic.isEmpty()) {
+			String[] auth = authBasic.split(":");
+			if (auth.length == 2) {
+				client.registerInterceptor(new BasicAuthInterceptor(auth[0], auth[1]));
+			}
+		} else if (authBearer != null && !authBearer.isEmpty()) {
+			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
+		}
+
 		// First save this bundle to fhirbase if POST/PUT
 //		client.create().resource(theBundle).prettyPrint().encodedJson().execute();
 
@@ -443,11 +514,14 @@ public class SystemTransactionProvider {
 			// 4. Get or Head
 			// 5. Conditional Reference
 
+			processDelete(client, entries);
 			processPostPatient(client, entries);
 			processPostPractitioner(client, entries);
-			processDelete(client, entries);
 			processPost(client, entries);
 //			processGet(theRequest.getRequestURL().toString(), entries);
+
+			createComposition(client, entries);
+
 			theBundle.setType(BundleType.BATCHRESPONSE);
 
 			break;

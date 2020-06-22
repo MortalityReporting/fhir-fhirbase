@@ -2,16 +2,12 @@ package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.text.Format;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
-import org.hl7.fhir.r4.model.IdType;
-import org.hl7.fhir.r4.model.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ParamPrefixEnum;
@@ -19,7 +15,6 @@ import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
-import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
@@ -30,18 +25,25 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 	
 	private FhirbaseMapping fhirbaseMapping;
 	private String myResourceType;
+	private String tableName;
+	private FhirContext ctx;
 	
-	public BaseResourceProvider() {
+	public BaseResourceProvider(FhirContext ctx) {
+		this.ctx = ctx;
 	}
 
 	@Autowired
 	public final void setFhirbaseMapping(FhirbaseMapping fhirbaseMapping) {
-		fhirbaseMapping.setCtx(FhirContext.forR4());
+		fhirbaseMapping.setCtx(getFhirContext());
 		this.fhirbaseMapping = fhirbaseMapping;
 	}
 	
-	public FhirbaseMapping getFhirbaseMapping() {
-		return this.fhirbaseMapping;
+	public FhirContext getFhirContext() {
+		return this.ctx;
+	}
+	
+	public void setFhirContext(FhirContext ctx) {
+		this.ctx = ctx;
 	}
 	
 	public String getMyResourceType() {
@@ -50,6 +52,18 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 	
 	public void setMyResourceType(String myResourceType) {
 		this.myResourceType = myResourceType;
+	}
+	
+	public String getTableName() {
+		return this.tableName;
+	}
+	
+	public void setTableName(String tableName) {
+		this.tableName = tableName;
+	}
+	
+	public FhirbaseMapping getFhirbaseMapping() {
+		return this.fhirbaseMapping;
 	}
 	
 	public String constructOrderParams(SortSpec theSort) {
@@ -92,74 +106,6 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return totalSize;
 	}
 
-	protected MethodOutcome create(IBaseResource resource) {
-		String idString = null;
-		try {
-			idString = fhirbaseMapping.create(resource);
-		} catch (Exception e) {
-			e.printStackTrace();
-			ThrowFHIRExceptions.internalErrorException(e.getMessage());
-		}
-
-		return new MethodOutcome(new IdType(idString));
-	}
-
-	protected IBaseResource read(IdType theId, Class<? extends Resource> fhirClass, String tableName) {
-		IBaseResource retval = null;
-
-		try {
-			retval = fhirbaseMapping.read(theId, fhirClass, tableName);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		if (retval == null) {
-			throw new ResourceNotFoundException(theId);
-		}
-
-		return retval;
-	}
-
-	protected MethodOutcome update(IdType theId, IBaseResource thePatient, Class<? extends Resource> fhirClass) {
-		IBaseResource retVal = null;
-
-		try {
-			retVal = fhirbaseMapping.update(thePatient, fhirClass);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		if (retVal == null) {
-			throw new ResourceNotFoundException(theId);
-		}
-		MethodOutcome mo = new MethodOutcome(retVal.getIdElement(), true);
-		mo.setResource(retVal);
-		return mo;
-	}
-
-	protected void delete(IdType theId) {
-		try {
-			fhirbaseMapping.delete(theId);
-		} catch (Exception e) {
-			e.printStackTrace();
-			throw new ResourceNotFoundException(theId);
-		}
-	}
-
-	protected List<IBaseResource> search(String sql, Class<? extends Resource> fhirClass) {
-		List<IBaseResource> retv = new ArrayList<IBaseResource>();
-
-		try {
-			List<IBaseResource> searchedResource = fhirbaseMapping.search(sql, fhirClass);
-			retv.addAll(searchedResource);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		return retv;
-
-	}
-
 	protected String constructWhereStatement(List<String> whereParameters, SortSpec theSort) {
 		String whereStatement = "";
 		if (whereParameters.size() > 0) {
@@ -179,15 +125,22 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return whereStatement;
 	}
 
-	protected String constructTypeWhereParameter(TokenOrListParam theOrTypes, String fromStatement, String pathToCoding) {
+	protected String constructFromStatement(TokenOrListParam tokenList, String fromStatement, String alias, String pathToCoding) {
+		List<TokenParam> tokens = tokenList.getValuesAsQueryTokens();
+		if (tokens.size() > 0) {
+			if (!fromStatement.contains(alias)) {
+				fromStatement += ", jsonb_array_elements("+pathToCoding+"->'coding') " + alias;
+			}
+		}
+		
+		return fromStatement;
+	}
+	
+	protected String constructTypeWhereParameter(TokenOrListParam theOrTypes) {
 		List<TokenParam> types = theOrTypes.getValuesAsQueryTokens();
 
 		String whereCodings = "";
 		if (types.size() > 0) {
-			if (!fromStatement.contains("types")) {
-				fromStatement += ", jsonb_array_elements("+pathToCoding+"->'coding') types";
-			}
-
 			for (TokenParam type : types) {
 				String system = type.getSystem();
 				String value = type.getValue();
@@ -215,7 +168,7 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 
 	}
 
-	protected String constructDateWhereParameter(DateParam theDate, String fromStatement, String tableAlias, String column) {
+	protected String constructDateWhereParameter(DateParam theDate, String tableAlias, String column) {
 		Format formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		String dateString = formatter.format(theDate.getValue());
 		String inequality = "=";
@@ -273,15 +226,11 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return null;
 	}
 
-	protected String constructCodeWhereParameter(TokenOrListParam theOrCodes, String fromStatement, String pathToCoding) {
+	protected String constructCodeWhereParameter(TokenOrListParam theOrCodes) {
 		List<TokenParam> codes = theOrCodes.getValuesAsQueryTokens();
 
 		String whereCodings = "";
 		if (codes.size() > 0) {
-			if (!fromStatement.contains("codings")) {
-				fromStatement += ", jsonb_array_elements("+pathToCoding+"->'coding') codings";
-			}
-
 			for (TokenParam code : codes) {
 				String system = code.getSystem();
 				String value = code.getValue();

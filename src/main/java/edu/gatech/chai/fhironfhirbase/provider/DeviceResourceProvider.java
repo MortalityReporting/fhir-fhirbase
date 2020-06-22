@@ -15,16 +15,17 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
-import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.IdType;
 import org.springframework.stereotype.Service;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.annotation.Delete;
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
@@ -48,17 +49,15 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 
 	private int preferredPageSize = 30;
 
-	public DeviceResourceProvider() {
-		super();
+	public DeviceResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
 
 	@PostConstruct
     private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(MyDevice.class);
-		getFhirbaseMapping().setTableName(DeviceResourceProvider.getType().toLowerCase());
+		setTableName(DeviceResourceProvider.getType().toLowerCase());
 		setMyResourceType(DeviceResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	@Override
@@ -94,19 +93,38 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 
 	@Read()
 	public IBaseResource readPatient(@IdParam IdType theId) {
-		return read(theId, getResourceType(), "device");
+		IBaseResource retVal = null;
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Update()
 	public MethodOutcome updateDevice(@IdParam IdType theId, @ResourceParam MyDevice theDevice) {
 		validateResource(theDevice);
-
-		return update(theId, theDevice, getResourceType());
+		MethodOutcome retVal = new MethodOutcome();
+		try {
+			IBaseResource updatedDevice = getFhirbaseMapping().update(theDevice, getResourceType());
+			retVal.setId(updatedDevice.getIdElement());
+			retVal.setResource(updatedDevice);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Delete()
 	public void deleteDevice(@IdParam IdType theId) {
-		delete(theId);
+		try {
+			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Search()
@@ -143,7 +161,8 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 		String fromStatement = "device d";
 
 		if (theOrTypes != null) {
-			String where = constructTypeWhereParameter(theOrTypes, fromStatement, "d.resource->'type'");
+			fromStatement = constructFromStatement(theOrTypes, fromStatement, "types", "d.resource->'type'");
+			String where = constructTypeWhereParameter(theOrTypes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
@@ -180,6 +199,7 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int theFromIndex, int theToIndex) {
+			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
 			// _Include
 			// TODO: do this later
 			List<String> includes = new ArrayList<String>();
@@ -188,7 +208,13 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 				query += " LIMIT " + (theToIndex - theFromIndex) + " OFFSET " + theFromIndex;
 			}
 
-			return search(query, getResourceType());
+			try {
+				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			
+			return retVal;
 		}
 
 	}

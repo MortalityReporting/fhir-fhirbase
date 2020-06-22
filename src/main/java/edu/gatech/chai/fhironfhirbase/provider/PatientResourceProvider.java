@@ -15,6 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -24,9 +25,15 @@ import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.instance.model.api.IPrimitiveType;
+import org.hl7.fhir.r4.model.CodeType;
 import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Composition;
+import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.DateType;
+import org.hl7.fhir.r4.model.Device;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.InstantType;
+import org.hl7.fhir.r4.model.IntegerType;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.springframework.stereotype.Service;
@@ -67,17 +74,15 @@ import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 @Service
 public class PatientResourceProvider extends BaseResourceProvider {
 
-	public PatientResourceProvider() {
-		super();
+	public PatientResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
 
 	@PostConstruct
-    private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(USCorePatient.class);
-		getFhirbaseMapping().setTableName(PatientResourceProvider.getType().toLowerCase());
+	private void postConstruct() {
+		setTableName(PatientResourceProvider.getType().toLowerCase());
 		setMyResourceType(PatientResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	public static String getType() {
@@ -100,8 +105,19 @@ public class PatientResourceProvider extends BaseResourceProvider {
 	@Create()
 	public MethodOutcome createPatient(@ResourceParam USCorePatient thePatient) {
 		validateResource(thePatient);
+		MethodOutcome retVal = new MethodOutcome();
 
-		return create(thePatient);
+		try {
+			IBaseResource createdPatient = getFhirbaseMapping().create(thePatient, getResourceType());
+			retVal.setId(createdPatient.getIdElement());
+			retVal.setResource(createdPatient);
+			retVal.setCreated(true);
+		} catch (SQLException e) {
+			retVal.setCreated(false);
+			e.printStackTrace();
+		}
+
+		return retVal;
 	}
 
 	/**
@@ -118,7 +134,15 @@ public class PatientResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readPatient(@IdParam IdType theId) {
-		return read(theId, getResourceType(), "patient");
+		IBaseResource retVal = null;
+
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return retVal;
 	}
 
 	/**
@@ -132,13 +156,26 @@ public class PatientResourceProvider extends BaseResourceProvider {
 	@Update()
 	public MethodOutcome updatePatient(@IdParam IdType theId, @ResourceParam USCorePatient thePatient) {
 		validateResource(thePatient);
+		MethodOutcome retVal = new MethodOutcome();
 
-		return update(theId, thePatient, getResourceType());
+		try {
+			IBaseResource updatedPatient = getFhirbaseMapping().update(thePatient, getResourceType());
+			retVal.setId(updatedPatient.getIdElement());
+			retVal.setResource(updatedPatient);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return retVal;
 	}
 
 	@Delete()
 	public void deletePatient(@IdParam IdType theId) {
-		delete(theId);
+		try {
+			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -248,7 +285,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			whereParameters.add("pract.resource->>'gender' = '" + theGender.getValue() + "'");
 		}
 		if (theBirthDate != null) {
-			String where = constructDateWhereParameter(theBirthDate, fromStatement, "p", "birthDate");
+			String where = constructDateWhereParameter(theBirthDate, "p", "birthDate");
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
@@ -331,7 +368,9 @@ public class PatientResourceProvider extends BaseResourceProvider {
 	 */
 	@Operation(name = "$everything", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
 	public IBundleProvider patientEverythingOperation(RequestDetails theRequestDetails, @IdParam IdType thePatientId,
-			@OperationParam(name = "start") DateType theStart, @OperationParam(name = "end") DateType theEnd) {
+			@OperationParam(name = "start") DateType theStart, @OperationParam(name = "end") DateType theEnd,
+			@OperationParam(name = "_since") InstantType theSince, @OperationParam(name = "_type") CodeType theType,
+			@OperationParam(name = "_count") IntegerType theCount) {
 
 		if (thePatientId == null) {
 			ThrowFHIRExceptions.unprocessableEntityException("Patient Id must be present");
@@ -348,6 +387,22 @@ public class PatientResourceProvider extends BaseResourceProvider {
 		List<IBaseResource> resources = new ArrayList<IBaseResource>();
 		try {
 			resources.add(getFhirbaseMapping().read(thePatientId, getResourceType(), "patient"));
+			
+			// get compositions
+			String sql = "select * from composition c where c.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			resources.addAll(getFhirbaseMapping().search(sql, Composition.class));
+			
+			// Get conditions
+			sql = "select * from condition c where c.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			resources.addAll(getFhirbaseMapping().search(sql, Condition.class));
+
+			// Get devices
+			sql = "select * from device d where d.resource->'patient'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			resources.addAll(getFhirbaseMapping().search(sql, Device.class));
+
 		} catch (Exception e) {
 			e.printStackTrace();
 			ThrowFHIRExceptions.internalErrorException("Failed to read the patient Id");
@@ -357,7 +412,12 @@ public class PatientResourceProvider extends BaseResourceProvider {
 
 		final List<IBaseResource> retv = resources;
 		final Integer totalsize = retv.size();
-		final Integer pageSize = totalsize; // Some clients do not support pagination. preferredPageSize;
+		final Integer pageSize;
+		if (theCount != null && !theCount.isEmpty()) {
+			pageSize = theCount.getValue();
+		} else {
+			pageSize = totalsize;
+		}
 
 		return new IBundleProvider() {
 			@Override
@@ -388,7 +448,6 @@ public class PatientResourceProvider extends BaseResourceProvider {
 	}
 
 	private void getEverthingfor(List<IBaseResource> resources, IdType thePatientId, Date startDate, Date endDate) {
-		// TODO Auto-generated method stub
 
 	}
 
@@ -431,7 +490,11 @@ public class PatientResourceProvider extends BaseResourceProvider {
 				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
-			retv.addAll(search(query, getResourceType()));
+			try {
+				retv.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
 
 			// TODO: _Include and _ReverseInclude - do this later.
 			// _Include

@@ -15,6 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -26,6 +27,7 @@ import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.IdType;
 import org.springframework.stereotype.Service;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
@@ -50,17 +52,15 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 
 	private int preferredPageSize = 30;
 
-	public EncounterResourceProvider() {
-		super();
+	public EncounterResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
 
 	@PostConstruct
-    private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(Encounter.class);
-		getFhirbaseMapping().setTableName(EncounterResourceProvider.getType().toLowerCase());
+	private void postConstruct() {
+		setTableName(EncounterResourceProvider.getType().toLowerCase());
 		setMyResourceType(EncounterResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	@Override
@@ -79,8 +79,19 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 	@Create()
 	public MethodOutcome createEncounter(@ResourceParam Encounter theEncounter) {
 		validateResource(theEncounter);
-
-		return create(theEncounter);
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource createdEncounter = getFhirbaseMapping().create(theEncounter, getResourceType());
+			retVal.setId(createdEncounter.getIdElement());
+			retVal.setResource(createdEncounter);
+			retVal.setCreated(true);
+		} catch (SQLException e) {
+			retVal.setCreated(false);
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	/**
@@ -97,8 +108,15 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readEncounter(@IdParam IdType theId) {
-
-		return read(theId, getResourceType(), "encounter");
+		IBaseResource retVal = null;
+		
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	/**
@@ -112,13 +130,26 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 	@Update()
 	public MethodOutcome updateEncounter(@IdParam IdType theId, @ResourceParam Encounter theEncounter) {
 		validateResource(theEncounter);
-
-		return update(theId, theEncounter, getResourceType());
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource updatedEncounter = getFhirbaseMapping().update(theEncounter, getResourceType());
+			retVal.setId(updatedEncounter.getIdElement());
+			retVal.setResource(updatedEncounter);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Delete()
 	public void deleteEncounter(@IdParam IdType theId) {
-		delete(theId);
+		try {
+			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Search()
@@ -186,8 +217,7 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 
-		public MyBundleProvider(String query, Set<Include> theIncludes,
-				Set<Include> theReverseIncludes) {
+		public MyBundleProvider(String query, Set<Include> theIncludes, Set<Include> theReverseIncludes) {
 			super(query);
 			setPreferredPageSize(preferredPageSize);
 			this.theIncludes = theIncludes;
@@ -196,6 +226,8 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
+			
 			// _Include
 			// TODO: include later.
 			List<String> includes = new ArrayList<String>();
@@ -244,7 +276,13 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
-			return search(query, getResourceType());
+			try {
+				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			
+			return retVal;
 		}
 	}
 }

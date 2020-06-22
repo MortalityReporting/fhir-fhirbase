@@ -15,6 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +28,7 @@ import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Organization;
 import org.springframework.stereotype.Service;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
@@ -57,17 +59,16 @@ import ca.uhn.fhir.rest.param.TokenParam;
 public class OrganizationResourceProvider extends BaseResourceProvider {
 	private int preferredPageSize = 30;
 
-	public OrganizationResourceProvider() {
-		super();
+	public OrganizationResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
 
 	@PostConstruct
-    private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(Organization.class);
-		getFhirbaseMapping().setTableName(OrganizationResourceProvider.getType().toLowerCase());
+	private void postConstruct() {
+		setTableName(OrganizationResourceProvider.getType().toLowerCase());
 		setMyResourceType(OrganizationResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	public static String getType() {
@@ -89,8 +90,20 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 	 */
 	@Create()
 	public MethodOutcome createOrganization(@ResourceParam Organization theOrganization) {
-		// validateResource(thePatient);
-		return create(theOrganization);
+		validateResource(theOrganization);
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource createdOrg = getFhirbaseMapping().create(theOrganization, getResourceType());
+			retVal.setId(createdOrg.getIdElement());
+			retVal.setResource(createdOrg);
+			retVal.setCreated(true);
+		} catch (SQLException e) {
+			retVal.setCreated(false);
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	/**
@@ -107,7 +120,15 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readOrganization(@IdParam IdType theId) {
-		return read(theId, getResourceType(), "organization");
+		IBaseResource retVal = null;
+		
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	/**
@@ -121,13 +142,26 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 	@Update()
 	public MethodOutcome updateOrganization(@IdParam IdType theId, @ResourceParam Organization theOrganization) {
 		validateResource(theOrganization);
-
-		return update(theId, theOrganization, getResourceType());
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource updatedOrg = getFhirbaseMapping().update(theOrganization, getResourceType());
+			retVal.setId(updatedOrg.getIdElement());
+			retVal.setResource(updatedOrg);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Delete()
 	public void deleteOrganization(@IdParam IdType theId) {
-		delete(theId);
+		try {
+			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Search()
@@ -181,6 +215,8 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
+			
 			// _Include
 			List<String> includes = new ArrayList<String>();
 			if (theIncludes.contains(new Include("Organization:partof"))) {
@@ -191,7 +227,13 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
-			return search(query, getResourceType());
+			try {
+				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			
+			return retVal;
 		}
 	}
 

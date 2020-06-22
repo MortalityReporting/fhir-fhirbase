@@ -15,20 +15,20 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.PostConstruct;
 
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
-import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
-import org.hl7.fhir.r4.model.ConceptMap;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.IdType;
 import org.springframework.stereotype.Service;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
 import ca.uhn.fhir.rest.annotation.IdParam;
@@ -57,20 +57,17 @@ import ca.uhn.fhir.rest.param.TokenParam;
  */
 @Service
 public class ConditionResourceProvider extends BaseResourceProvider {
-	protected FhirbaseMapping fhirbaseMapping;
 	private int preferredPageSize = 30;
 
-	public ConditionResourceProvider() {
-		super();
+	public ConditionResourceProvider(FhirContext ctx) {
+		super(ctx);
 	}
 
 	@PostConstruct
-    private void postConstruct() {
-		getFhirbaseMapping().setFhirClass(Condition.class);
-		getFhirbaseMapping().setTableName(ConditionResourceProvider.getType().toLowerCase());
+	private void postConstruct() {
 		setMyResourceType(ConditionResourceProvider.getType());
-		
-		getTotalSize("SELECT count(*) FROM "+getFhirbaseMapping().getTableName()+";");
+		setTableName(ConditionResourceProvider.getType().toLowerCase());
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 	}
 
 	public static String getType() {
@@ -92,12 +89,31 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 	 */
 	@Create()
 	public MethodOutcome createCondition(@ResourceParam Condition condition) {
-		return create(condition);
+		MethodOutcome retVal = new MethodOutcome();
+		try {
+			Condition createdCondition = (Condition) getFhirbaseMapping().create(condition, getResourceType());
+			if (createdCondition != null && !createdCondition.isEmpty()) {
+				retVal.setId(createdCondition.getIdElement());
+				retVal.setCreated(true);
+				retVal.setResource(createdCondition);
+			} else {
+				retVal.setCreated(false);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+			retVal.setCreated(false);
+		}
+		
+		return retVal;
 	}
 
 	@Delete()
 	public void deleteCondition(@IdParam IdType theId) {
-		delete(theId);
+		try {
+			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -114,7 +130,14 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 	 */
 	@Read()
 	public IBaseResource readCondition(@IdParam IdType theId) {
-		return read(theId, getResourceType(), "condition");
+		IBaseResource retVal = null;
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	/**
@@ -128,8 +151,17 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 	@Update()
 	public MethodOutcome updateCondition(@IdParam IdType theId, @ResourceParam Condition theCondition) {
 		validateResource(theCondition);
-
-		return update(theId, theCondition, getResourceType());
+		MethodOutcome retVal = new MethodOutcome();
+		
+		try {
+			IBaseResource updatedCondition = getFhirbaseMapping().update(theCondition, getResourceType());
+			retVal.setId(updatedCondition.getIdElement());
+			retVal.setResource(updatedCondition);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return retVal;
 	}
 
 	@Search()
@@ -158,13 +190,15 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 	@Search()
 	public IBundleProvider findConditionByParams(@OptionalParam(name = Condition.SP_CODE) TokenOrListParam theOrCodes,
 			@OptionalParam(name = Condition.SP_SUBJECT) ReferenceOrListParam theSubjects,
-			@OptionalParam(name = Condition.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME }) ReferenceOrListParam thePatients,
+			@OptionalParam(name = Condition.SP_PATIENT, chainWhitelist = { "",
+					USCorePatient.SP_NAME }) ReferenceOrListParam thePatients,
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "condition c";
 		if (theOrCodes != null) {
-			String where = constructCodeWhereParameter(theOrCodes, fromStatement, "c.resource->'code'");
+			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes", "c.resource->'code'");
+			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
@@ -188,8 +222,8 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 			}
 		}
 
-		String whereStatement = constructWhereStatement(whereParameters, theSort);		
-		
+		String whereStatement = constructWhereStatement(whereParameters, theSort);
+
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
 
@@ -212,6 +246,8 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
+
 			// _Include
 			// TODO: do this later
 			List<String> includes = new ArrayList<String>();
@@ -220,7 +256,13 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
-			return search(query, getResourceType());
+			try {
+				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			
+			return retVal;
 		}
 
 	}
