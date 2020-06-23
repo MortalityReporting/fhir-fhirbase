@@ -2,6 +2,7 @@ package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.text.Format;
 import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
@@ -124,7 +125,15 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 
 		return whereStatement;
 	}
-
+	
+	protected String constructFromStatement(String fromStatement, String alias, String path) {
+		if (!fromStatement.contains(alias)) {
+			fromStatement += ", json_array_elements("+path+") " + alias;
+		}
+		
+		return fromStatement;
+	}
+	
 	protected String constructFromStatement(TokenOrListParam tokenList, String fromStatement, String alias, String pathToCoding) {
 		List<TokenParam> tokens = tokenList.getValuesAsQueryTokens();
 		if (tokens.size() > 0) {
@@ -186,7 +195,26 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		
 		return "("+tableAlias+".resource->>'"+column+"')::timestamp " + inequality + " '" + dateString + "'::timestamp";		
 	}
-	
+
+	protected String constructDatePeriodWhereParameter(Date startDate, Date endDate, String tableAlias, String column) {
+		Format formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		String where = "";
+		if (startDate != null) {
+			String startDateString = formatter.format(startDate);
+			where += "(" + tableAlias + ".resource->>'" + column + "')::timestamp >= '" + startDateString + "'::timestamp";
+		}
+		
+		if (endDate != null) {
+			String endDateString = formatter.format(endDate);
+			if (where != null && !where.isEmpty()) {
+				where += " AND ";
+			}
+			where += "(" + tableAlias + ".resource->>'" + column + "')::timestamp <= '" + endDateString + "'::timestamp";
+		}
+		
+		return where;
+	}
+
 	protected String constructSubjectWhereParameter(ReferenceParam theSubject, String tableAlias) {
 		if (theSubject != null) {
 			if (theSubject.getResourceType() != null && 

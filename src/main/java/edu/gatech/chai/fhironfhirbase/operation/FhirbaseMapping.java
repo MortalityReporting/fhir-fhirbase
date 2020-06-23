@@ -179,6 +179,8 @@ public class FhirbaseMapping implements IResourceMapping {
 
 	@Override
 	public int getSize(String sql) throws SQLException {
+		logger.debug("getSize(): " + sql);
+		
 		int retVal = 0;
 		
 		if (databaseConfiguration == null) {

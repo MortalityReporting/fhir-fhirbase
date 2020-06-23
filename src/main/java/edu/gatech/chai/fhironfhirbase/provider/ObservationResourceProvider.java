@@ -163,7 +163,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "observation o";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes", "o.resource->'code'");
+			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codings", "o.resource->'code'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

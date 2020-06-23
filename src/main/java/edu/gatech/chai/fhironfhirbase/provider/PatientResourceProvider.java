@@ -27,18 +27,30 @@ import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.instance.model.api.IPrimitiveType;
 import org.hl7.fhir.r4.model.CodeType;
 import org.hl7.fhir.r4.model.CodeableConcept;
-import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.DateType;
 import org.hl7.fhir.r4.model.Device;
+import org.hl7.fhir.r4.model.DeviceUseStatement;
+import org.hl7.fhir.r4.model.DocumentReference;
+import org.hl7.fhir.r4.model.Encounter;
+import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.InstantType;
 import org.hl7.fhir.r4.model.IntegerType;
+import org.hl7.fhir.r4.model.ListResource;
+import org.hl7.fhir.r4.model.Location;
+import org.hl7.fhir.r4.model.MedicationRequest;
+import org.hl7.fhir.r4.model.MedicationStatement;
+import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.hl7.fhir.r4.model.Organization;
+import org.hl7.fhir.r4.model.Procedure;
+import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.RelatedPerson;
+import org.hl7.fhir.r4.model.Type;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.Include;
@@ -389,15 +401,22 @@ public class PatientResourceProvider extends BaseResourceProvider {
 		List<IBaseResource> resources = new ArrayList<IBaseResource>();
 		try {
 			resources.add(getFhirbaseMapping().read(thePatientId, getResourceType(), "patient"));
+
+			// addition where
+			String where = "";
 			
-			// get compositions
-			String sql = "select * from composition c where c.resource->'subject'->>'reference' like '%Patient/"
-					+ thePatientId.getIdPart() + "'";
-			resources.addAll(getFhirbaseMapping().search(sql, Composition.class));
+//			get compositions
+//			String sql = "select * from composition c where c.resource->'subject'->>'reference' like '%Patient/"
+//					+ thePatientId.getIdPart() + "'";
+//			resources.addAll(getFhirbaseMapping().search(sql, Composition.class));
 			
 			// Get conditions
-			sql = "select * from condition c where c.resource->'subject'->>'reference' like '%Patient/"
+			String sql = "select * from condition c where c.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
+			where = constructDatePeriodWhereParameter(startDate, endDate, "c", "onsetDateTime");
+			if (where != null && !where.isEmpty()) {
+				sql += " AND " + where;
+			}
 			resources.addAll(getFhirbaseMapping().search(sql, Condition.class));
 
 			// Get devices
@@ -405,12 +424,103 @@ public class PatientResourceProvider extends BaseResourceProvider {
 					+ thePatientId.getIdPart() + "'";
 			resources.addAll(getFhirbaseMapping().search(sql, Device.class));
 
+			// Get deviceUseStatement
+			sql = "select * from deviceusestatement du where du.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			where = constructDatePeriodWhereParameter(startDate, endDate, "du", "timingDateTime");
+			if (where != null && !where.isEmpty()) {
+				sql += " AND " + where;
+			}
+			resources.addAll(getFhirbaseMapping().search(sql, DeviceUseStatement.class));
+
+			// Get documentReference
+			sql = "select * from documentreference dr where dr.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			where = constructDatePeriodWhereParameter(startDate, endDate, "dr", "date");
+			if (where != null && !where.isEmpty()) {
+				sql += " AND " + where;
+			}
+			resources.addAll(getFhirbaseMapping().search(sql, DocumentReference.class));
+
+			// Get encounter
+			sql = "select * from encounter e where e.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			where = constructDatePeriodWhereParameter(startDate, endDate, "e", "period->'start'");
+			if (where != null && !where.isEmpty()) {
+				sql += " AND " + where;
+			}
+			resources.addAll(getFhirbaseMapping().search(sql, Encounter.class));
+
+			// Get list
+			sql = "select * from list l where l.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			where = constructDatePeriodWhereParameter(startDate, endDate, "l", "date");
+			if (where != null && !where.isEmpty()) {
+				sql += " AND " + where;
+			}
+			resources.addAll(getFhirbaseMapping().search(sql, ListResource.class));
+
+			// Get medicationRequest
+			sql = "select * from medicationrequest mr where mr.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			where = constructDatePeriodWhereParameter(startDate, endDate, "mr", "authoredOn");
+			if (where != null && !where.isEmpty()) {
+				sql += " AND " + where;
+			}
+			resources.addAll(getFhirbaseMapping().search(sql, MedicationRequest.class));
+
+			// Get medicationStatement
+			sql = "select * from medicationstatement ms where ms.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			where = constructDatePeriodWhereParameter(startDate, endDate, "ms", "effectiveDateTime");
+			if (where != null && !where.isEmpty()) {
+				sql += " AND " + where;
+			}
+			resources.addAll(getFhirbaseMapping().search(sql, MedicationStatement.class));
+
+			// Get observation
+			sql = "select * from observation o where o.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			where = constructDatePeriodWhereParameter(startDate, endDate, "o", "effectiveDateTime");
+			if (where != null && !where.isEmpty()) {
+				sql += " AND " + where;
+			}
+			resources.addAll(getFhirbaseMapping().search(sql, Observation.class));
+
+			// Get procedure
+			sql = "select * from procedure p where p.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			where = constructDatePeriodWhereParameter(startDate, endDate, "p", "performedDateTime");
+			if (where != null && !where.isEmpty()) {
+				sql += " AND " + where;
+			}
+			resources.addAll(getFhirbaseMapping().search(sql, Procedure.class));
+
+			// Get relatedPerson
+			sql = "select * from relatedperson rp where rp.resource->'patient'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			resources.addAll(getFhirbaseMapping().search(sql, RelatedPerson.class));
+
+			// Now, we have other resources that are not directly reference by decedent.
+			// For those indirect referenced resources, we need to figure out.
+			// Practitioner: Certifier
+			// Organization: Funeral Home and/or Interested Party
+			// Location: Death Location, Injury Location, Disposition Location
+			
+			// Disposition Location can be obtained from Decedent Disposition Method Observation (code:80905-3)
+			getLocations(resources, thePatientId.getIdPart(), "80905-3", "VRDR-Disposition-Location");
+			
+			// Death Location
+			getLocations(resources, thePatientId.getIdPart(), "81956-5", "VRDR-Death-Location");
+			
+			// Injury Location
+			getLocations(resources, thePatientId.getIdPart(), "11374-6", "VRDR-Injury-Location");
+
+
 		} catch (Exception e) {
 			e.printStackTrace();
 			ThrowFHIRExceptions.internalErrorException("Failed to read the patient Id");
 		}
-
-		getEverthingfor(resources, thePatientId, startDate, endDate);
 
 		final List<IBaseResource> retv = resources;
 		final Integer totalsize = retv.size();
@@ -449,7 +559,33 @@ public class PatientResourceProvider extends BaseResourceProvider {
 		};
 	}
 
-	private void getEverthingfor(List<IBaseResource> resources, IdType thePatientId, Date startDate, Date endDate) {
+	private void getLocations(List<IBaseResource> resources, String patientId, String code, String extensionType) throws SQLException {
+		String sql = "select * from observation o, jsonb_array_elements(o.resource->'code'->'coding') codings where o.resource->'subject'->>'reference' like '%Patient/" + 
+		patientId + "' and codings @> '{\"code\": \"" + code + "\"}'::jsonb";
+		
+		List<IBaseResource> observations = getFhirbaseMapping().search(sql, Observation.class);
+		for (IBaseResource observation : observations) {
+			Observation obs = (Observation) observation;
+			List<Extension> extensions = obs.getExtension();
+		
+			String id = null;
+			for (Extension extension : extensions) {
+				if (extension.getUrl().contains(extensionType)) {
+					Type value = extension.getValue();
+					if (value instanceof Reference) {
+						Reference ref = (Reference) value;
+						id = ref.getReferenceElement().getIdPart();
+						break;
+					}
+				}
+			}
+			
+			if (id != null) {
+				// get this location.
+				sql = "select * from location where id = '" + id + "'";
+				resources.addAll(getFhirbaseMapping().search(sql, Location.class));
+			}
+		}
 
 	}
 

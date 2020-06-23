@@ -5,14 +5,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-import javax.annotation.PostConstruct;
-
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.CodeableConcept;
-import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.MessageHeader;
 import org.hl7.fhir.r4.model.OperationOutcome;
-import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,46 +31,36 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
-import ca.uhn.fhir.rest.param.DateParam;
-import ca.uhn.fhir.rest.param.ReferenceOrListParam;
-import ca.uhn.fhir.rest.param.ReferenceParam;
+import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
-import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 
 @Service
 @Scope("prototype")
-public class CompositionResourceProvider extends BaseResourceProvider {
-	private static final Logger logger = LoggerFactory.getLogger(CompositionResourceProvider.class);
+public class MessageHeaderResourceProvider extends BaseResourceProvider {
+	private static final Logger logger = LoggerFactory.getLogger(MessageHeaderResourceProvider.class);
 
-	public CompositionResourceProvider(FhirContext ctx) {
+	public MessageHeaderResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
 
-	@PostConstruct
-	private void postConstruct() {
-		setTableName(CompositionResourceProvider.getType().toLowerCase());
-		setMyResourceType(CompositionResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
-	}
-
 	public static String getType() {
-		return "Composition";
+		return "MessageHeader";
 	}
-
+	
 	@Override
-	public Class<Composition> getResourceType() {
-		return Composition.class;
+	public Class<MessageHeader> getResourceType() {
+		return MessageHeader.class;
 	}
 
 	@Create()
-	public MethodOutcome createComposition(@ResourceParam Composition theComposition) {
-		validateResource(theComposition);
+	public MethodOutcome createMessageHeader(@ResourceParam MessageHeader theMessageHeader) {
+		validateResource(theMessageHeader);
 		MethodOutcome retVal = new MethodOutcome();
 
 		try {
-			IBaseResource createdObservation = getFhirbaseMapping().create(theComposition, getResourceType());
+			IBaseResource createdObservation = getFhirbaseMapping().create(theMessageHeader, getResourceType());
 			retVal.setId(createdObservation.getIdElement());
 			retVal.setResource(createdObservation);
 			retVal.setCreated(true);
@@ -84,9 +71,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		return retVal;
 	}
-
+	
 	@Delete()
-	public void deleteComposition(@IdParam IdType theId) {
+	public void deleteMessageHeader(@IdParam IdType theId) {
 		try {
 			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
 		} catch (SQLException e) {
@@ -95,23 +82,23 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	}
 
 	@Search()
-	public IBundleProvider findCompositionsById(
-			@RequiredParam(name = Composition.SP_RES_ID) TokenOrListParam theCompositionIds, 
+	public IBundleProvider findMessageHeaderById(
+			@RequiredParam(name = MessageHeader.SP_RES_ID) TokenOrListParam theMessageHeaderIds, 
 			@Sort SortSpec theSort) {
 
-		if (theCompositionIds == null) {
+		if (theMessageHeaderIds == null) {
 			return null;
 		}
 
 		String whereStatement = "WHERE ";
-		for (TokenParam theComposition : theCompositionIds.getValuesAsQueryTokens()) {
-			whereStatement += "comp.id = " + theComposition.getValue() + " OR ";
+		for (TokenParam theMessageHeader : theMessageHeaderIds.getValuesAsQueryTokens()) {
+			whereStatement += "mh.id = " + theMessageHeader.getValue() + " OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
 
-		String queryCount = "SELECT count(*) FROM " + getTableName() + " comp " + whereStatement;
-		String query = "SELECT * FROM " + getTableName() + " comp " + whereStatement;
+		String queryCount = "SELECT count(*) FROM " + getTableName() + " mh " + whereStatement;
+		String query = "SELECT * FROM " + getTableName() + " mh " + whereStatement;
 
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
@@ -120,48 +107,19 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	}
 
 	@Search()
-	public IBundleProvider findCompositionsByParams(
-			@OptionalParam(name = Composition.SP_TYPE) TokenOrListParam theOrTypes,
-			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
-			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME,
-					USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam thePatients,
-			@OptionalParam(name = Composition.SP_SUBJECT, chainWhitelist = { "", USCorePatient.SP_NAME,
-					USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam theSubjects,
+	public IBundleProvider findMessageHeaderByParams(
+			@OptionalParam(name = MessageHeader.SP_SOURCE) StringParam theSource,
+			@OptionalParam(name = MessageHeader.SP_SOURCE_URI) StringParam theSourceUri,
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
-		String fromStatement = getTableName() + " comp";
-		if (theOrTypes != null) {
-			fromStatement = constructFromStatement(theOrTypes, fromStatement, "types", "comp.resource->'type'");
-			String where = constructTypeWhereParameter(theOrTypes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
+		String fromStatement = getTableName() + " mh";
+		if (theSource != null) {
+			whereParameters.add("mh.resource->'source'->>'name' = '" + theSource.getValue() + "'");
 		}
 
-		if (theDate != null) {
-			String where = constructDateWhereParameter(theDate, "comp", "date");
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-		}
-
-		if (theSubjects != null) {
-			for (ReferenceParam theSubject : theSubjects.getValuesAsQueryTokens()) {
-				String where = constructSubjectWhereParameter(theSubject, "comp");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
-			}
-		}
-
-		if (thePatients != null) {
-			for (ReferenceParam thePatient : thePatients.getValuesAsQueryTokens()) {
-				String where = constructPatientWhereParameter(thePatient, "comp");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
-			}
+		if (theSourceUri != null) {
+			whereParameters.add("mh.resource->'source'->>'endpoint' = '" + theSource.getValue() + "'");
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
@@ -190,7 +148,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	 * @return Returns a resource matching this identifier, or null if none exists.
 	 */
 	@Read()
-	public IBaseResource readComposition(@IdParam IdType theId) {
+	public IBaseResource readMessageHeader(@IdParam IdType theId) {
 		IBaseResource retVal = null;
 
 		try {
@@ -211,12 +169,12 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	 * @return This method returns a "MethodOutcome"
 	 */
 	@Update()
-	public MethodOutcome updateComposition(@IdParam IdType theId, @ResourceParam Composition theComposition) {
-		validateResource(theComposition);
+	public MethodOutcome updateMessageHeader(@IdParam IdType theId, @ResourceParam MessageHeader theMessageHeader) {
+		validateResource(theMessageHeader);
 		MethodOutcome retVal = new MethodOutcome();
 
 		try {
-			IBaseResource updatedObservation = getFhirbaseMapping().update(theComposition, getResourceType());
+			IBaseResource updatedObservation = getFhirbaseMapping().update(theMessageHeader, getResourceType());
 			retVal.setId(updatedObservation.getIdElement());
 			retVal.setResource(updatedObservation);
 		} catch (SQLException e) {
@@ -225,31 +183,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		return retVal;
 	}
-
-	private void validateResource(Composition theComposition) {
-		OperationOutcome outcome = new OperationOutcome();
-		CodeableConcept detailCode = new CodeableConcept();
-		if (theComposition.getType().isEmpty()) {
-			detailCode.setText("No type is provided.");
-			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-		}
-
-		Reference subjectReference = theComposition.getSubject();
-		if (subjectReference == null || subjectReference.isEmpty()) {
-			detailCode.setText("Subject cannot be empty");
-			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-		}
-
-		String subjectResource = subjectReference.getReferenceElement().getResourceType();
-		if (!subjectResource.contentEquals("Patient")) {
-			detailCode.setText("Subject (" + subjectResource + ") must be Patient");
-			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-		}
-	}
-
+	
 	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
@@ -281,4 +215,21 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			return retVal;
 		}
 	}
+	
+	private void validateResource(MessageHeader theMessageHeader) {
+		OperationOutcome outcome = new OperationOutcome();
+		CodeableConcept detailCode = new CodeableConcept();
+		if (theMessageHeader.getSource().isEmpty()) {
+			detailCode.setText("No source is provided.");
+			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+		}
+
+		if (theMessageHeader.getEventCoding().isEmpty() && theMessageHeader.getEventUriType().isEmpty()) {
+			detailCode.setText("Event[x] is empty");
+			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+		}
+	}
+
 }
