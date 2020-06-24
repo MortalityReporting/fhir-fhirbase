@@ -624,12 +624,13 @@ public class PatientResourceProvider extends BaseResourceProvider {
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retv = new ArrayList<IBaseResource>();
 
+			String myQuery = query;			
 			if (toIndex - fromIndex > 0) {
-				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
+				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
 			try {
-				retv.addAll(getFhirbaseMapping().search(query, getResourceType()));
+				retv.addAll(getFhirbaseMapping().search(myQuery, getResourceType()));
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}

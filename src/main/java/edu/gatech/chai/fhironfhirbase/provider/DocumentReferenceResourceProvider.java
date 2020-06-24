@@ -259,12 +259,13 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 				includes.add("DocumentReference:subject");
 			}
 
+			String myQuery = query;			
 			if (toIndex - fromIndex > 0) {
-				query += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
+				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
 			try {
-				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+				retVal.addAll(getFhirbaseMapping().search(myQuery, getResourceType()));
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}

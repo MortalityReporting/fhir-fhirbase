@@ -157,7 +157,8 @@ public class FhirbaseMapping implements IResourceMapping {
 		IParser parser = ctx.newJsonParser();
 
 		Connection connection = databaseConfiguration.getDataSource().getConnection();
-
+		
+		logger.debug("search(): " + sql);
 		PreparedStatement stmt = connection.prepareStatement(sql);
 
 		ResultSet rs = stmt.executeQuery();

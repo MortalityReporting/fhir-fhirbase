@@ -230,12 +230,13 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 				includes.add("DeviceUseStatement:device");
 			}
 
+			String myQuery = query;			
 			if (theToIndex - theFromIndex > 0) {
-				query += " LIMIT " + (theToIndex - theFromIndex) + " OFFSET " + theFromIndex;
+				myQuery += " LIMIT " + (theToIndex - theFromIndex) + " OFFSET " + theFromIndex;
 			}
 
 			try {
-				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+				retVal.addAll(getFhirbaseMapping().search(myQuery, getResourceType()));
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}

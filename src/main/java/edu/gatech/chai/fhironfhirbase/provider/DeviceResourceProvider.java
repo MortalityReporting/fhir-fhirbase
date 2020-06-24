@@ -206,12 +206,13 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 			// TODO: do this later
 			List<String> includes = new ArrayList<String>();
 
+			String myQuery = query;			
 			if (theToIndex - theFromIndex > 0) {
-				query += " LIMIT " + (theToIndex - theFromIndex) + " OFFSET " + theFromIndex;
+				myQuery += " LIMIT " + (theToIndex - theFromIndex) + " OFFSET " + theFromIndex;
 			}
 
 			try {
-				retVal.addAll(getFhirbaseMapping().search(query, getResourceType()));
+				retVal.addAll(getFhirbaseMapping().search(myQuery, getResourceType()));
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
