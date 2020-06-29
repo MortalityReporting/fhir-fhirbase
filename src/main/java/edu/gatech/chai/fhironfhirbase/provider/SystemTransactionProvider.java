@@ -153,6 +153,22 @@ public class SystemTransactionProvider {
 				Patient patient = (Patient) resource;
 				patientId = null;
 				for (Identifier identifier : patient.getIdentifier()) {
+					// do search only on the case number.
+					CodeableConcept identifierType = identifier.getType();
+					if (identifierType.isEmpty()) {
+						continue;
+					}
+					
+					Coding identifierCoding = identifierType.getCodingFirstRep();
+					if (identifierCoding.isEmpty()) {
+						continue;
+					}
+					
+					if (!"urn:mdi:temporary:code".equalsIgnoreCase(identifierCoding.getSystem()) 
+							|| !"1000007".equalsIgnoreCase(identifierCoding.getCode())) {
+						continue;
+					}
+					
 					Bundle responseBundle = client
 							.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly()
 									.systemAndCode(identifier.getSystem(), identifier.getValue()))
