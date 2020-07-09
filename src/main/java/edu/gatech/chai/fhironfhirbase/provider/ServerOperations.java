@@ -30,18 +30,14 @@ import org.hl7.fhir.r4.model.ResourceType;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.UriType;
 import org.hl7.fhir.r4.model.codesystems.ObservationCategory;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
-import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
 import edu.gatech.chai.fhironfhirbase.utilities.CodeableConceptUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 public class ServerOperations {
-	@Autowired
-	private FhirbaseMapping fhirbaseMapping;
-	
+
 	public ServerOperations() {
 	}
 	
@@ -57,13 +53,13 @@ public class ServerOperations {
 		
 		if (theContent.getType() == BundleType.MESSAGE) {
 			List<BundleEntryComponent> entries = theContent.getEntry();
+			
 			// Evaluate the first entry, which must be MessageHeader
-//			BundleEntryComponent entry1 = theContent.getEntryFirstRep();
-//			Resource resource = entry1.getResource();
 			if (entries != null && entries.size() > 0 && 
 					entries.get(0).getResource() != null &&
 					entries.get(0).getResource().getResourceType() == ResourceType.MessageHeader) {
 				messageHeader = (MessageHeader) entries.get(0).getResource();
+				
 				// We handle observation-type.
 				// TODO: Add other types later.
 				Type eventType = messageHeader.getEvent();
@@ -72,6 +68,7 @@ public class ServerOperations {
 					Coding obsprovided = new Coding(ObservationCategory.LABORATORY.getSystem(), ObservationCategory.LABORATORY.toCode(), ObservationCategory.LABORATORY.getDisplay());
 					if (CodeableConceptUtil.compareCodings(event, obsprovided) == 0) {
 						// This is lab report. they are all to be added to the server.
+						// We add resources that are focused.
 						for (int i=1; i<entries.size(); i++) {
 							resources.add(entries.get(i).getResource());
 						}
@@ -88,6 +85,7 @@ public class ServerOperations {
 			ThrowFHIRExceptions.unprocessableEntityException(
 					"The bundle must be a MESSAGE type");
 		}
+		
 		MessageHeaderResponseComponent messageHeaderResponse = new MessageHeaderResponseComponent();
 		messageHeaderResponse.setId(messageHeader.getId());
 

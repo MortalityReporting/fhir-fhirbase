@@ -2,17 +2,22 @@ package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 
 import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.hl7.fhir.instance.model.api.IPrimitiveType;
+import org.hl7.fhir.r4.model.BooleanType;
 import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.UriType;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,9 +26,12 @@ import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.Include;
+import ca.uhn.fhir.model.valueset.BundleTypeEnum;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
 import ca.uhn.fhir.rest.annotation.IdParam;
+import ca.uhn.fhir.rest.annotation.Operation;
+import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.RequiredParam;
@@ -34,12 +42,14 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import edu.gatech.chai.fhironfhirbase.model.MyBundle;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 
 @Service
@@ -96,8 +106,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 	@Search()
 	public IBundleProvider findCompositionsById(
-			@RequiredParam(name = Composition.SP_RES_ID) TokenOrListParam theCompositionIds, 
-			@Sort SortSpec theSort) {
+			@RequiredParam(name = Composition.SP_RES_ID) TokenOrListParam theCompositionIds, @Sort SortSpec theSort) {
 
 		if (theCompositionIds == null) {
 			return null;
@@ -170,7 +179,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
 
 		logger.debug("query count:" + queryCount + "\nquery:" + query);
-		
+
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
@@ -250,6 +259,95 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 	}
 
+	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
+	public IBundleProvider generateDocumentOperation(RequestDetails theRequestDetails, @IdParam IdType theCompositionId,
+			@OperationParam(name = "id") UriType theIdUri, @OperationParam(name = "persist") BooleanType thePersist,
+			@OperationParam(name = "graph") UriType theGraph) {
+
+		OperationOutcome outcome = new OperationOutcome();
+		if (theCompositionId == null || theCompositionId.isEmpty()) {
+			// see if the id is coming as an input parameter.
+			if (theIdUri == null || theIdUri.isEmpty()) {
+				// We do not support getting all Document.
+				outcome.addIssue().setSeverity(IssueSeverity.WARNING).setDetails(
+						(new CodeableConcept()).setText("id is required. We do not support getting all documents"));
+				throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+			} else {
+				String compositionId = null;
+				compositionId = theIdUri.getId();
+				if (compositionId.startsWith("http")) {
+					// We do not support the external composition.
+					outcome.addIssue().setSeverity(IssueSeverity.WARNING).setDetails(
+							(new CodeableConcept()).setText("We do not support external composition documents"));
+					throw new UnprocessableEntityException(FhirContext.forR4(), outcome);					
+				}
+				
+				theCompositionId = new IdType(compositionId);
+			}
+		}
+		
+		Composition composition = (Composition) readComposition(theCompositionId);
+		CodeableConcept myType = composition.getType();
+		
+		if (myType.isEmpty()) {
+			// We can't generate a document without type. 
+			outcome.addIssue().setSeverity(IssueSeverity.ERROR).setDetails(
+					(new CodeableConcept()).setText("This composition has no type"));
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+		}
+		
+		Coding typeCoding = myType.getCodingFirstRep();
+		if (typeCoding.isEmpty()) {
+			// We must have coding.
+			outcome.addIssue().setSeverity(IssueSeverity.ERROR).setDetails(
+					(new CodeableConcept()).setText("This composition type has no coding"));
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+		}
+		
+		String typeSystem = typeCoding.getSystem();
+		String typeCode = typeCoding.getCode();
+		
+		List<IBaseResource> resources = new ArrayList<IBaseResource>();
+
+		if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "64297-5".equalsIgnoreCase(typeCode)) {
+			// This is a death certificate
+			
+		} else if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "11502-2".equalsIgnoreCase(typeCode)) {
+			// This is a lab report
+		}
+
+		final List<IBaseResource> retv = resources;
+		final Integer totalSize = retv.size();
+		final Integer pageSize = totalSize;
+		
+		return new IBundleProvider() {
+			@Override
+			public IPrimitiveType<Date> getPublished() {
+				return null;
+			}
+
+			@Override
+			public List<IBaseResource> getResources(int theFromIndex, int theToIndex) {
+				return retv.subList(theFromIndex, theToIndex);
+			}
+
+			@Override
+			public String getUuid() {
+				return null;
+			}
+
+			@Override
+			public Integer preferredPageSize() {
+				return pageSize;
+			}
+
+			@Override
+			public Integer size() {
+				return totalSize;
+			}
+		};
+	}
+
 	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
@@ -264,11 +362,11 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
-			
+
 			// _Include
 			List<String> includes = new ArrayList<String>();
 
-			String myQuery = query;			
+			String myQuery = query;
 			if (toIndex - fromIndex > 0) {
 				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
@@ -278,7 +376,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			return retVal;
 		}
 	}
