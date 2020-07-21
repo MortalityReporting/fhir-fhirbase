@@ -18,23 +18,23 @@ public class MdiProfileUtil {
 	static {
 		singletonMap = new HashMap<String, String>();
 		singletonMap.put("Observation", 
-				"http://loinc.org:30525-0,"         // VRDR_DecedentAge
-				+ "http://loinc.org:80913-7,"       // VRDR_DecedentEducationLevel
+				"http://loinc.org:30525-0,"         // VRDR-Decedent-Age
+				+ "http://loinc.org:80913-7,"       // VRDR-Decedent-Education-Level
 				+ "http://hl7.org/fhir/v2/0203:BR," // VRDR-BirthRecordIdentifier
 				+ "http://loinc.org:74497-9,"       // VRDR-Examiner-Contacted
-				+ "http://loinc.org:69442-2,"       // VRDR_DecedentPregnancy
-				+ "http://loinc.org:69451-3,"       // VRDR_DecedentTransportationRole
-				+ "http://loinc.org:69443-0,2.16.840.1.113883.6.1:69443-0," // VRDR_TobaccoUseContributedToDeath
+				+ "http://loinc.org:69442-2,"       // VRDR-Decedent-Pregnancy
+				+ "http://loinc.org:69451-3,"       // VRDR-Decedent-Transportation-Role
+				+ "http://loinc.org:69443-0,2.16.840.1.113883.6.1:69443-0," // VRDR-Tobacco-Use-Contributed-To-Death
 				+ "http://loinc.org:85699-7,"       // VRDR-Autopsy-Performed-Indicator
 				+ "http://loinc.org:11374-6,"       // VRDR-InjuryIncident
 				+ "http://loinc.org:81956-5,"       // VRDR-Death-Date
-				+ "http://loinc.org:69449-7,"       // VRDR_MannerOfDeath
-				+ "http://loinc.org:80905-3"        // VRDR_DecedentDispositionMethod
+				+ "http://loinc.org:69449-7,"       // VRDR-Manner-of-Death
+				+ "http://loinc.org:80905-3"        // VRDR-Decedent-Disposition-Method
 				); 
 		singletonMap.put("RelatedPerson", 
 				"http://terminology.hl7.org/CodeSystem/v3-RoleCode:MTH,"   // VRDR-Decedent-Mother
-				+ "http://terminology.hl7.org/CodeSystem/v3-RoleCode:SPS," // VRDR_DecedentSpouse
-				+ "http://terminology.hl7.org/CodeSystem/v3-RoleCode:FTH"  // DecedentFather
+				+ "http://terminology.hl7.org/CodeSystem/v3-RoleCode:SPS," // VRDR-Decedent-Spouse
+				+ "http://terminology.hl7.org/CodeSystem/v3-RoleCode:FTH"  // VRDR-Decedent-Father
 				);
 		singletonMap.put("Composition", 
 				"http://loinc.org:64297-5"         // VRDR-Death-Certificate
