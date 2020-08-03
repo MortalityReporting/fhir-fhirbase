@@ -211,7 +211,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "procedure proc";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes", "proc.resource->'code'");
+			fromStatement = constructFromStatementPath(fromStatement, "codes", "proc.resource->'code'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

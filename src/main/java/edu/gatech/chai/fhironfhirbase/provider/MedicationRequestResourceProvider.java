@@ -177,10 +177,7 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 	@Search()
 	public IBundleProvider findMedicationRequestsByParams(
 			@OptionalParam(name = MedicationRequest.SP_CODE) TokenOrListParam theOrCodes,
-			@OptionalParam(name = MedicationRequest.SP_MEDICATION + "."
-					+ Medication.SP_CODE) TokenOrListParam theMedicationOrCodes,
-			@OptionalParam(name = MedicationRequest.SP_MEDICATION, chainWhitelist = {
-					"" }) ReferenceParam theMedication,
+			@OptionalParam(name = MedicationRequest.SP_MEDICATION, chainWhitelist = {"", Medication.SP_CODE}) ReferenceParam theMedication,
 			@OptionalParam(name = MedicationRequest.SP_ENCOUNTER) ReferenceParam theEncounter,
 			@OptionalParam(name = MedicationRequest.SP_AUTHOREDON) DateParam theDate,
 			@OptionalParam(name = MedicationRequest.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME,
@@ -196,7 +193,7 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "medicationrequest mr";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes", "mr");
+			fromStatement = constructFromStatementPath(fromStatement, "codes", "mr.resource->'medicationCodeableConcept'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
@@ -214,16 +211,17 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 			}
 		}
 
-		if (theMedicationOrCodes != null) {
-			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes",
-					"mr.resource->'medicationCodeableConcept'");
-			String where = constructCodeWhereParameter(theOrCodes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-		}
+//		if (theMedication != null) {
+//			fromStatement = constructFromStatementTokens(theMedicationOrCodes, fromStatement, "codes",
+//					"mr.resource->'medicationCodeableConcept'->'coding'");
+//			String where = constructCodeWhereParameter(theOrCodes);
+//			if (where != null && !where.isEmpty()) {
+//				whereParameters.add(where);
+//			}
+//		}
 
 		if (theMedication != null) {
+			//TODO: Medication.code needs to be implemented.
 			whereParameters
 					.add("mr.resource->medicationReference->>reference like '%" + theMedication.getIdPart() + "%'");
 		}

@@ -199,7 +199,7 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "condition c";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes", "c.resource->'code'");
+			fromStatement = constructFromStatementPath(fromStatement, "codes", "c.resource->'code'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

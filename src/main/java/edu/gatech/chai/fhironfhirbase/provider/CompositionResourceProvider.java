@@ -141,7 +141,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = getTableName() + " comp";
 		if (theOrTypes != null) {
-			fromStatement = constructFromStatement(theOrTypes, fromStatement, "types", "comp.resource->'type'");
+			fromStatement = constructFromStatementPath(fromStatement, "types", "comp.resource->'type'->'coding'");
 			String where = constructTypeWhereParameter(theOrTypes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

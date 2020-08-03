@@ -178,8 +178,8 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "medicationstatement ms";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatement(theOrCodes, fromStatement, "codes",
-					"ms.resource->'medicationCodeableConcept'");
+			fromStatement = constructFromStatementPath(fromStatement, "codes",
+					"ms.resource->'medicationCodeableConcept'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

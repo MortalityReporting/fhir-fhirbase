@@ -182,7 +182,7 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = "documentreference dr";
 		if (theOrTypes != null) {
-			fromStatement = constructFromStatement(theOrTypes, fromStatement, "types", "dr.resource->'type'");
+			fromStatement = constructFromStatementPath(fromStatement, "types", "dr.resource->'type'->'coding'");
 			String where = constructTypeWhereParameter(theOrTypes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

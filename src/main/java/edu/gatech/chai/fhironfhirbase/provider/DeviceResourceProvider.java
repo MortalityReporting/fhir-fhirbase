@@ -163,7 +163,7 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 		String fromStatement = "device d";
 
 		if (theOrTypes != null) {
-			fromStatement = constructFromStatement(theOrTypes, fromStatement, "types", "d.resource->'type'");
+			fromStatement = constructFromStatementPath(fromStatement, "types", "d.resource->'type'->'coding'");
 			String where = constructTypeWhereParameter(theOrTypes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
