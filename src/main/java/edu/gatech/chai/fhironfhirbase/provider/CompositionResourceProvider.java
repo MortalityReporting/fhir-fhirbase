@@ -11,13 +11,18 @@ import javax.annotation.PostConstruct;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.instance.model.api.IPrimitiveType;
 import org.hl7.fhir.r4.model.BooleanType;
+import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
+import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.UriType;
+import org.hl7.fhir.r4.model.codesystems.BundleType;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +48,9 @@ import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import ca.uhn.fhir.rest.client.api.IGenericClient;
+import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
+import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
@@ -51,6 +59,7 @@ import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.MyBundle;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
+import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 @Service
 @Scope("prototype")
@@ -260,11 +269,20 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	}
 
 	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
-	public IBundleProvider generateDocumentOperation(RequestDetails theRequestDetails, @IdParam IdType theCompositionId,
+	public Bundle generateDocumentOperation(RequestDetails theRequestDetails, @IdParam IdType theCompositionId,
 			@OperationParam(name = "id") UriType theIdUri, @OperationParam(name = "persist") BooleanType thePersist,
 			@OperationParam(name = "graph") UriType theGraph) {
 
 		OperationOutcome outcome = new OperationOutcome();
+		if (thePersist != null && !thePersist.isEmpty()) {
+			if (thePersist.getValue()) {
+				// We can't store this bundler. 
+				outcome.addIssue().setSeverity(IssueSeverity.ERROR).setDetails(
+						(new CodeableConcept()).setText("This server do not support Bundle persist"));
+				throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+			}
+		}
+		
 		if (theCompositionId == null || theCompositionId.isEmpty()) {
 			// see if the id is coming as an input parameter.
 			if (theIdUri == null || theIdUri.isEmpty()) {
@@ -307,45 +325,60 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		String typeSystem = typeCoding.getSystem();
 		String typeCode = typeCoding.getCode();
 		
-		List<IBaseResource> resources = new ArrayList<IBaseResource>();
+		List<BundleEntryComponent> bundleEntries = new ArrayList<BundleEntryComponent>();
+		
+		// First entry must be composition.
+		BundleEntryComponent bundleEntry = new BundleEntryComponent();
+		bundleEntry.setFullUrlElement(composition.getIdElement());
+		bundleEntry.setResource(composition);
+		bundleEntries.add(bundleEntry);
+		
+		String myFhirServerBase = theRequestDetails.getFhirServerBase();
+		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
+
+		String authBasic = System.getenv("AUTH_BASIC");
+		String authBearer = System.getenv("AUTH_BEARER");
+		if (authBasic != null && !authBasic.isEmpty()) {
+			String[] auth = authBasic.split(":");
+			if (auth.length == 2) {
+				client.registerInterceptor(new BasicAuthInterceptor(auth[0], auth[1]));
+			}
+		} else if (authBearer != null && !authBearer.isEmpty()) {
+			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
+		}
 
 		if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "64297-5".equalsIgnoreCase(typeCode)) {
-			// This is a death certificate
+			// This is a death certificate document. We need to add full resources in the section entries
+			// to the resources.
 			
+			for (SectionComponent section: composition.getSection()) {
+				for (Reference reference: section.getEntry()) {
+					// get the reference. 
+					Resource response = (Resource) client.read().resource(reference.getReferenceElement().getResourceType()).withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
+					if (response == null || response.isEmpty()) {
+						outcome.addIssue().setSeverity(IssueSeverity.ERROR).setDetails(
+								(new CodeableConcept()).setText("resource (" + reference.getReferenceElement().getValue() + ") in Composition section not found"));
+						throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+					}
+					
+					bundleEntry = new BundleEntryComponent();
+					bundleEntry.setFullUrl(reference.getReferenceElement().getValue());
+					bundleEntry.setResource(response);
+					bundleEntries.add(bundleEntry);
+				}
+			}
 		} else if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "11502-2".equalsIgnoreCase(typeCode)) {
 			// This is a lab report
 		}
 
-		final List<IBaseResource> retv = resources;
-		final Integer totalSize = retv.size();
-		final Integer pageSize = totalSize;
+		Bundle retBundle = new Bundle();
 		
-		return new IBundleProvider() {
-			@Override
-			public IPrimitiveType<Date> getPublished() {
-				return null;
-			}
-
-			@Override
-			public List<IBaseResource> getResources(int theFromIndex, int theToIndex) {
-				return retv.subList(theFromIndex, theToIndex);
-			}
-
-			@Override
-			public String getUuid() {
-				return null;
-			}
-
-			@Override
-			public Integer preferredPageSize() {
-				return pageSize;
-			}
-
-			@Override
-			public Integer size() {
-				return totalSize;
-			}
-		};
+		// This is generate Document operation. Thus, type must be Document.
+		retBundle.setType(Bundle.BundleType.DOCUMENT);
+		
+		retBundle.setEntry(bundleEntries);
+		
+		return retBundle;
 	}
 
 	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
