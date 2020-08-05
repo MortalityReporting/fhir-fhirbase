@@ -199,6 +199,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 	 */
 	@Search()
 	public IBundleProvider findProceduresByParams(@OptionalParam(name = Procedure.SP_CODE) TokenOrListParam theOrCodes,
+			@OptionalParam(name = Procedure.SP_IDENTIFIER) TokenParam theProcecureIdentifier,
 			@OptionalParam(name = Procedure.SP_DATE) DateParam theDateParam,
 			@OptionalParam(name = Procedure.SP_ENCOUNTER) ReferenceParam theEncounterParam,
 			@OptionalParam(name = Procedure.SP_SUBJECT) ReferenceOrListParam theSubjectParams,
@@ -215,6 +216,20 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
+			}
+		}
+
+		if (theProcecureIdentifier != null) {
+			String system = theProcecureIdentifier.getSystem();
+			String value = theProcecureIdentifier.getValue();
+
+			if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
+				whereParameters.add("proc.resource->'identifier' @> '[{\"value\": \"" + value + "\",\"system\": \""
+						+ system + "\"}]'::jsonb");
+			} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
+				whereParameters.add("proc.resource->'identifier' @> '[{\"system\": \"" + system + "\"}]'::jsonb");
+			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
+				whereParameters.add("proc.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
 		}
 

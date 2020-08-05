@@ -18,6 +18,7 @@ import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.Meta;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
@@ -375,6 +376,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		
 		// This is generate Document operation. Thus, type must be Document.
 		retBundle.setType(Bundle.BundleType.DOCUMENT);
+		Meta meta = retBundle.getMeta();
+		meta.addProfile("http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Death-Certificate-Document");
+		retBundle.setMeta(meta);
 		
 		retBundle.setEntry(bundleEntries);
 		

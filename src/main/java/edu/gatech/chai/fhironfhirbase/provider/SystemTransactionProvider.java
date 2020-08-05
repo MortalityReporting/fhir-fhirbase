@@ -32,9 +32,13 @@ import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.Bundle.HTTPVerb;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Composition;
+import org.hl7.fhir.r4.model.Composition.CompositionAttesterComponent;
+import org.hl7.fhir.r4.model.Composition.CompositionEventComponent;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.Procedure;
+import org.hl7.fhir.r4.model.Procedure.ProcedurePerformerComponent;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.RelatedPerson;
 import org.springframework.http.HttpStatus;
@@ -384,18 +388,16 @@ public class SystemTransactionProvider {
 		if (reference == null || reference.isEmpty())
 			return;
 
-		if (reference.getReferenceElement().isIdPartValid()) {
-			String originalId = reference.getReferenceElement().getIdPart();
-			String newId = referenceIds.get(originalId);
+		String originalId = reference.getReferenceElement().getIdPart();
+		String newId = referenceIds.get(originalId);
 
-			logger.debug("new id:"+newId);
-			if (newId != null && !newId.isEmpty()) {
-				String[] resourceId = newId.split("/");
-				if (resourceId.length == 2) {
-					reference.setReferenceElement(new IdType(resourceId[0], resourceId[1]));
-				} else {
-					reference.setReferenceElement(new IdType(newId));
-				}
+		logger.debug("new id:"+newId);
+		if (newId != null && !newId.isEmpty()) {
+			String[] resourceId = newId.split("/");
+			if (resourceId.length == 2) {
+				reference.setReferenceElement(new IdType(resourceId[0], resourceId[1]));
+			} else {
+				reference.setReferenceElement(new IdType(newId));
 			}
 		}
 	}
@@ -422,6 +424,12 @@ public class SystemTransactionProvider {
 				Resource resource = entry.getResource();
 				if (resource != null && !resource.isEmpty()) {
 					String resourceId = null;
+					
+					if (resource instanceof Composition) {
+						// Composition must be handled separately. 
+						continue;
+					}
+					
 					if (resource instanceof Observation) {
 						Observation res = (Observation) resource;
 						updateReference(res.getSubject());
@@ -461,20 +469,38 @@ public class SystemTransactionProvider {
 					} else if (resource instanceof Procedure) {
 						Procedure res = (Procedure) resource;
 						updateReference(res.getSubject());
+						ProcedurePerformerComponent performer = res.getPerformerFirstRep();
+						if (performer != null && !performer.isEmpty()) {
+							updateReference(performer.getActor());
+						}
 						updateReference(res.getAsserter());
+						
 
 						// Check if this is singleton resource
-						Coding myCoding;
-						if ((myCoding = MdiProfileUtil.isSingletonResource(resource)) != null) {
+//						Coding myCoding;
+//						if ((myCoding = MdiProfileUtil.isSingletonResource(resource)) != null) {
 							// We need to search and get an existing resource ID for this type of resource.
-							Bundle responseBundle = client.search().forResource(Procedure.class)
-									.where(Procedure.CODE.exactly().codings(myCoding))
-									.and(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-							int total = responseBundle.getTotal();
-							if (total > 0) {
-								resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-								break;
-							}
+//							Bundle responseBundle = client.search().forResource(Procedure.class)
+//									.where(Procedure.CODE.exactly().codings(myCoding))
+//									.and(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+//							int total = responseBundle.getTotal();
+//							if (total > 0) {
+//								resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+//								break;
+//							}
+						if (MdiProfileUtil.isSingletonResource(resource) != null) {
+							for (Identifier identifier : res.getIdentifier()) {
+								Bundle responseBundle = client
+										.search().forResource(Procedure.class).where(Procedure.IDENTIFIER.exactly()
+												.systemAndCode(identifier.getSystem(), identifier.getValue()))
+										.returnBundle(Bundle.class).execute();
+
+								int total = responseBundle.getTotal();
+								if (total > 0) {
+									resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+									break;
+								}
+							}					
 						}
 					} else if (resource instanceof ListResource) {
 						ListResource res = (ListResource) resource;
@@ -533,18 +559,18 @@ public class SystemTransactionProvider {
 						}
 						outcome = client.create().resource(resource).prettyPrint().encodedJson().execute();
 						if (outcome.getCreated() != null && outcome.getCreated()) {
-							String newId = outcome.getId().getIdPart();
-							if (newId != null && !newId.isEmpty()) {
+							resourceId = outcome.getId().getIdPart();
+							if (resourceId != null && !resourceId.isEmpty()) {
 								response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
 										+ HttpStatus.CREATED.getReasonPhrase());
-								response.setLocation(resource.getResourceType().toString() + "/" + newId);
+								response.setLocation(resource.getResourceType().toString() + "/" + resourceId);
 
 								entry.setFullUrl(
-										client.getServerBase() + resource.getResourceType().toString() + "/" + newId);
+										client.getServerBase() + resource.getResourceType().toString() + "/" + resourceId);
 								if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 									entry.setResource((Resource) outcome.getResource());
 								} else {
-									resource.setId(newId);
+									resource.setId(resourceId);
 								}
 							} else {
 								response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value())
@@ -555,9 +581,57 @@ public class SystemTransactionProvider {
 									+ HttpStatus.BAD_REQUEST.getReasonPhrase());
 						}
 					}
+					
+					referenceIds.put(entry.getFullUrl(), resource.getResourceType().toString() + "/" + resourceId);
 				} else {
 					response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()) + " "
 							+ HttpStatus.BAD_REQUEST.getReasonPhrase());
+				}
+
+				entry.setRequest(null);
+			}
+		}
+	}
+	
+	private void processPostComposition(IGenericClient client, List<BundleEntryComponent> entries) {
+		for (BundleEntryComponent entry : entries) {
+			BundleEntryResponseComponent response = entry.getResponse();
+			if (response != null && !response.isEmpty()) {
+				// We have already processed this.
+				continue;
+			}
+
+			Resource resource = entry.getResource();
+			if (resource instanceof Composition) {
+				Composition composition = (Composition) resource;
+				updateReference(composition.getSubject());
+				
+				CompositionAttesterComponent attester = composition.getAttesterFirstRep();
+				if (attester != null && !attester.isEmpty()) {
+					updateReference(attester.getParty());						
+				}
+				
+				CompositionEventComponent event = composition.getEventFirstRep();
+				if (event != null && !event.isEmpty()) {
+					updateReference(event.getDetailFirstRep());
+				}
+				
+				MethodOutcome outcome = client.create().resource(composition).prettyPrint().encodedJson().execute();
+				if (outcome.getCreated()) {
+					String compositionId = outcome.getId().getIdPart();
+					referenceIds.put(entry.getFullUrl(), "Composition/" + compositionId);
+
+					response.setStatus(
+							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
+					response.setLocation(CompositionResourceProvider.getType() + "/" + compositionId);
+
+					entry.setFullUrl(client.getServerBase() + "Composition/" + compositionId);
+					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+						entry.setResource((Resource) outcome.getResource());
+					}
+				} else {
+					response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
+							+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
 				}
 
 				entry.setRequest(null);
@@ -701,8 +775,22 @@ public class SystemTransactionProvider {
 			theBundle.setType(BundleType.BATCHRESPONSE);
 
 			break;
-		default:
+		case DOCUMENT:
+			// We support two kinds of document here. 
+			// One is VRDR, the other is Toxicology document
+			// We post all in the entries (based on VRDR resources) to server.
+			processPostPatient(client, entries);
+			processPostPractitioner(client, entries);
+			processPostLocation(client, entries);
+			processPostCondition(client, entries);
+			processPost(client, entries);
 
+			// Now, we should have composition left. 
+			processPostComposition(client, entries);
+			
+			break;
+
+		default:
 		}
 
 		return theBundle;

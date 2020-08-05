@@ -40,7 +40,7 @@ public class MdiProfileUtil {
 				"http://loinc.org:64297-5"         // VRDR-Death-Certificate
 				);
 		singletonMap.put("Procedure", 
-				"http://snomed.info/sct:103693007" // VRDR-Death-Certification
+				"http://snomed.info/sct:308646001" // VRDR-Death-Certification
 				);
 	}
 	

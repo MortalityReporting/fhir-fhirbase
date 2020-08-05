@@ -134,6 +134,7 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	@Search()
 	public IBundleProvider findPractitionersByParams(
 			@OptionalParam(name = Practitioner.SP_RES_ID) TokenOrListParam thePractitionerIds,
+			@OptionalParam(name = Practitioner.SP_IDENTIFIER) TokenParam thePractitionerIdentifier,
 			@OptionalParam(name = Practitioner.SP_ACTIVE) TokenParam theActive,
 			@OptionalParam(name = Practitioner.SP_FAMILY) StringParam theFamilyName,
 			@OptionalParam(name = Practitioner.SP_GIVEN) StringParam theGivenName,
@@ -148,6 +149,20 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 		if (thePractitionerIds != null) {
 			for (TokenParam thePractitionerId : thePractitionerIds.getValuesAsQueryTokens()) {
 				whereParameters.add("pract.id = " + thePractitionerId.getValue());
+			}
+		}
+		
+		if (thePractitionerIdentifier != null) {
+			String system = thePractitionerIdentifier.getSystem();
+			String value = thePractitionerIdentifier.getValue();
+
+			if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
+				whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\",\"system\": \""
+						+ system + "\"}]'::jsonb");
+			} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
+				whereParameters.add("pract.resource->'identifier' @> '[{\"system\": \"" + system + "\"}]'::jsonb");
+			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
+				whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
 		}
 
