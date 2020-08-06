@@ -409,6 +409,8 @@ public class SystemTransactionProvider {
 				// We have already processed this.
 				continue;
 			}
+			
+			String originalFullUrl = entry.getFullUrl();
 
 			BundleEntryRequestComponent request = entry.getRequest();
 
@@ -582,7 +584,7 @@ public class SystemTransactionProvider {
 						}
 					}
 					
-					referenceIds.put(entry.getFullUrl(), resource.getResourceType().toString() + "/" + resourceId);
+					referenceIds.put(originalFullUrl, resource.getResourceType().toString() + "/" + resourceId);
 				} else {
 					response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()) + " "
 							+ HttpStatus.BAD_REQUEST.getReasonPhrase());
@@ -606,6 +608,10 @@ public class SystemTransactionProvider {
 				Composition composition = (Composition) resource;
 				updateReference(composition.getSubject());
 				
+				for (Reference author: composition.getAuthor()) {
+					updateReference(author);
+				}
+
 				CompositionAttesterComponent attester = composition.getAttesterFirstRep();
 				if (attester != null && !attester.isEmpty()) {
 					updateReference(attester.getParty());						
@@ -616,8 +622,27 @@ public class SystemTransactionProvider {
 					updateReference(event.getDetailFirstRep());
 				}
 				
-				MethodOutcome outcome = client.create().resource(composition).prettyPrint().encodedJson().execute();
-				if (outcome.getCreated()) {
+				// check if we already have a composition for this patient.
+				IdType compositionIdType = null;
+				IdType subjectIdType = new IdType("Patient", patientId);
+				Bundle resultBundle = client.search().forResource(Composition.class).where(Composition.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
+				if (resultBundle != null && !resultBundle.isEmpty()) {
+					BundleEntryComponent compositionEntry = resultBundle.getEntryFirstRep();
+					if (compositionEntry != null && !compositionEntry.isEmpty()) {
+						Composition existingComposition = (Composition) compositionEntry.getResource();
+						compositionIdType = existingComposition.getIdElement();
+					}
+				}
+				
+				MethodOutcome outcome;
+				if (compositionIdType == null) {
+					outcome = client.create().resource(composition).prettyPrint().encodedJson().execute();
+				} else {
+					composition.setId(compositionIdType);
+					outcome = client.update().resource(composition).prettyPrint().encodedJson().execute();
+				}
+				
+				if (outcome.getCreated() != null && outcome.getCreated()) {
 					String compositionId = outcome.getId().getIdPart();
 					referenceIds.put(entry.getFullUrl(), "Composition/" + compositionId);
 
@@ -629,10 +654,21 @@ public class SystemTransactionProvider {
 					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 						entry.setResource((Resource) outcome.getResource());
 					}
+				} else if (outcome.getId() != null && !outcome.getId().isEmpty()) {
+					String compositionId = outcome.getId().getIdPart();
+					referenceIds.put(entry.getFullUrl(), "Composition/" + compositionId);
+
+					response.setStatus(
+							String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
+					entry.setFullUrl(client.getServerBase() + "Composition/" + compositionId);
+					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+						entry.setResource((Resource) outcome.getResource());
+					}					
 				} else {
 					response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
 							+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
 				}
+				 
 
 				entry.setRequest(null);
 			}

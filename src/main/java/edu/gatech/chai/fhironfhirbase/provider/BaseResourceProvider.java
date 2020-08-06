@@ -229,17 +229,22 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 
 	protected String constructSubjectWhereParameter(ReferenceParam theSubject, String tableAlias) {
 		if (theSubject != null) {
-			if (theSubject.getResourceType() != null && 
-					theSubject.getResourceType().equals(PatientResourceProvider.getType())) {
-				return constructPatientWhereParameter(theSubject, tableAlias);
+//			if (theSubject.getResourceType() != null && 
+//					theSubject.getResourceType().equals(PatientResourceProvider.getType())) {
+//				return constructPatientWhereParameter(theSubject, tableAlias);
+//			} else {
+//				// If resource is null, we assume Patient.
+//				if (theSubject.getResourceType() == null) {
+//					return constructPatientWhereParameter(theSubject, tableAlias);
+//				} 
+//			}
+
+			if (theSubject.getResourceType() != null) { 
+				return tableAlias + ".resource->'subject'->>'reference' like '%" + theSubject.getValue() + "%'";
 			} else {
-				// If resource is null, we assume Patient.
-				if (theSubject.getResourceType() == null) {
-					return constructPatientWhereParameter(theSubject, tableAlias);
-				} 
+				return constructPatientWhereParameter(theSubject, tableAlias);
 			}
 			
-			return tableAlias + ".resource->'subject'->>'reference' like '%" + theSubject.getResourceType() + "/" + theSubject.getValue() + "%'";
 		}
 		
 		return null;
