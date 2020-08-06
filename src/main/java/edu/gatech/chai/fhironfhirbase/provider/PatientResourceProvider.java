@@ -27,6 +27,7 @@ import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.instance.model.api.IPrimitiveType;
 import org.hl7.fhir.r4.model.CodeType;
 import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.DateType;
 import org.hl7.fhir.r4.model.Device;
@@ -424,7 +425,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 					+ thePatientId.getIdPart() + "'";
 			resources.addAll(getFhirbaseMapping().search(sql, Device.class));
 
-			// Get deviceUseStatement
+			// Get deviceUseStatements
 			sql = "select * from deviceusestatement du where du.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
 			where = constructDatePeriodWhereParameter(startDate, endDate, "du", "timingDateTime");
@@ -433,7 +434,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			}
 			resources.addAll(getFhirbaseMapping().search(sql, DeviceUseStatement.class));
 
-			// Get documentReference
+			// Get documentReferences
 			sql = "select * from documentreference dr where dr.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
 			where = constructDatePeriodWhereParameter(startDate, endDate, "dr", "date");
@@ -442,7 +443,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			}
 			resources.addAll(getFhirbaseMapping().search(sql, DocumentReference.class));
 
-			// Get encounter
+			// Get encounters
 			sql = "select * from encounter e where e.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
 			where = constructDatePeriodWhereParameter(startDate, endDate, "e", "period->'start'");
@@ -451,7 +452,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			}
 			resources.addAll(getFhirbaseMapping().search(sql, Encounter.class));
 
-			// Get list
+			// Get lists
 			sql = "select * from list l where l.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
 			where = constructDatePeriodWhereParameter(startDate, endDate, "l", "date");
@@ -460,7 +461,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			}
 			resources.addAll(getFhirbaseMapping().search(sql, ListResource.class));
 
-			// Get medicationRequest
+			// Get medicationRequests
 			sql = "select * from medicationrequest mr where mr.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
 			where = constructDatePeriodWhereParameter(startDate, endDate, "mr", "authoredOn");
@@ -469,7 +470,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			}
 			resources.addAll(getFhirbaseMapping().search(sql, MedicationRequest.class));
 
-			// Get medicationStatement
+			// Get medicationStatements
 			sql = "select * from medicationstatement ms where ms.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
 			where = constructDatePeriodWhereParameter(startDate, endDate, "ms", "effectiveDateTime");
@@ -478,7 +479,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			}
 			resources.addAll(getFhirbaseMapping().search(sql, MedicationStatement.class));
 
-			// Get observation
+			// Get observations
 			sql = "select * from observation o where o.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
 			where = constructDatePeriodWhereParameter(startDate, endDate, "o", "effectiveDateTime");
@@ -487,7 +488,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			}
 			resources.addAll(getFhirbaseMapping().search(sql, Observation.class));
 
-			// Get procedure
+			// Get procedures
 			sql = "select * from procedure p where p.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
 			where = constructDatePeriodWhereParameter(startDate, endDate, "p", "performedDateTime");
@@ -496,11 +497,16 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			}
 			resources.addAll(getFhirbaseMapping().search(sql, Procedure.class));
 
-			// Get relatedPerson
+			// Get relatedPersons
 			sql = "select * from relatedperson rp where rp.resource->'patient'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
 			resources.addAll(getFhirbaseMapping().search(sql, RelatedPerson.class));
 
+			// Get compositions
+			sql = "select * from composition comp where comp.resource->'subject'->>'reference' like '%Patient/"
+					+ thePatientId.getIdPart() + "'";
+			resources.addAll(getFhirbaseMapping().search(sql, Composition.class));
+			
 			// Now, we have other resources that are not directly reference by decedent.
 			// For those indirect referenced resources, we need to figure out.
 			// Practitioner: Certifier
