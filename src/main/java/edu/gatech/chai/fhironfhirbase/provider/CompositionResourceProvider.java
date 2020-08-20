@@ -306,6 +306,10 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 		
 		Composition composition = (Composition) readComposition(theCompositionId);
+		if (composition == null || composition.isEmpty()) {
+			return null;
+		}
+		
 		CodeableConcept myType = composition.getType();
 		
 		if (myType.isEmpty()) {

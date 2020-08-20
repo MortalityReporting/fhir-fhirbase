@@ -769,7 +769,9 @@ public class SystemTransactionProvider {
 		if (entries.size() == 0)
 			return null;
 
-		String requestUrl = theRequest.getRequestURL().toString();
+//		String requestUrl = theRequest.getRequestURL().toString();
+		// It's better to use the requestUrl. But, redirection seems to be causing hiccups.
+		String requestUrl = "http://localhost:8080/fhir";
 		IGenericClient client = ctx.newRestfulGenericClient(requestUrl);
 
 		String authBasic = System.getenv("AUTH_BASIC");
