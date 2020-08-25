@@ -506,6 +506,7 @@ public class SystemTransactionProvider {
 						}
 					} else if (resource instanceof ListResource) {
 						ListResource res = (ListResource) resource;
+						updateReference(res.getSubject());
 						for (ListEntryComponent listEntry : res.getEntry()) {
 							logger.debug("list item before:"+listEntry.getItem().getReferenceElement().getValue());
 							updateReference(listEntry.getItem());

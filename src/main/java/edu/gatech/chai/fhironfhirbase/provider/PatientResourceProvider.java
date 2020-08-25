@@ -48,6 +48,7 @@ import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.hl7.fhir.r4.model.Organization;
+import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.Procedure;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.RelatedPerson;
@@ -418,8 +419,49 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				sql += " AND " + where;
 			}
-			resources.addAll(getFhirbaseMapping().search(sql, Condition.class));
-
+			
+			List<IBaseResource> conditions = getFhirbaseMapping().search(sql, Condition.class);
+			resources.addAll(conditions);
+			
+			// Now, we have some resources that we need to include but only being referenced by cause of death condition.
+			// Get asserters. 
+			List<Reference> asserters = new ArrayList<Reference>();
+			for (IBaseResource res : conditions) {
+				Condition condition = (Condition)res;
+				Reference asserter = condition.getAsserter();
+				if (asserter != null && !asserter.isEmpty()) {
+					boolean exists = false;
+					for (Reference existingAsserter : asserters) {
+						// avoid any duplicates
+						if (existingAsserter.getId().equalsIgnoreCase(asserter.getId())) {
+							exists = true;
+							break;
+						}
+					}
+					if (exists == false && asserter.getReferenceElement().getResourceType().equals("Practitioner")) {
+						// We only care about Practitioner.
+						asserters.add(asserter);
+					}
+				}
+			}
+			// Get practitioner (Asserter)
+			String practitionerIds = "";
+			String sourceWhere = "";
+			for (Reference asserter : asserters) {
+				String id = asserter.getReferenceElement().getIdPart();
+				if (practitionerIds.isEmpty()) {
+					practitionerIds = "'" + id + "'";
+					sourceWhere = "l.resource->'source'->>'reference' like '%Practitioner/" + id + "'";
+				} else {
+					practitionerIds += ", '" + id + "'";
+					sourceWhere += " or l.resource->'source'->>'reference' like '%Practitioner/" + id + "'";
+				}
+			}
+			if (!practitionerIds.isEmpty()) {
+				sql = "select * from practitioner where id in (" + practitionerIds + ")";
+				resources.addAll(getFhirbaseMapping().search(sql, Practitioner.class));
+			}
+			
 			// Get devices
 			sql = "select * from device d where d.resource->'patient'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
@@ -459,8 +501,37 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				sql += " AND " + where;
 			}
-			resources.addAll(getFhirbaseMapping().search(sql, ListResource.class));
-
+			
+			List<IBaseResource> lists = getFhirbaseMapping().search(sql, ListResource.class);
+			
+			// Get List that has source pointing to the asserters.
+			if (!sourceWhere.isEmpty()) {
+				sql = "select * from list l where " + sourceWhere;
+				List<IBaseResource> moreLists = getFhirbaseMapping().search(sql, ListResource.class);
+				resources.addAll(moreLists);
+	
+				for (IBaseResource res : lists) {
+					ListResource list = (ListResource) res;
+					String listId = list.getId();
+					
+					boolean exists = false;
+					for (IBaseResource moreRes : moreLists) {
+						ListResource moreList = (ListResource) moreRes;
+						if (listId == moreList.getId()) {
+							exists = true;
+							break;
+						}
+						
+					}
+					
+					if (exists == false) {
+						resources.add(res);
+					}
+				}
+			} else {
+				resources.addAll(lists);
+			}
+						
 			// Get medicationRequests
 			sql = "select * from medicationrequest mr where mr.resource->'subject'->>'reference' like '%Patient/"
 					+ thePatientId.getIdPart() + "'";
