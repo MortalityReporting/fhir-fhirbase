@@ -810,6 +810,10 @@ public class SystemTransactionProvider {
 			processPostLocation(client, entries);
 			processPostCondition(client, entries);
 			processPost(client, entries);
+
+			// Now, we should have composition left. 
+			processPostComposition(client, entries);
+			
 //			processGet(theRequest.getRequestURL().toString(), entries);
 
 //			createComposition(client, entries);
