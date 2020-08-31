@@ -515,6 +515,16 @@ public class SystemTransactionProvider {
 							}					
 						}
 					} else if (resource instanceof ListResource) {
+						// Delete current ListResources in the server.
+						Bundle rListResourceB = client.search().forResource(ListResource.class).where(ListResource.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
+						if (rListResourceB.getTotal() > 0) {
+							List<BundleEntryComponent> rListResources = rListResourceB.getEntry();
+							for (BundleEntryComponent rListResourceComp : rListResources) {
+								ListResource rList = (ListResource) rListResourceComp.getResource();
+								client.delete().resourceById(rList.getIdElement()).execute();
+							}
+						}
+
 						ListResource res = (ListResource) resource;
 						updateReference(res.getSubject());
 						updateReference(res.getSource());
