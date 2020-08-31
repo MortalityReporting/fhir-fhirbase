@@ -512,12 +512,12 @@ public class PatientResourceProvider extends BaseResourceProvider {
 	
 				for (IBaseResource res : lists) {
 					ListResource list = (ListResource) res;
-					String listId = list.getId();
+					String listId = list.getIdElement().getId();
 					
 					boolean exists = false;
 					for (IBaseResource moreRes : moreLists) {
 						ListResource moreList = (ListResource) moreRes;
-						if (listId == moreList.getId()) {
+						if (listId == moreList.getIdElement().getId()) {
 							exists = true;
 							break;
 						}
