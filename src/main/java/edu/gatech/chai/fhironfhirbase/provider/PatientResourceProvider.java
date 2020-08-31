@@ -433,7 +433,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 					boolean exists = false;
 					for (Reference existingAsserter : asserters) {
 						// avoid any duplicates
-						if (existingAsserter.getId().equalsIgnoreCase(asserter.getId())) {
+						if (existingAsserter.getReferenceElement().getValueAsString().equalsIgnoreCase(asserter.getReferenceElement().getValueAsString())) {
 							exists = true;
 							break;
 						}

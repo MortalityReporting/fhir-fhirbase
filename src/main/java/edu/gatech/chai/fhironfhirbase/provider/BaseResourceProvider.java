@@ -227,6 +227,15 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return where;
 	}
 
+	protected String constructReferenceWhereParameter(ReferenceParam theSource, String tableAlias, String column) {
+		if (theSource != null) {
+			if (theSource.getResourceType() != null) { 
+				return tableAlias + ".resource->'" + column + "'->>'reference' like '%" + theSource.getValue() + "%'";
+			} 
+		}
+		return null;
+	}
+
 	protected String constructSubjectWhereParameter(ReferenceParam theSubject, String tableAlias) {
 		if (theSubject != null) {
 //			if (theSubject.getResourceType() != null && 

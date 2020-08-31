@@ -141,6 +141,7 @@ public class ListResourceProvider extends BaseResourceProvider {
 	public IBundleProvider findListResourceByParams(
 			@OptionalParam(name = ListResource.SP_CODE) TokenOrListParam theOrCodes,
 			@OptionalParam(name = ListResource.SP_SUBJECT) ReferenceOrListParam theSubjects,
+			@OptionalParam(name = ListResource.SP_SOURCE) ReferenceOrListParam theSources,
 			@OptionalParam(name = ListResource.SP_PATIENT, chainWhitelist = { "",
 					USCorePatient.SP_NAME }) ReferenceOrListParam thePatients,
 			@Sort SortSpec theSort) {
@@ -167,6 +168,15 @@ public class ListResourceProvider extends BaseResourceProvider {
 		if (thePatients != null) {
 			for (ReferenceParam thePatient : thePatients.getValuesAsQueryTokens()) {
 				String where = constructPatientWhereParameter(thePatient, "l");
+				if (where != null && !where.isEmpty()) {
+					whereParameters.add(where);
+				}
+			}
+		}
+		
+		if (theSources != null) {
+			for (ReferenceParam theSource : theSources.getValuesAsQueryTokens()) {
+				String where = constructReferenceWhereParameter(theSource, "l", "source");
 				if (where != null && !where.isEmpty()) {
 					whereParameters.add(where);
 				}

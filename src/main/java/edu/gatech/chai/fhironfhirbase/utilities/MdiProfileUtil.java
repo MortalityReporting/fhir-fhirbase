@@ -29,7 +29,8 @@ public class MdiProfileUtil {
 				+ "http://loinc.org:11374-6,"       // VRDR-InjuryIncident
 				+ "http://loinc.org:81956-5,"       // VRDR-Death-Date
 				+ "http://loinc.org:69449-7,"       // VRDR-Manner-of-Death
-				+ "http://loinc.org:80905-3"        // VRDR-Decedent-Disposition-Method
+				+ "http://loinc.org:80905-3,"       // VRDR-Decedent-Disposition-Method
+				+ "http://loinc.org:21843-8"        // VRDR-Decedent-Usual-Work
 				); 
 		singletonMap.put("RelatedPerson", 
 				"http://terminology.hl7.org/CodeSystem/v3-RoleCode:MTH,"   // VRDR-Decedent-Mother

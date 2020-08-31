@@ -348,6 +348,16 @@ public class SystemTransactionProvider {
 	}
 	
 	private void processPostCondition(IGenericClient client, List<BundleEntryComponent> entries) {
+		// It's hard to match the condition. So, we will clear all conditions.
+		Bundle rConditionB = client.search().forResource(Condition.class).where(Condition.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
+		if (rConditionB.getTotal() > 0) {
+			List<BundleEntryComponent> rConditions = rConditionB.getEntry();
+			for (BundleEntryComponent rConditionComp : rConditions) {
+				Condition rCond = (Condition) rConditionComp.getResource();
+				client.delete().resourceById(rCond.getIdElement()).execute();
+			}
+		}
+		
 		for (BundleEntryComponent entry : entries) {
 			BundleEntryResponseComponent response = entry.getResponse();
 			if (response != null && !response.isEmpty()) {
