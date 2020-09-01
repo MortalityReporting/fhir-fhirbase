@@ -479,6 +479,16 @@ public class SystemTransactionProvider {
 //						updateReference(res.getSubject());
 //						updateReference(res.getAsserter());
 					} else if (resource instanceof Procedure) {
+						// Delete current Procedure in the server.
+						Bundle rProcedureB = client.search().forResource(Procedure.class).where(Procedure.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
+						if (rProcedureB.getTotal() > 0) {
+							List<BundleEntryComponent> rProcedures = rProcedureB.getEntry();
+							for (BundleEntryComponent rProcedureComp : rProcedures) {
+								Procedure rProc = (Procedure) rProcedureComp.getResource();
+								client.delete().resourceById(rProc.getIdElement()).execute();
+							}
+						}
+
 						Procedure res = (Procedure) resource;
 						updateReference(res.getSubject());
 						ProcedurePerformerComponent performer = res.getPerformerFirstRep();
@@ -489,31 +499,31 @@ public class SystemTransactionProvider {
 						
 
 						// Check if this is singleton resource
-//						Coding myCoding;
-//						if ((myCoding = MdiProfileUtil.isSingletonResource(resource)) != null) {
-							// We need to search and get an existing resource ID for this type of resource.
-//							Bundle responseBundle = client.search().forResource(Procedure.class)
-//									.where(Procedure.CODE.exactly().codings(myCoding))
-//									.and(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-//							int total = responseBundle.getTotal();
-//							if (total > 0) {
-//								resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-//								break;
-//							}
-						if (MdiProfileUtil.isSingletonResource(resource) != null) {
-							for (Identifier identifier : res.getIdentifier()) {
-								Bundle responseBundle = client
-										.search().forResource(Procedure.class).where(Procedure.IDENTIFIER.exactly()
-												.systemAndCode(identifier.getSystem(), identifier.getValue()))
-										.returnBundle(Bundle.class).execute();
-
-								int total = responseBundle.getTotal();
-								if (total > 0) {
-									resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-									break;
-								}
-							}					
-						}
+////						Coding myCoding;
+////						if ((myCoding = MdiProfileUtil.isSingletonResource(resource)) != null) {
+//							// We need to search and get an existing resource ID for this type of resource.
+////							Bundle responseBundle = client.search().forResource(Procedure.class)
+////									.where(Procedure.CODE.exactly().codings(myCoding))
+////									.and(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+////							int total = responseBundle.getTotal();
+////							if (total > 0) {
+////								resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+////								break;
+////							}
+//						if (MdiProfileUtil.isSingletonResource(resource) != null) {
+//							for (Identifier identifier : res.getIdentifier()) {
+//								Bundle responseBundle = client
+//										.search().forResource(Procedure.class).where(Procedure.IDENTIFIER.exactly()
+//												.systemAndCode(identifier.getSystem(), identifier.getValue()))
+//										.returnBundle(Bundle.class).execute();
+//
+//								int total = responseBundle.getTotal();
+//								if (total > 0) {
+//									resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+//									break;
+//								}
+//							}					
+//						}
 					} else if (resource instanceof ListResource) {
 						// Delete current ListResources in the server.
 						Bundle rListResourceB = client.search().forResource(ListResource.class).where(ListResource.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
