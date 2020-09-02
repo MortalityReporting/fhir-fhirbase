@@ -21,6 +21,7 @@ import java.util.List;
 import org.hl7.fhir.r4.model.BackboneElement;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Patient;
+import org.hl7.fhir.r4.model.StringType;
 
 import ca.uhn.fhir.model.api.annotation.Block;
 import ca.uhn.fhir.model.api.annotation.Child;
@@ -108,6 +109,46 @@ public class USCorePatient extends Patient {
 			this.myCategory = myCategory;
 		}
 
+		/**
+		 * This is a primitive datatype extension
+		 */
+		@Description(shortDefinition = "The 900+ CDC race codes that are grouped under one of the 5 OMB race category codes")
+		@Extension(url = "detailed", isModifier = false, definedLocally = true)
+		@Child(name = "detailed", min = 0, max = Child.MAX_UNLIMITED)
+		private List<Coding> myDetailed;
+
+		public List<Coding> getDetailed() {
+			if (myDetailed == null) {
+				myDetailed = new ArrayList<Coding>();
+			}
+			
+			return myDetailed;
+		}
+
+		public void setDetailed(List<Coding> myDetailed) {
+			this.myDetailed = myDetailed;
+		}
+
+		/**
+		 * This is a primitive datatype extension
+		 */
+		@Description(shortDefinition = "Plain text representation of the race concept(s)")
+		@Extension(url = "text", isModifier = false, definedLocally = true)
+		@Child(name = "text", min = 1, max = 1)
+		private List<StringType> myText;
+
+		public List<StringType> getText() {
+			if (myText == null) {
+				myText = new ArrayList<StringType>();
+			}
+			
+			return myText;
+		}
+
+		public void setText(List<StringType> myText) {
+			this.myText = myText;
+		}
+
 		/*
 		 * ***************************** Boilerplate methods- Hopefully these will be
 		 * removed or made optional in a future version of HAPI but for now they need to
@@ -122,13 +163,15 @@ public class USCorePatient extends Patient {
 
 		@Override
 		public boolean isEmpty() {
-			return ElementUtil.isEmpty(myCategory);
+			return (ElementUtil.isEmpty(myCategory) || ElementUtil.isEmpty(myText)) ;
 		}
 
 		@Override
 		public Race copy() {
 			Race copy = new Race();
 			copy.myCategory = this.myCategory;
+			copy.myText = this.myText;
+			copy.myDetailed = this.myDetailed;
 			
 			return copy;
 		}
@@ -151,7 +194,7 @@ public class USCorePatient extends Patient {
 		 */
 		@Description(shortDefinition = "The 2 ethnicity category codes according to the OMB Standards")
 		@Extension(url = "ombCategory", isModifier = false, definedLocally = true)
-		@Child(name = "category", min = 0, max = 5)
+		@Child(name = "category", min = 1, max = 1)
 		private List<Coding> myCategory;
 
 		public List<Coding> getCategory() {
@@ -166,6 +209,46 @@ public class USCorePatient extends Patient {
 			this.myCategory = myCategory;
 		}
 
+		/**
+		 * This is a primitive datatype extension
+		 */
+		@Description(shortDefinition = "The 41 CDC ethnicity codes that are grouped under one of the 2 OMB ethnicity category codes")
+		@Extension(url = "detailed", isModifier = false, definedLocally = true)
+		@Child(name = "detailed", min = 0, max = Child.MAX_UNLIMITED)
+		private List<Coding> myDetailed;
+
+		public List<Coding> getDetailed() {
+			if (myDetailed == null) {
+				myDetailed = new ArrayList<Coding>();
+			}
+			
+			return myDetailed;
+		}
+
+		public void setDetailed(List<Coding> myDetailed) {
+			this.myDetailed = myDetailed;
+		}
+
+		/**
+		 * This is a primitive datatype extension
+		 */
+		@Description(shortDefinition = "Plain text representation of the ethnicity concept(s)")
+		@Extension(url = "text", isModifier = false, definedLocally = true)
+		@Child(name = "text", min = 1, max = 1)
+		private List<StringType> myText;
+
+		public List<StringType> getText() {
+			if (myText == null) {
+				myText = new ArrayList<StringType>();
+			}
+			
+			return myText;
+		}
+
+		public void setText(List<StringType> myText) {
+			this.myText = myText;
+		}
+		
 		/*
 		 * ***************************** Boilerplate methods- Hopefully these will be
 		 * removed or made optional in a future version of HAPI but for now they need to
@@ -180,13 +263,15 @@ public class USCorePatient extends Patient {
 
 		@Override
 		public boolean isEmpty() {
-			return ElementUtil.isEmpty(myCategory);
+			return (ElementUtil.isEmpty(myCategory) || ElementUtil.isEmpty(myText)) ;
 		}
 
 		@Override
 		public Ethnicity copy() {
 			Ethnicity copy = new Ethnicity();
 			copy.myCategory = this.myCategory;
+			copy.myText = this.myText;
+			copy.myDetailed = this.myDetailed;
 			
 			return copy;
 		}

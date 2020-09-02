@@ -30,17 +30,27 @@ import org.hl7.fhir.r4.model.ResourceType;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.UriType;
 import org.hl7.fhir.r4.model.codesystems.ObservationCategory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import edu.gatech.chai.fhironfhirbase.utilities.CodeableConceptUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 public class ServerOperations {
+	private static final Logger logger = LoggerFactory.getLogger(ServerOperations.class);
+
+	private FhirContext ctx;
 
 	public ServerOperations() {
 	}
-	
+
+	public ServerOperations(FhirContext ctx) {
+		this.ctx = ctx;
+	}
+
 	@Operation(name="$process-message")
 	public Bundle processMessageOperation(
 			@OperationParam(name="content") Bundle theContent,
