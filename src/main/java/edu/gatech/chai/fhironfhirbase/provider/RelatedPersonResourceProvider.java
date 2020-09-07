@@ -8,6 +8,7 @@ import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.RelatedPerson;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
 import ca.uhn.fhir.rest.annotation.IdParam;
+import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.RequiredParam;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
@@ -25,8 +27,11 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.param.ReferenceOrListParam;
+import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
+import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
 
 @Service
@@ -135,10 +140,22 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 	}
 
 	@Search()
-	public IBundleProvider findRelatedPersonByParams(@Sort SortSpec theSort) {
+	public IBundleProvider findRelatedPersonByParams(
+			@OptionalParam(name = Observation.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME,
+					USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam thePatients,
+			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
-		String fromStatement = getTableName() + " lo";
+		String fromStatement = getTableName() + " rp";
+
+		if (thePatients != null) {
+			for (ReferenceParam thePatient : thePatients.getValuesAsQueryTokens()) {
+				String where = constructPatientWhereParameter(thePatient, "rp");
+				if (where != null && !where.isEmpty()) {
+					whereParameters.add(where);
+				}
+			}
+		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 

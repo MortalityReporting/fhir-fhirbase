@@ -134,8 +134,8 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
 
-		String queryCount = "SELECT count(*) FROM observation o " + whereStatement;
-		String query = "SELECT * FROM observation o " + whereStatement;
+		String queryCount = "SELECT count(*) FROM " + getTableName() + " o " + whereStatement;
+		String query = "SELECT * FROM " + getTableName() + " o " + whereStatement;
 
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, theReverseIncludes);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
@@ -161,7 +161,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
 
 		List<String> whereParameters = new ArrayList<String>();
-		String fromStatement = "observation o";
+		String fromStatement = getTableName() + " o";
 		if (theOrCodes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "codings", "o.resource->'code'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
