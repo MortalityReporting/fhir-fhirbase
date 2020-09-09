@@ -147,6 +147,8 @@ public class ListResourceProvider extends BaseResourceProvider {
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
+		boolean returnAll = true;
+		
 		String fromStatement = "list l";
 		if (theOrCodes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "codes", "l.resource->'code'->'coding'");
@@ -154,6 +156,7 @@ public class ListResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			returnAll = false;
 		}
 
 		if (theSubjects != null) {
@@ -163,6 +166,7 @@ public class ListResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		if (thePatients != null) {
@@ -172,6 +176,7 @@ public class ListResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 		
 		if (theSources != null) {
@@ -181,11 +186,14 @@ public class ListResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 		
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

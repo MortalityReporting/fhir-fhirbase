@@ -154,12 +154,16 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = getTableName() + " comp";
+		
+		boolean returnAll = true;
 		if (theOrTypes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "types", "comp.resource->'type'->'coding'");
 			String where = constructTypeWhereParameter(theOrTypes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			
+			returnAll = false;
 		}
 
 		if (theDate != null) {
@@ -167,6 +171,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			
+			returnAll = false;
 		}
 
 		if (theSubjects != null) {
@@ -176,6 +182,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			
+			returnAll = false;
 		}
 
 		if (thePatients != null) {
@@ -185,11 +193,15 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

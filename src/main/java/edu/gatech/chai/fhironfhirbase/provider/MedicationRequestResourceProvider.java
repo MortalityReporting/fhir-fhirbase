@@ -191,6 +191,8 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 	) {
 
 		List<String> whereParameters = new ArrayList<String>();
+		boolean returnAll = true;
+		
 		String fromStatement = "medicationrequest mr";
 		if (theOrCodes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "codes", "mr.resource->'medicationCodeableConcept'->'coding'");
@@ -198,10 +200,12 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			returnAll = false;
 		}
 
 		if (theEncounter != null) {
 			whereParameters.add("mr.resource->encounter->>reference like '%" + theEncounter.getIdPart() + "%'");
+			returnAll = false;
 		}
 
 		if (theDate != null) {
@@ -209,6 +213,7 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			returnAll = false;
 		}
 
 //		if (theMedication != null) {
@@ -224,6 +229,7 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 			//TODO: Medication.code needs to be implemented.
 			whereParameters
 					.add("mr.resource->medicationReference->>reference like '%" + theMedication.getIdPart() + "%'");
+			returnAll = false;
 		}
 
 		if (theSubjects != null) {
@@ -233,6 +239,7 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		if (thePatients != null) {
@@ -242,11 +249,14 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

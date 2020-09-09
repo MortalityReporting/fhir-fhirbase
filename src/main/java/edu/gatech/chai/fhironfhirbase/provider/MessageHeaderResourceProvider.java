@@ -113,18 +113,24 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
+		boolean returnAll = true;
+		
 		String fromStatement = getTableName() + " mh";
 		if (theSource != null) {
 			whereParameters.add("mh.resource->'source'->>'name' = '" + theSource.getValue() + "'");
+			returnAll = false;
 		}
 
 		if (theSourceUri != null) {
 			whereParameters.add("mh.resource->'source'->>'endpoint' = '" + theSource.getValue() + "'");
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

@@ -176,6 +176,8 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = MedicationStatement.SP_SOURCE) ReferenceParam theSource, @Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
+		boolean returnAll = true;
+		
 		String fromStatement = "medicationstatement ms";
 		if (theOrCodes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "codes",
@@ -184,9 +186,11 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			returnAll = false;
 		}
 		if (theContext != null) {
 			whereParameters.add("ms.resource->context->>reference like '%" + theContext.getValue() + "%'");
+			returnAll = false;
 		}
 
 		if (theDate != null) {
@@ -194,10 +198,12 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			returnAll = false;
 		}
 
 		if (theSource != null) {
 			whereParameters.add("ms.resource->informationSource->>reference like '%" + theSource.getValue() + "%'");
+			returnAll = false;
 		}
 
 		if (theSubjects != null) {
@@ -207,6 +213,7 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		if (thePatients != null) {
@@ -216,11 +223,14 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

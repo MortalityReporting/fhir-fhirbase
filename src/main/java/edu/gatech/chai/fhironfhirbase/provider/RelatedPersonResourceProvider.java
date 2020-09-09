@@ -146,6 +146,8 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
+		boolean returnAll = true;
+		
 		String fromStatement = getTableName() + " rp";
 
 		if (thePatients != null) {
@@ -155,11 +157,14 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

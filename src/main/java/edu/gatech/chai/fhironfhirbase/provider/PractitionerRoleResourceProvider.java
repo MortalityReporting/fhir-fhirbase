@@ -100,12 +100,15 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
 
 		List<String> whereParameters = new ArrayList<String>();
+		boolean returnAll = true;
+		
 		String fromStatement = "practitionerrole practrole";
 
 		if (thePractitionerRoleIds != null) {
 			for (TokenParam thePractitionerRoleId : thePractitionerRoleIds.getValuesAsQueryTokens()) {
 				whereParameters.add("practrole.id = " + thePractitionerRoleId.getValue());
 			}
+			returnAll = false;
 		}
 		
 		if (thePractitionerRoleIdentifier != null) {
@@ -120,10 +123,12 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
 				whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
+			returnAll = false;
 		}
 
 		if (theActive != null) {
 			whereParameters.add("practrole.resource->>'active'=" + theActive.getValue());
+			returnAll = false;
 		}
 
 		if (theOrganizations != null) {
@@ -133,6 +138,7 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		if (thePractitioners != null) {
@@ -142,11 +148,14 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

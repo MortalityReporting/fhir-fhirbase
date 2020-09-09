@@ -144,12 +144,15 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
 
 		List<String> whereParameters = new ArrayList<String>();
+		boolean returnAll = true;
+		
 		String fromStatement = "practitioner pract";
 
 		if (thePractitionerIds != null) {
 			for (TokenParam thePractitionerId : thePractitionerIds.getValuesAsQueryTokens()) {
 				whereParameters.add("pract.id = " + thePractitionerId.getValue());
 			}
+			returnAll = false;
 		}
 		
 		if (thePractitionerIdentifier != null) {
@@ -164,10 +167,12 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
 				whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
+			returnAll = false;
 		}
 
 		if (theActive != null) {
 			whereParameters.add("pract.resource->>'active'=" + theActive.getValue());
+			returnAll = false;
 		}
 
 		if (theFamilyName != null) {
@@ -180,6 +185,7 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 			} else {
 				whereParameters.add("names->>'family' like '%" + theFamilyName.getValue() + "%'");
 			}
+			returnAll = false;
 		}
 
 		if (theGivenName != null) {
@@ -188,18 +194,23 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 			}
 
 			whereParameters.add("names->>'given' like '%" + theGivenName.getValue() + "%'");
+			returnAll = false;
 		}
 		if (theName != null) {
 			whereParameters.add("pract.resource->>'name' like '%" + theName.getValue() + "%'");
+			returnAll = false;
 		}
 
 		if (theGender != null) {
 			whereParameters.add("pract.resource->>'gender' = '" + theGender.getValue() + "'");
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

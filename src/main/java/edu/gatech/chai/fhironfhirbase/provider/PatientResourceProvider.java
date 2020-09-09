@@ -238,11 +238,13 @@ public class PatientResourceProvider extends BaseResourceProvider {
 					"Observation:subject" }, reverse = true) final Set<Include> theReverseIncludes) {
 
 		List<String> whereParameters = new ArrayList<String>();
-
+		boolean returnAll = true;
+		
 		String fromStatement = "patient p";
 
 		if (thePatientId != null) {
 			whereParameters.add("p.id = '" + thePatientId.getValue() + "'");
+			returnAll = false;
 		}
 
 		if (thePatientIdentifier != null) {
@@ -257,24 +259,29 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
 				whereParameters.add("p.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
+			returnAll = false;
 		}
 		if (theActive != null) {
 			whereParameters.add("p.resource->>'active'=" + theActive.getValue());
+			returnAll = false;
 		}
 		if (theEmail != null) {
 			whereParameters.add(
 					"p.resource->'telecom' @> '[{\"system\":\"email\"}]'::jsonb AND p.resource->'telecom' @> '[{\"value\":\""
 							+ theEmail.getValue() + "\"}]'::jsonb");
+			returnAll = false;
 		}
 		if (thePhone != null) {
 			whereParameters.add(
 					"p.resource->'telecom' @> '[{\"system\":\"phone\"}]'::jsonb AND p.resource->'telecom' @> '[{\"value\":\""
 							+ thePhone.getValue() + "\"}]'::jsonb");
+			returnAll = false;
 		}
 		if (theTelecom != null) {
 			whereParameters.add("p.resource->'telecom' @> '[{\"system\":\"" + theTelecom.getSystem()
 					+ "\"}]'::jsonb AND p.resource->'telecom' @> '[{\"value\":\"" + theTelecom.getValue()
 					+ "\"}]'::jsonb");
+			returnAll = false;
 		}
 		if (theFamilyName != null) {
 			if (!fromStatement.contains("names")) {
@@ -286,9 +293,11 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			} else {
 				whereParameters.add("names->>'family' like '%" + theFamilyName.getValue() + "%'");
 			}
+			returnAll = false;
 		}
 		if (theName != null) {
 			whereParameters.add("p.resource->>'name' like '%" + theName.getValue() + "%'");
+			returnAll = false;
 		}
 		if (theGivenName != null) {
 			if (!fromStatement.contains("names")) {
@@ -296,18 +305,22 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			}
 
 			whereParameters.add("names->>'given' like '%" + theGivenName.getValue() + "%'");
+			returnAll = false;
 		}
 		if (theGender != null) {
 			whereParameters.add("pract.resource->>'gender' = '" + theGender.getValue() + "'");
+			returnAll = false;
 		}
 		if (theBirthDate != null) {
 			String where = constructDateWhereParameter(theBirthDate, "p", "birthDate");
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			returnAll = false;
 		}
 		if (theAddress != null) {
 			whereParameters.add("p.resource->>'address' like '%" + theAddress.getValue() + "%'");
+			returnAll = false;
 		}
 		if (theAddressCity != null) {
 			if (!fromStatement.contains("addresses")) {
@@ -319,6 +332,8 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			} else {
 				whereParameters.add("addresses->>'city' like '%" + theAddressCity.getValue() + "%'");
 			}
+
+			returnAll = false;
 		}
 		if (theAddressState != null) {
 			if (!fromStatement.contains("addresses")) {
@@ -330,6 +345,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			} else {
 				whereParameters.add("addresses->>'state' like '%" + theAddressState.getValue() + "%'");
 			}
+			returnAll = false;
 		}
 		if (theAddressZip != null) {
 			if (!fromStatement.contains("addresses")) {
@@ -341,6 +357,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			} else {
 				whereParameters.add("addresses->>'postalCode' like '%" + theAddressZip.getValue() + "%'");
 			}
+			returnAll = false;
 		}
 
 		// Chain Search.
@@ -369,7 +386,9 @@ public class PatientResourceProvider extends BaseResourceProvider {
 		// Complete Query.
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

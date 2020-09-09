@@ -210,6 +210,8 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 					"Procedure:context" }) final Set<Include> theIncludes) {
 
 		List<String> whereParameters = new ArrayList<String>();
+		boolean returnAll = true;
+		
 		String fromStatement = "procedure proc";
 		if (theOrCodes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "codes", "proc.resource->'code'->'coding'");
@@ -217,6 +219,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			returnAll = false;
 		}
 
 		if (theProcecureIdentifier != null) {
@@ -231,6 +234,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
 				whereParameters.add("proc.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
+			returnAll = false;
 		}
 
 		if (theDateParam != null) {
@@ -238,9 +242,11 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}
+			returnAll = false;
 		}
 		if (theEncounterParam != null) {
 			whereParameters.add("proc.resource->>'encounter' like '%" + theEncounterParam.getValue() + "%'");
+			returnAll = false;
 		}
 		if (theSubjectParams != null) {
 			for (ReferenceParam theSubject : theSubjectParams.getValuesAsQueryTokens()) {
@@ -249,6 +255,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		if (thePatientParams != null) {
@@ -258,15 +265,19 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		if (thePerformerParam != null) {
 			whereParameters.add("proc.resource->>'performer' like '%" + theEncounterParam.getValue() + "%'");
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;

@@ -158,12 +158,15 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 	) {
 
 		List<String> whereParameters = new ArrayList<String>();
+		boolean returnAll = true;
+		
 		String fromStatement = "deviceusestatement du";
 
 		if (theDeviceUseStatementIds != null) {
 			for (TokenParam theDeviceUseStatementId : theDeviceUseStatementIds.getValuesAsQueryTokens()) {
 				whereParameters.add("du.id = " + theDeviceUseStatementId.getValue());
 			}
+			returnAll = false;
 		}
 
 		// With OMOP, we only support subject to be patient.
@@ -175,6 +178,7 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		if (thePatients != null) {
@@ -184,11 +188,14 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 					whereParameters.add(where);
 				}
 			}
+			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll) {
+			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
