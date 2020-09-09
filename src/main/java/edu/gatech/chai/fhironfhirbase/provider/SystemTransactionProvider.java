@@ -456,6 +456,8 @@ public class SystemTransactionProvider {
 									|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Disposition-Location"
 											.equalsIgnoreCase(extUrl)
 									|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Death-Location"
+											.equalsIgnoreCase(extUrl)
+									|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/Observation-Location"
 											.equalsIgnoreCase(extUrl)) {
 								// get valueReference and update it.
 								updateReference((Reference) extension.getValue());
