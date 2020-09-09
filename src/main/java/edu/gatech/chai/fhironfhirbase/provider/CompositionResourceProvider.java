@@ -2,14 +2,12 @@ package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Set;
 
 import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
-import org.hl7.fhir.instance.model.api.IPrimitiveType;
 import org.hl7.fhir.r4.model.BooleanType;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
@@ -29,7 +27,6 @@ import org.hl7.fhir.r4.model.RelatedPerson;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.UriType;
-import org.hl7.fhir.r4.model.codesystems.BundleType;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
@@ -61,16 +58,13 @@ import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
-import ca.uhn.fhir.rest.gclient.IReadExecutable;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
-import edu.gatech.chai.fhironfhirbase.model.MyBundle;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
-import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 @Service
 @Scope("prototype")
@@ -194,6 +188,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
+
+		if (whereStatement == null || whereStatement.isEmpty()) return null;
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
@@ -477,7 +473,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				// Practitioner referenced resources
 				for (String idPart : addedPractitioner) {
 					// Get List (this is Cause of Death pathway
-					Bundle listBundle = client.search().forResource(ListResource.class).where(ListResource.SOURCE.hasId(idPart)).returnBundle(Bundle.class).execute();
+					Bundle listBundle = client.search().forResource(ListResource.class).where(ListResource.SOURCE.hasId("Practitioner/"+idPart)).returnBundle(Bundle.class).execute();
 					List<BundleEntryComponent> entries = listBundle.getEntry();
 					for (BundleEntryComponent entry : entries) {
 						ListResource list = (ListResource) entry.getResource();

@@ -369,6 +369,8 @@ public class PatientResourceProvider extends BaseResourceProvider {
 		// Complete Query.
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
+		if (whereStatement == null || whereStatement.isEmpty()) return null;
+
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, theReverseIncludes);

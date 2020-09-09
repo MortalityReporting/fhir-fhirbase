@@ -246,6 +246,8 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
+		if (whereStatement == null || whereStatement.isEmpty()) return null;
+
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
 
