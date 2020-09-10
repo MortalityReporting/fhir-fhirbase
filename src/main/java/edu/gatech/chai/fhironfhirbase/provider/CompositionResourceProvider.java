@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import javax.annotation.PostConstruct;
 
@@ -569,7 +570,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 		
 		retBundle.setEntry(bundleEntries);
-		
+		retBundle.setId(UUID.randomUUID().toString());
+
 		return retBundle;
 	}
 
