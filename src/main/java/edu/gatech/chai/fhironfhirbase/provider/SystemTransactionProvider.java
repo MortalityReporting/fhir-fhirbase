@@ -473,7 +473,26 @@ public class SystemTransactionProvider {
 									.and(Observation.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
 							int total = responseBundle.getTotal();
 							if (total > 0) {
-								resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+								Observation existingObservation = (Observation) responseBundle.getEntryFirstRep().getResource();
+								resourceId = existingObservation.getIdElement().getIdPart();
+								
+								// Delete if there is any extension for location. 
+								extensions = existingObservation.getExtension();
+								for (Extension extension : extensions) {
+									String extUrl = extension.getUrl();
+									if ("http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-InjuryLocation"
+											.equalsIgnoreCase(extUrl)
+											|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Disposition-Location"
+													.equalsIgnoreCase(extUrl)
+											|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Death-Location"
+													.equalsIgnoreCase(extUrl)
+											|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/Observation-Location"
+													.equalsIgnoreCase(extUrl)) {
+										// get valueReference and update it.
+										Reference reference = (Reference) extension.getValue();
+										client.delete().resourceById(reference.getReferenceElement()).execute();
+									}									
+								}
 							}
 						}
 //					} else if (resource instanceof Condition) {
