@@ -32,6 +32,7 @@ import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.PractitionerRole;
+import org.hl7.fhir.r4.model.Procedure;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Scope;
@@ -518,6 +519,20 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 									addedResource.add(referenceId);
 								}
 							}
+						}
+					}
+				}
+				
+				// Procedure
+				Bundle relProcedureBundle = client.search().forResource(Procedure.class).where(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+				List<BundleEntryComponent> relProcedureEntries = relProcedureBundle.getEntry();
+				for (BundleEntryComponent relProcedureEntry : relProcedureEntries) {
+					Procedure procedure = (Procedure) relProcedureEntry.getResource();
+					if (procedure != null && !procedure.isEmpty()) {
+						// First add this resource to section and entry of this bundle document.
+						if (!addedResource.contains("Procedure/"+procedure.getIdElement().getIdPart())) {
+							bundleEntries.add(addToSectAndEntryofDoc(composition, "Procedure/"+procedure.getIdElement().getIdPart(), procedure));
+							addedResource.add("Procedure/"+procedure.getIdElement().getIdPart());
 						}
 					}
 				}

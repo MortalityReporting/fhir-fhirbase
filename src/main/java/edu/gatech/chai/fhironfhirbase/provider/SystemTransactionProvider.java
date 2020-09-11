@@ -398,10 +398,16 @@ public class SystemTransactionProvider {
 		if (reference == null || reference.isEmpty())
 			return;
 
-		String originalId = reference.getReferenceElement().getIdPart();
+		String originalId = reference.getReferenceElement().getValueAsString();
+		if (originalId == null || originalId.isEmpty()) {
+			originalId = reference.getReferenceElement().getIdPart();
+			if (originalId == null || originalId.isEmpty()) {
+				return;
+			}
+		}
 		String newId = referenceIds.get(originalId);
 
-		logger.debug("new id:"+newId);
+		logger.debug("orginal id: " + originalId + " new id:" + newId);
 		if (newId != null && !newId.isEmpty()) {
 			String[] resourceId = newId.split("/");
 			if (resourceId.length == 2) {
@@ -649,6 +655,11 @@ public class SystemTransactionProvider {
 
 			Resource resource = entry.getResource();
 			if (resource instanceof Composition) {
+				System.out.println("++++++++++++++++++++++++");
+				for (Map.Entry<String, String> rid : referenceIds.entrySet()) {
+			        System.out.println(rid.getKey() + ":" + rid.getValue());
+			    }
+				
 				Composition composition = (Composition) resource;
 				updateReference(composition.getSubject());
 				
