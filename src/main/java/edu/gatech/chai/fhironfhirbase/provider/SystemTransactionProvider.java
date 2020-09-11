@@ -62,7 +62,7 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
 import edu.gatech.chai.fhironfhirbase.model.MyBundle;
-import edu.gatech.chai.fhironfhirbase.utilities.MdiProfileUtil;
+//import edu.gatech.chai.fhironfhirbase.utilities.MdiProfileUtil;
 
 public class SystemTransactionProvider {
 	private static final Logger logger = LoggerFactory.getLogger(SystemTransactionProvider.class);
@@ -413,6 +413,48 @@ public class SystemTransactionProvider {
 	}
 
 	private void processPost(IGenericClient client, List<BundleEntryComponent> entries) {
+		IdType subjectIdType = new IdType("Patient", patientId);
+
+		// Delete current observations. 
+		Bundle currentBundles = client.search().forResource(Observation.class).where(Observation.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
+		if (currentBundles.getTotal() > 0) {
+			List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
+			for (BundleEntryComponent currentEntry : currentEntries) {
+				Observation currentResource = (Observation) currentEntry.getResource();
+				client.delete().resourceById(currentResource.getIdElement()).execute();
+			}
+		}
+		
+		// Delete current Procedure in the server.
+		currentBundles = client.search().forResource(Procedure.class).where(Procedure.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
+		if (currentBundles.getTotal() > 0) {
+			List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
+			for (BundleEntryComponent currentEntry : currentEntries) {
+				Procedure currentResource = (Procedure) currentEntry.getResource();
+				client.delete().resourceById(currentResource.getIdElement()).execute();
+			}
+		}
+
+		// Delete current ListResources in the server.
+		currentBundles = client.search().forResource(ListResource.class).where(ListResource.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
+		if (currentBundles.getTotal() > 0) {
+			List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
+			for (BundleEntryComponent currentEntry : currentEntries) {
+				ListResource currentResource = (ListResource) currentEntry.getResource();
+				client.delete().resourceById(currentResource.getIdElement()).execute();
+			}
+		}
+
+		// Delete current RelatedPerson
+		currentBundles = client.search().forResource(RelatedPerson.class).where(RelatedPerson.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+		if (currentBundles.getTotal() > 0) {
+			List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
+			for (BundleEntryComponent currentEntry : currentEntries) {
+				RelatedPerson currentResource = (RelatedPerson) currentEntry.getResource();
+				client.delete().resourceById(currentResource.getIdElement()).execute();
+			}
+		}
+
 		for (BundleEntryComponent entry : entries) {
 			BundleEntryResponseComponent response = entry.getResponse();
 			if (response != null && !response.isEmpty()) {
@@ -465,51 +507,37 @@ public class SystemTransactionProvider {
 						}
 
 						// Check if this is singleton resource
-						Coding myCoding;
-						if ((myCoding = MdiProfileUtil.isSingletonResource(resource)) != null) {
-							// We need to search and get an existing resource ID for this type of resource.
-							Bundle responseBundle = client.search().forResource(Observation.class)
-									.where(Observation.CODE.exactly().codings(myCoding))
-									.and(Observation.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-							int total = responseBundle.getTotal();
-							if (total > 0) {
-								Observation existingObservation = (Observation) responseBundle.getEntryFirstRep().getResource();
-								resourceId = existingObservation.getIdElement().getIdPart();
-								
-								// Delete if there is any extension for location. 
-								extensions = existingObservation.getExtension();
-								for (Extension extension : extensions) {
-									String extUrl = extension.getUrl();
-									if ("http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-InjuryLocation"
-											.equalsIgnoreCase(extUrl)
-											|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Disposition-Location"
-													.equalsIgnoreCase(extUrl)
-											|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Death-Location"
-													.equalsIgnoreCase(extUrl)
-											|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/Observation-Location"
-													.equalsIgnoreCase(extUrl)) {
-										// get valueReference and update it.
-										Reference reference = (Reference) extension.getValue();
-										client.delete().resourceById(reference.getReferenceElement()).execute();
-									}									
-								}
-							}
-						}
-//					} else if (resource instanceof Condition) {
-//						Condition res = (Condition) resource;
-//						updateReference(res.getSubject());
-//						updateReference(res.getAsserter());
+//						Coding myCoding;
+//						if ((myCoding = MdiProfileUtil.isSingletonResource(resource)) != null) {
+//							// We need to search and get an existing resource ID for this type of resource.
+//							Bundle responseBundle = client.search().forResource(Observation.class)
+//									.where(Observation.CODE.exactly().codings(myCoding))
+//									.and(Observation.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+//							int total = responseBundle.getTotal();
+//							if (total > 0) {
+//								Observation existingObservation = (Observation) responseBundle.getEntryFirstRep().getResource();
+//								resourceId = existingObservation.getIdElement().getIdPart();
+//								
+//								// Delete if there is any extension for location. 
+//								extensions = existingObservation.getExtension();
+//								for (Extension extension : extensions) {
+//									String extUrl = extension.getUrl();
+//									if ("http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-InjuryLocation"
+//											.equalsIgnoreCase(extUrl)
+//											|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Disposition-Location"
+//													.equalsIgnoreCase(extUrl)
+//											|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Death-Location"
+//													.equalsIgnoreCase(extUrl)
+//											|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/Observation-Location"
+//													.equalsIgnoreCase(extUrl)) {
+//										// get valueReference and update it.
+//										Reference reference = (Reference) extension.getValue();
+//										client.delete().resourceById(reference.getReferenceElement()).execute();
+//									}									
+//								}
+//							}
+//						}
 					} else if (resource instanceof Procedure) {
-						// Delete current Procedure in the server.
-						Bundle rProcedureB = client.search().forResource(Procedure.class).where(Procedure.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
-						if (rProcedureB.getTotal() > 0) {
-							List<BundleEntryComponent> rProcedures = rProcedureB.getEntry();
-							for (BundleEntryComponent rProcedureComp : rProcedures) {
-								Procedure rProc = (Procedure) rProcedureComp.getResource();
-								client.delete().resourceById(rProc.getIdElement()).execute();
-							}
-						}
-
 						Procedure res = (Procedure) resource;
 						updateReference(res.getSubject());
 						ProcedurePerformerComponent performer = res.getPerformerFirstRep();
@@ -518,44 +546,7 @@ public class SystemTransactionProvider {
 						}
 						updateReference(res.getAsserter());
 						
-
-						// Check if this is singleton resource
-////						Coding myCoding;
-////						if ((myCoding = MdiProfileUtil.isSingletonResource(resource)) != null) {
-//							// We need to search and get an existing resource ID for this type of resource.
-////							Bundle responseBundle = client.search().forResource(Procedure.class)
-////									.where(Procedure.CODE.exactly().codings(myCoding))
-////									.and(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-////							int total = responseBundle.getTotal();
-////							if (total > 0) {
-////								resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-////								break;
-////							}
-//						if (MdiProfileUtil.isSingletonResource(resource) != null) {
-//							for (Identifier identifier : res.getIdentifier()) {
-//								Bundle responseBundle = client
-//										.search().forResource(Procedure.class).where(Procedure.IDENTIFIER.exactly()
-//												.systemAndCode(identifier.getSystem(), identifier.getValue()))
-//										.returnBundle(Bundle.class).execute();
-//
-//								int total = responseBundle.getTotal();
-//								if (total > 0) {
-//									resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-//									break;
-//								}
-//							}					
-//						}
 					} else if (resource instanceof ListResource) {
-						// Delete current ListResources in the server.
-						Bundle rListResourceB = client.search().forResource(ListResource.class).where(ListResource.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
-						if (rListResourceB.getTotal() > 0) {
-							List<BundleEntryComponent> rListResources = rListResourceB.getEntry();
-							for (BundleEntryComponent rListResourceComp : rListResources) {
-								ListResource rList = (ListResource) rListResourceComp.getResource();
-								client.delete().resourceById(rList.getIdElement()).execute();
-							}
-						}
-
 						ListResource res = (ListResource) resource;
 						updateReference(res.getSubject());
 						updateReference(res.getSource());
