@@ -35,6 +35,7 @@ import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Composition.CompositionAttesterComponent;
 import org.hl7.fhir.r4.model.Composition.CompositionEventComponent;
+import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.Procedure;
@@ -399,12 +400,6 @@ public class SystemTransactionProvider {
 			return;
 
 		String originalId = reference.getReferenceElement().getValueAsString();
-		if (originalId == null || originalId.isEmpty()) {
-			originalId = reference.getReferenceElement().getIdPart();
-			if (originalId == null || originalId.isEmpty()) {
-				return;
-			}
-		}
 		String newId = referenceIds.get(originalId);
 
 		logger.debug("orginal id: " + originalId + " new id:" + newId);
@@ -675,6 +670,14 @@ public class SystemTransactionProvider {
 				CompositionEventComponent event = composition.getEventFirstRep();
 				if (event != null && !event.isEmpty()) {
 					updateReference(event.getDetailFirstRep());
+				}
+				
+				List<SectionComponent> sectionComponents = composition.getSection();
+				for (SectionComponent sectionComponent : sectionComponents) {
+					List<Reference> references = sectionComponent.getEntry();
+					for (Reference reference : references) {
+						updateReference(reference);
+					}
 				}
 				
 				// check if we already have a composition for this patient.
