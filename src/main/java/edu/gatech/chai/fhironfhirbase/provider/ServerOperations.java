@@ -101,11 +101,11 @@ public class ServerOperations {
 				Patient patient = (Patient) resource;
 				for (Identifier identifier : patient.getIdentifier()) {
 					// do search only on the case number.
-					CodeableConcept identifierType = identifier.getType();
-					if (identifierType.isEmpty()) {
-						continue;
-					}
-
+//					CodeableConcept identifierType = identifier.getType();
+//					if (identifierType.isEmpty()) {
+//						continue;
+//					}
+//
 //					Coding identifierCoding = identifierType.getCodingFirstRep();
 //					if (identifierCoding.isEmpty()) {
 //						continue;
