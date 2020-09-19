@@ -16,15 +16,25 @@
 package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.hl7.fhir.r4.model.BooleanType;
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.DateTimeType;
+import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.Identifier;
 import org.hl7.fhir.r4.model.MessageHeader;
-import org.hl7.fhir.r4.model.MessageHeader.MessageHeaderResponseComponent;
+import org.hl7.fhir.r4.model.Patient;
+import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.ResourceType;
 import org.hl7.fhir.r4.model.Type;
@@ -36,6 +46,11 @@ import org.slf4j.LoggerFactory;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
+import ca.uhn.fhir.rest.api.MethodOutcome;
+import ca.uhn.fhir.rest.client.api.IGenericClient;
+import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
+import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
+import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.utilities.CodeableConceptUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
@@ -43,23 +58,195 @@ public class ServerOperations {
 	private static final Logger logger = LoggerFactory.getLogger(ServerOperations.class);
 
 	private FhirContext ctx;
+	private Map<String, String> referenceIds;
+	private List<String> patientIds;
 
 	public ServerOperations() {
+		this(null);
 	}
 
 	public ServerOperations(FhirContext ctx) {
-		this.ctx = ctx;
+		if (ctx != null) {
+			this.ctx = ctx;
+		}
+		
+		patientIds = new ArrayList<String>();
 	}
 
+	private void updateReference(Reference reference) {
+		if (reference == null || reference.isEmpty())
+			return;
+
+		String originalId = reference.getReferenceElement().getValueAsString();
+		String newId = referenceIds.get(originalId);
+
+		logger.debug("orginal id: " + originalId + " new id:" + newId);
+		if (newId != null && !newId.isEmpty()) {
+			String[] resourceId = newId.split("/");
+			if (resourceId.length == 2) {
+				reference.setReferenceElement(new IdType(resourceId[0], resourceId[1]));
+			} else {
+				reference.setReferenceElement(new IdType(newId));
+			}
+		}
+	}
+
+	private OperationOutcome processPostResources(IGenericClient client, List<BundleEntryComponent> entries) {
+		for (BundleEntryComponent entry : entries) {
+			Resource resource = entry.getResource();
+
+			// Do the patient first.
+			String patientId = null;
+			if (resource instanceof Patient) {
+				Patient patient = (Patient) resource;
+				for (Identifier identifier : patient.getIdentifier()) {
+					// do search only on the case number.
+					CodeableConcept identifierType = identifier.getType();
+					if (identifierType.isEmpty()) {
+						continue;
+					}
+
+					Coding identifierCoding = identifierType.getCodingFirstRep();
+					if (identifierCoding.isEmpty()) {
+						continue;
+					}
+
+					if (!"urn:mdi:temporary:code".equalsIgnoreCase(identifierCoding.getSystem())
+							|| !"1000007".equalsIgnoreCase(identifierCoding.getCode())) {
+						continue;
+					}
+
+					Bundle responseBundle = client
+							.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly()
+									.systemAndCode(identifier.getSystem(), identifier.getValue()))
+							.returnBundle(Bundle.class).execute();
+
+					int total = responseBundle.getTotal();
+					if (total > 0) {
+						patientId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+						break;
+					}
+				}
+
+				if (patientId != null && !patientId.isEmpty()) {
+					// We do not update the patient info from the lab report. So we just get 
+					// patient id and keep the information
+					referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+					patientIds.add("Patient/" + patientId);
+					patient.setId(patientId);
+				} else {
+					MethodOutcome outcome = client.create().resource(patient).prettyPrint().encodedJson().execute();
+					if (outcome.getCreated()) {
+						patientId = outcome.getId().getIdPart();
+						referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+						patientIds.add("Patient/" + patientId);
+
+						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+							entry.setResource((Resource) outcome.getResource());
+						} else {
+							patient.setId(patientId);
+						}
+					} else {
+						return (OperationOutcome) outcome.getOperationOutcome();
+					}
+				}
+				entry.setFullUrl("Patient/" + patientId);
+			}
+		}
+		
+		// Now, we re-loop the entries and take care of resources other than patient.
+		for (BundleEntryComponent entry : entries) {
+			Resource resource = entry.getResource();
+			if (resource instanceof Observation) {
+				Observation observation = (Observation) resource;
+				updateReference(observation.getSubject());
+				updateReference(observation.getPerformerFirstRep());
+
+				String observationId = "";
+				for (String pId : patientIds) {
+					CodeableConcept obsCode = observation.getCode();
+					List<Coding> obsCodings = obsCode.getCoding();
+					for (Coding obsCoding : obsCodings) {
+						String theSystem = obsCoding.getSystem();
+						String theCode = obsCoding.getCode();
+						DateTimeType theDateType = observation.getEffectiveDateTimeType();
+						if (theDateType == null || theDateType.isEmpty()) {
+							break;
+						}
+						
+						Date theDate = theDateType.getValue();
+						Bundle responseBundle = client
+							.search().forResource(Observation.class).where(Observation.SUBJECT.hasId(pId))
+							.and(Observation.CODE.exactly().systemAndCode(theSystem, theCode)).and(Observation.DATE.exactly().day(theDate))
+							.returnBundle(Bundle.class).execute();
+						
+						int total = responseBundle.getTotal();
+						if (total > 0) {
+							observationId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+							observation.setId(observationId);
+							break;
+						}
+						
+						if (observationId != null && !observationId.isEmpty()) {
+							break;
+						}
+					}
+					
+					if (observationId != null && !observationId.isEmpty()) {
+						break;
+					}
+				}
+				
+				if (observationId != null && !observationId.isEmpty()) {
+					MethodOutcome outcome = client.update().resource(observation).prettyPrint().encodedJson().execute();
+					if (outcome.getId() == null || outcome.getId().isEmpty()) {
+						return (OperationOutcome) outcome.getOperationOutcome();
+					}
+				} else {
+					MethodOutcome outcome = client.create().resource(observation).prettyPrint().encodedJson().execute();
+					if (outcome.getCreated()) {
+						observationId = outcome.getId().getIdPart();
+					} else {
+						return (OperationOutcome) outcome.getOperationOutcome();
+					}
+
+				}
+				referenceIds.put(entry.getFullUrl(), "Observation/" + observationId);
+
+				observation.setId(observationId);
+				entry.setFullUrl("Observation/" + observationId);
+			}
+		}
+		
+		// If we are here, then we do not have any errors. So, return null.
+		return null;
+	}
+	
 	@Operation(name="$process-message")
-	public Bundle processMessageOperation(
+	public Bundle ProcessMessageOperation(
 			@OperationParam(name="content") Bundle theContent,
 			@OperationParam(name="async") BooleanType theAsync,
 			@OperationParam(name="response-url") UriType theUri			
 			) {
-		Bundle retVal = new Bundle();
+		String requestUrl = System.getenv("INTERNAL_FHIR_REQUEST_URL");
+		if (requestUrl == null || requestUrl.isEmpty()) {
+			requestUrl = "http://localhost:8080/fhir";
+		}
+		IGenericClient client = ctx.newRestfulGenericClient(requestUrl);
+
+		String authBasic = System.getenv("AUTH_BASIC");
+		String authBearer = System.getenv("AUTH_BEARER");
+		if (authBasic != null && !authBasic.isEmpty()) {
+			String[] auth = authBasic.split(":");
+			if (auth.length == 2) {
+				client.registerInterceptor(new BasicAuthInterceptor(auth[0], auth[1]));
+			}
+		} else if (authBearer != null && !authBearer.isEmpty()) {
+			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
+		}
+
+		referenceIds = new HashMap<String, String>();		
 		MessageHeader messageHeader = null;
-		List<Resource> resources = new ArrayList<Resource>();
 		
 		if (theContent.getType() == BundleType.MESSAGE) {
 			List<BundleEntryComponent> entries = theContent.getEntry();
@@ -79,8 +266,15 @@ public class ServerOperations {
 					if (CodeableConceptUtil.compareCodings(event, obsprovided) == 0) {
 						// This is lab report. they are all to be added to the server.
 						// We add resources that are focused.
-						for (int i=1; i<entries.size(); i++) {
-							resources.add(entries.get(i).getResource());
+						OperationOutcome oo = processPostResources(client, entries);
+						if (oo != null)  {
+							throw new UnprocessableEntityException(FhirContext.forR4(), oo); 
+						}
+						
+						// update message.focus().
+						List<Reference> references = messageHeader.getFocus();
+						for (Reference reference : references) {
+							updateReference(reference);
 						}
 					} else {
 						ThrowFHIRExceptions.unprocessableEntityException(
@@ -95,37 +289,7 @@ public class ServerOperations {
 			ThrowFHIRExceptions.unprocessableEntityException(
 					"The bundle must be a MESSAGE type");
 		}
-		
-		MessageHeaderResponseComponent messageHeaderResponse = new MessageHeaderResponseComponent();
-		messageHeaderResponse.setId(messageHeader.getId());
-
-		List<BundleEntryComponent> resultEntries = null;
-		
-		//TODO: Complete this.
-//		try {
-//			resultEntries = myMapper.createEntries(resources);
-//			messageHeaderResponse.setCode(ResponseType.OK);
-//		} catch (FHIRException e) {
-//			e.printStackTrace();
-//			messageHeaderResponse.setCode(ResponseType.OK);
-//			OperationOutcome outcome = new OperationOutcome();
-//			CodeableConcept detailCode = new CodeableConcept();
-//			detailCode.setText(e.getMessage());
-//			outcome.addIssue().setSeverity(IssueSeverity.ERROR).setDetails(detailCode);
-//			messageHeaderResponse.setDetailsTarget(outcome);
-//		}
-//		
-//		messageHeader.setResponse(messageHeaderResponse);
-//		BundleEntryComponent responseMessageEntry = new BundleEntryComponent();
-//		UUID uuid = UUID.randomUUID();
-//		responseMessageEntry.setFullUrl("urn:uuid:"+uuid.toString());
-//		responseMessageEntry.setResource(messageHeader);
-//		
-//		if (resultEntries == null) resultEntries = new ArrayList<BundleEntryComponent>();
-//		
-//		resultEntries.add(0, responseMessageEntry);
-//		retVal.setEntry(resultEntries);
-		
-		return retVal;
+				
+		return theContent;
 	}
 }

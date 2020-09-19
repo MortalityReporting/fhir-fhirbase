@@ -202,7 +202,7 @@ public class SystemTransactionProvider {
 								String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
 						response.setLocation(PatientResourceProvider.getType() + "/" + patientId);
 
-						entry.setFullUrl(client.getServerBase() + "Patient/" + patientId);
+						entry.setFullUrl("Patient/" + patientId);
 						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 							entry.setResource((Resource) outcome.getResource());
 						}
@@ -220,7 +220,7 @@ public class SystemTransactionProvider {
 								+ HttpStatus.CREATED.getReasonPhrase());
 						response.setLocation(PatientResourceProvider.getType() + "/" + patientId);
 
-						entry.setFullUrl(client.getServerBase() + "Patient/" + patientId);
+						entry.setFullUrl("Patient/" + patientId);
 						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 							entry.setResource((Resource) outcome.getResource());
 						} else {
@@ -275,7 +275,7 @@ public class SystemTransactionProvider {
 								String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
 						response.setLocation(PractitionerResourceProvider.getType() + "/" + practitionerId);
 
-						entry.setFullUrl(client.getServerBase() + "Practitioner/" + practitionerId);
+						entry.setFullUrl("Practitioner/" + practitionerId);
 						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 							entry.setResource((Resource) outcome.getResource());
 						}
@@ -295,7 +295,7 @@ public class SystemTransactionProvider {
 								+ HttpStatus.CREATED.getReasonPhrase());
 						response.setLocation(PractitionerResourceProvider.getType() + "/" + practitionerId);
 
-						entry.setFullUrl(client.getServerBase() + "Practitioner/" + practitionerId);
+						entry.setFullUrl("Practitioner/" + practitionerId);
 						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 							entry.setResource((Resource) outcome.getResource());
 						}
@@ -334,7 +334,7 @@ public class SystemTransactionProvider {
 							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
 					response.setLocation(LocationResourceProvider.getType() + "/" + locationId);
 
-					entry.setFullUrl(client.getServerBase() + "Location/" + locationId);
+					entry.setFullUrl("Location/" + locationId);
 					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 						entry.setResource((Resource) outcome.getResource());
 					}
@@ -381,7 +381,7 @@ public class SystemTransactionProvider {
 							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
 					response.setLocation(ConditionResourceProvider.getType() + "/" + conditionId);
 
-					entry.setFullUrl(client.getServerBase() + "Condition/" + conditionId);
+					entry.setFullUrl("Condition/" + conditionId);
 					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 						entry.setResource((Resource) outcome.getResource());
 					}
@@ -591,8 +591,7 @@ public class SystemTransactionProvider {
 									String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
 							response.setLocation(resource.getResourceType().toString() + "/" + resourceId);
 
-							entry.setFullUrl(
-									client.getServerBase() + resource.getResourceType().toString() + "/" + resourceId);
+							entry.setFullUrl(resource.getResourceType().toString() + "/" + resourceId);
 							if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 								entry.setResource((Resource) outcome.getResource());
 							}
@@ -612,8 +611,7 @@ public class SystemTransactionProvider {
 										+ HttpStatus.CREATED.getReasonPhrase());
 								response.setLocation(resource.getResourceType().toString() + "/" + resourceId);
 
-								entry.setFullUrl(
-										client.getServerBase() + resource.getResourceType().toString() + "/" + resourceId);
+								entry.setFullUrl(resource.getResourceType().toString() + "/" + resourceId);
 								if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 									entry.setResource((Resource) outcome.getResource());
 								} else {
@@ -708,7 +706,7 @@ public class SystemTransactionProvider {
 							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
 					response.setLocation(CompositionResourceProvider.getType() + "/" + compositionId);
 
-					entry.setFullUrl(client.getServerBase() + "Composition/" + compositionId);
+					entry.setFullUrl("Composition/" + compositionId);
 					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 						entry.setResource((Resource) outcome.getResource());
 					}
@@ -718,7 +716,7 @@ public class SystemTransactionProvider {
 
 					response.setStatus(
 							String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
-					entry.setFullUrl(client.getServerBase() + "Composition/" + compositionId);
+					entry.setFullUrl("Composition/" + compositionId);
 					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 						entry.setResource((Resource) outcome.getResource());
 					}					
