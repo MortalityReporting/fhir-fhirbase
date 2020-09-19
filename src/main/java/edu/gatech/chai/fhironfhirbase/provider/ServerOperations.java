@@ -106,11 +106,11 @@ public class ServerOperations {
 						continue;
 					}
 
-					Coding identifierCoding = identifierType.getCodingFirstRep();
-					if (identifierCoding.isEmpty()) {
-						continue;
-					}
-
+//					Coding identifierCoding = identifierType.getCodingFirstRep();
+//					if (identifierCoding.isEmpty()) {
+//						continue;
+//					}
+//
 //					if (!"urn:mdi:temporary:code".equalsIgnoreCase(identifierCoding.getSystem())
 //							|| !"1000007".equalsIgnoreCase(identifierCoding.getCode())) {
 //						continue;
