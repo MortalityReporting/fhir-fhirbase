@@ -111,10 +111,10 @@ public class ServerOperations {
 						continue;
 					}
 
-					if (!"urn:mdi:temporary:code".equalsIgnoreCase(identifierCoding.getSystem())
-							|| !"1000007".equalsIgnoreCase(identifierCoding.getCode())) {
-						continue;
-					}
+//					if (!"urn:mdi:temporary:code".equalsIgnoreCase(identifierCoding.getSystem())
+//							|| !"1000007".equalsIgnoreCase(identifierCoding.getCode())) {
+//						continue;
+//					}
 
 					Bundle responseBundle = client
 							.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly()
