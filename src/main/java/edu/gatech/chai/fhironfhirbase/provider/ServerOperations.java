@@ -177,7 +177,7 @@ public class ServerOperations {
 						Date theDate = theDateType.getValue();
 						Bundle responseBundle = client
 							.search().forResource(Observation.class).where(Observation.SUBJECT.hasId(pId))
-							.and(Observation.CODE.exactly().systemAndCode(theSystem, theCode)).and(Observation.DATE.exactly().day(theDate))
+							.and(Observation.CODE.exactly().systemAndCode(theSystem, theCode)).and(Observation.DATE.exactly().second(theDate))
 							.returnBundle(Bundle.class).execute();
 						
 						int total = responseBundle.getTotal();
