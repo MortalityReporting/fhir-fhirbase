@@ -179,7 +179,7 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 
 		if (theOrganizationIds != null) {
 			for (TokenParam theOrganizationId : theOrganizationIds.getValuesAsQueryTokens()) {
-				whereParameters.add("org.id = " + theOrganizationId.getValue());
+				whereParameters.add("org.id = '" + theOrganizationId.getValue() + "'");
 			}
 			returnAll = false;
 		}

@@ -106,7 +106,7 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 
 		if (thePractitionerRoleIds != null) {
 			for (TokenParam thePractitionerRoleId : thePractitionerRoleIds.getValuesAsQueryTokens()) {
-				whereParameters.add("practrole.id = " + thePractitionerRoleId.getValue());
+				whereParameters.add("practrole.id = '" + thePractitionerRoleId.getValue() + "'");
 			}
 			returnAll = false;
 		}

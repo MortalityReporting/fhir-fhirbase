@@ -150,7 +150,7 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 
 		if (thePractitionerIds != null) {
 			for (TokenParam thePractitionerId : thePractitionerIds.getValuesAsQueryTokens()) {
-				whereParameters.add("pract.id = " + thePractitionerId.getValue());
+				whereParameters.add("pract.id = '" + thePractitionerId.getValue() + "'");
 			}
 			returnAll = false;
 		}

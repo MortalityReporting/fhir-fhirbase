@@ -130,7 +130,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theComposition : theCompositionIds.getValuesAsQueryTokens()) {
-			whereStatement += "comp.id = " + theComposition.getValue() + " OR ";
+			whereStatement += "comp.id = '" + theComposition.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);

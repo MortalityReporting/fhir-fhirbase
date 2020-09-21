@@ -125,7 +125,7 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theCondition : theRelatedPersonIds.getValuesAsQueryTokens()) {
-			whereStatement += "rp.id = " + theCondition.getValue() + " OR ";
+			whereStatement += "rp.id = '" + theCondition.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);

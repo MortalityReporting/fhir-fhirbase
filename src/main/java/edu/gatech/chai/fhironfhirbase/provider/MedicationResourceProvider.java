@@ -92,7 +92,7 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theCondition : theMedicationIds.getValuesAsQueryTokens()) {
-			whereStatement += "mr.id = " + theCondition.getValue() + " OR ";
+			whereStatement += "mr.id = '" + theCondition.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);

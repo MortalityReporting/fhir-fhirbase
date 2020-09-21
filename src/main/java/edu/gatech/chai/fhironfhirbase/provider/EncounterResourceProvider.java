@@ -174,7 +174,7 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 		String fromStatement = "encounter e";
 
 		if (theEncounterId != null) {
-			whereParameters.add("e.id = " + theEncounterId.getValue());
+			whereParameters.add("e.id = '" + theEncounterId.getValue() + "'");
 			returnAll = false;
 		}
 

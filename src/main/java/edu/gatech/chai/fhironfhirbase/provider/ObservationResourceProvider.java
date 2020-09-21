@@ -129,7 +129,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theObservation : theObservationIds.getValuesAsQueryTokens()) {
-			whereStatement += "o.id = " + theObservation.getValue() + " OR ";
+			whereStatement += "o.id = '" + theObservation.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);

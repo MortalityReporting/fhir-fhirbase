@@ -120,7 +120,7 @@ public class LocationResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theCondition : theLocationIds.getValuesAsQueryTokens()) {
-			whereStatement += "lo.id = " + theCondition.getValue() + " OR ";
+			whereStatement += "lo.id = '" + theCondition.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);

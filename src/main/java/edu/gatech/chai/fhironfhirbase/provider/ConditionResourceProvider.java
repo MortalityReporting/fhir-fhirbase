@@ -175,7 +175,7 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theCondition : theConditionIds.getValuesAsQueryTokens()) {
-			whereStatement += "c.id = " + theCondition.getValue() + " OR ";
+			whereStatement += "c.id = '" + theCondition.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);

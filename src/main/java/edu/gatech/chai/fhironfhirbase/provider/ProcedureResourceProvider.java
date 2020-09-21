@@ -167,7 +167,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theProcedureId : theProcedureIds.getValuesAsQueryTokens()) {
-			whereStatement += "proc.id = " + theProcedureId.getValue() + " OR ";
+			whereStatement += "proc.id = '" + theProcedureId.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);

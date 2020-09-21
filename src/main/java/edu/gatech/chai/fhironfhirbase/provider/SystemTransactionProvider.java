@@ -192,7 +192,10 @@ public class SystemTransactionProvider {
 				}
 
 				if (patientId != null && !patientId.isEmpty()) {
-					referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
+						referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+					}
+					
 					// Now we need to write this to fhirbase.
 					patient.setIdElement(new IdType("Patient", patientId));
 //					patient.setId("Patient/"+patientId);
@@ -215,7 +218,9 @@ public class SystemTransactionProvider {
 					MethodOutcome outcome = client.create().resource(patient).prettyPrint().encodedJson().execute();
 					if (outcome.getCreated()) {
 						patientId = outcome.getId().getIdPart();
-						referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+						if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
+							referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+						}
 						response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
 								+ HttpStatus.CREATED.getReasonPhrase());
 						response.setLocation(PatientResourceProvider.getType() + "/" + patientId);
@@ -264,7 +269,9 @@ public class SystemTransactionProvider {
 				}
 
 				if (practitionerId != null && !practitionerId.isEmpty()) {
-					referenceIds.put(entry.getFullUrl(), "Practitioner/" + practitionerId);
+					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
+						referenceIds.put(entry.getFullUrl(), "Practitioner/" + practitionerId);
+					}
 
 					// Now we need to write this to fhirbase.
 					practitioner.setId(new IdType("Practitioner", practitionerId));
@@ -289,7 +296,9 @@ public class SystemTransactionProvider {
 							.execute();
 					if (outcome.getCreated()) {
 						practitionerId = outcome.getId().getIdPart();
-						referenceIds.put(entry.getFullUrl(), "Practitioner/" + practitionerId);
+						if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
+							referenceIds.put(entry.getFullUrl(), "Practitioner/" + practitionerId);
+						}
 
 						response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
 								+ HttpStatus.CREATED.getReasonPhrase());
@@ -328,7 +337,9 @@ public class SystemTransactionProvider {
 				MethodOutcome outcome = client.create().resource(location).prettyPrint().encodedJson().execute();
 				if (outcome.getCreated()) {
 					locationId = outcome.getId().getIdPart();
-					referenceIds.put(entry.getFullUrl(), "Location/" + locationId);
+					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
+						referenceIds.put(entry.getFullUrl(), "Location/" + locationId);
+					}
 
 					response.setStatus(
 							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
@@ -375,7 +386,9 @@ public class SystemTransactionProvider {
 				MethodOutcome outcome = client.create().resource(condition).prettyPrint().encodedJson().execute();
 				if (outcome.getCreated()) {
 					String conditionId = outcome.getId().getIdPart();
-					referenceIds.put(entry.getFullUrl(), "Condition/" + conditionId);
+					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
+						referenceIds.put(entry.getFullUrl(), "Condition/" + conditionId);
+					}
 
 					response.setStatus(
 							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
@@ -626,8 +639,9 @@ public class SystemTransactionProvider {
 									+ HttpStatus.BAD_REQUEST.getReasonPhrase());
 						}
 					}
-					
-					referenceIds.put(originalFullUrl, resource.getResourceType().toString() + "/" + resourceId);
+					if (originalFullUrl != null && !originalFullUrl.isEmpty()) {
+						referenceIds.put(originalFullUrl, resource.getResourceType().toString() + "/" + resourceId);
+					}
 				} else {
 					response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()) + " "
 							+ HttpStatus.BAD_REQUEST.getReasonPhrase());
@@ -700,7 +714,9 @@ public class SystemTransactionProvider {
 				
 				if (outcome.getCreated() != null && outcome.getCreated()) {
 					String compositionId = outcome.getId().getIdPart();
-					referenceIds.put(entry.getFullUrl(), "Composition/" + compositionId);
+					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
+						referenceIds.put(entry.getFullUrl(), "Composition/" + compositionId);
+					}
 
 					response.setStatus(
 							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
@@ -712,7 +728,9 @@ public class SystemTransactionProvider {
 					}
 				} else if (outcome.getId() != null && !outcome.getId().isEmpty()) {
 					String compositionId = outcome.getId().getIdPart();
-					referenceIds.put(entry.getFullUrl(), "Composition/" + compositionId);
+					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
+						referenceIds.put(entry.getFullUrl(), "Composition/" + compositionId);
+					}
 
 					response.setStatus(
 							String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());

@@ -123,7 +123,7 @@ public class ListResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theCondition : theListResourceIds.getValuesAsQueryTokens()) {
-			whereStatement += "l.id = " + theCondition.getValue() + " OR ";
+			whereStatement += "l.id = '" + theCondition.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);

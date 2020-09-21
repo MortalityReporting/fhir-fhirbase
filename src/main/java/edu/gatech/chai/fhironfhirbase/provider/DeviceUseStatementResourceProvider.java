@@ -164,7 +164,7 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 
 		if (theDeviceUseStatementIds != null) {
 			for (TokenParam theDeviceUseStatementId : theDeviceUseStatementIds.getValuesAsQueryTokens()) {
-				whereParameters.add("du.id = " + theDeviceUseStatementId.getValue());
+				whereParameters.add("du.id = '" + theDeviceUseStatementId.getValue() + "'");
 			}
 			returnAll = false;
 		}

@@ -102,7 +102,7 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theMessageHeader : theMessageHeaderIds.getValuesAsQueryTokens()) {
-			whereStatement += "mh.id = " + theMessageHeader.getValue() + " OR ";
+			whereStatement += "mh.id = '" + theMessageHeader.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);

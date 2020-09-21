@@ -151,7 +151,7 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theCondition : theDocumentReferenceIds.getValuesAsQueryTokens()) {
-			whereStatement += "r.id = " + theCondition.getValue() + " OR ";
+			whereStatement += "r.id = '" + theCondition.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
