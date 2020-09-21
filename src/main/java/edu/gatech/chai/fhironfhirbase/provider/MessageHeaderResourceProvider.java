@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import javax.annotation.PostConstruct;
+
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.IdType;
@@ -44,6 +46,14 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 	public MessageHeaderResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
+
+	@PostConstruct
+	private void postConstruct() {
+		setTableName(MessageHeaderResourceProvider.getType().toLowerCase());
+		setMyResourceType(MessageHeaderResourceProvider.getType());
+		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+	}
+
 
 	public static String getType() {
 		return "MessageHeader";

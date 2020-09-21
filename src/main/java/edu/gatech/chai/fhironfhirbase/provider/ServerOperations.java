@@ -27,6 +27,8 @@ import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Composition;
+import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.DateTimeType;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Identifier;
@@ -69,7 +71,7 @@ public class ServerOperations {
 		if (ctx != null) {
 			this.ctx = ctx;
 		}
-		
+
 		patientIds = new ArrayList<String>();
 	}
 
@@ -89,6 +91,55 @@ public class ServerOperations {
 				reference.setReferenceElement(new IdType(newId));
 			}
 		}
+	}
+
+	private void createComposition(IGenericClient client, List<BundleEntryComponent> entries) {
+		for (String patientId : patientIds) {
+			// Check if we already have a composition for the same patient
+			Bundle responseBundle = client.search().forResource(Composition.class)
+					.where(Composition.SUBJECT.hasAnyOfIds(patientId))
+					.and(Composition.TYPE.exactly().systemAndCode("http://loinc.org", "11502-2"))
+					.returnBundle(Bundle.class).execute();
+
+			Composition composition;
+			boolean create = true;
+			if (responseBundle.getTotal() > 0) {
+				composition = (Composition) responseBundle.getEntryFirstRep().getResource();
+				create = false; // we should update
+			} else {
+				// Create a composition for this batch write.
+				composition = new Composition();
+				composition
+						.setType(new CodeableConcept(new Coding("http://loinc.org", "64297-5", "Death certificate")));
+			}
+
+			// Walk through the entries again and add the entries to composition
+			SectionComponent sectionComponent = new SectionComponent();
+			for (BundleEntryComponent entry : entries) {
+				Resource resource = entry.getResource();
+				if (resource instanceof Patient) {
+					composition.setSubject(new Reference(resource.getIdElement()));
+				}
+				sectionComponent.addEntry(new Reference(resource));
+			}
+
+			composition.getSection().add(sectionComponent);
+			MethodOutcome mo;
+			if (create) {
+				mo = client.create().resource(composition).encodedJson().prettyPrint().execute();
+			} else {
+				mo = client.update().resource(composition).encodedJson().prettyPrint().execute();
+			}
+
+			if (mo.getId() == null) {
+				logger.debug("Failed to create a composition for the batch upload.");
+			}
+		}
+	}
+	
+	private void createMessageHeader(IGenericClient client, MessageHeader messageHeader) {
+		// We store all the messaging events.
+		client.create().resource(messageHeader).encodedJson().prettyPrint().execute();
 	}
 
 	private OperationOutcome processPostResources(IGenericClient client, List<BundleEntryComponent> entries) {
@@ -129,7 +180,7 @@ public class ServerOperations {
 				}
 
 				if (patientId != null && !patientId.isEmpty()) {
-					// We do not update the patient info from the lab report. So we just get 
+					// We do not update the patient info from the lab report. So we just get
 					// patient id and keep the information
 					referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
 					patientIds.add("Patient/" + patientId);
@@ -153,7 +204,7 @@ public class ServerOperations {
 				entry.setFullUrl("Patient/" + patientId);
 			}
 		}
-		
+
 		// Now, we re-loop the entries and take care of resources other than patient.
 		for (BundleEntryComponent entry : entries) {
 			Resource resource = entry.getResource();
@@ -173,30 +224,30 @@ public class ServerOperations {
 						if (theDateType == null || theDateType.isEmpty()) {
 							break;
 						}
-						
+
 						Date theDate = theDateType.getValue();
-						Bundle responseBundle = client
-							.search().forResource(Observation.class).where(Observation.SUBJECT.hasId(pId))
-							.and(Observation.CODE.exactly().systemAndCode(theSystem, theCode)).and(Observation.DATE.exactly().second(theDate))
-							.returnBundle(Bundle.class).execute();
-						
+						Bundle responseBundle = client.search().forResource(Observation.class)
+								.where(Observation.SUBJECT.hasId(pId))
+								.and(Observation.CODE.exactly().systemAndCode(theSystem, theCode))
+								.and(Observation.DATE.exactly().second(theDate)).returnBundle(Bundle.class).execute();
+
 						int total = responseBundle.getTotal();
 						if (total > 0) {
 							observationId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
 							observation.setId(observationId);
 							break;
 						}
-						
+
 						if (observationId != null && !observationId.isEmpty()) {
 							break;
 						}
 					}
-					
+
 					if (observationId != null && !observationId.isEmpty()) {
 						break;
 					}
 				}
-				
+
 				if (observationId != null && !observationId.isEmpty()) {
 					MethodOutcome outcome = client.update().resource(observation).prettyPrint().encodedJson().execute();
 					if (outcome.getId() == null || outcome.getId().isEmpty()) {
@@ -217,17 +268,15 @@ public class ServerOperations {
 				entry.setFullUrl("Observation/" + observationId);
 			}
 		}
-		
+
 		// If we are here, then we do not have any errors. So, return null.
 		return null;
 	}
-	
-	@Operation(name="$process-message")
-	public Bundle ProcessMessageOperation(
-			@OperationParam(name="content") Bundle theContent,
-			@OperationParam(name="async") BooleanType theAsync,
-			@OperationParam(name="response-url") UriType theUri			
-			) {
+
+	@Operation(name = "$process-message")
+	public Bundle ProcessMessageOperation(@OperationParam(name = "content") Bundle theContent,
+			@OperationParam(name = "async") BooleanType theAsync,
+			@OperationParam(name = "response-url") UriType theUri) {
 		String requestUrl = System.getenv("INTERNAL_FHIR_REQUEST_URL");
 		if (requestUrl == null || requestUrl.isEmpty()) {
 			requestUrl = "http://localhost:8080/fhir";
@@ -245,51 +294,53 @@ public class ServerOperations {
 			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
 		}
 
-		referenceIds = new HashMap<String, String>();		
+		referenceIds = new HashMap<String, String>();
 		MessageHeader messageHeader = null;
-		
+
 		if (theContent.getType() == BundleType.MESSAGE) {
 			List<BundleEntryComponent> entries = theContent.getEntry();
-			
+
 			// Evaluate the first entry, which must be MessageHeader
-			if (entries != null && entries.size() > 0 && 
-					entries.get(0).getResource() != null &&
-					entries.get(0).getResource().getResourceType() == ResourceType.MessageHeader) {
+			if (entries != null && entries.size() > 0 && entries.get(0).getResource() != null
+					&& entries.get(0).getResource().getResourceType() == ResourceType.MessageHeader) {
 				messageHeader = (MessageHeader) entries.get(0).getResource();
-				
+
 				// We handle observation-type.
 				// TODO: Add other types later.
 				Type eventType = messageHeader.getEvent();
 				if (eventType instanceof Coding) {
 					Coding event = eventType.castToCoding(eventType);
-					Coding obsprovided = new Coding(ObservationCategory.LABORATORY.getSystem(), ObservationCategory.LABORATORY.toCode(), ObservationCategory.LABORATORY.getDisplay());
+					Coding obsprovided = new Coding(ObservationCategory.LABORATORY.getSystem(),
+							ObservationCategory.LABORATORY.toCode(), ObservationCategory.LABORATORY.getDisplay());
 					if (CodeableConceptUtil.compareCodings(event, obsprovided) == 0) {
 						// This is lab report. they are all to be added to the server.
 						// We add resources that are focused.
 						OperationOutcome oo = processPostResources(client, entries);
-						if (oo != null)  {
-							throw new UnprocessableEntityException(FhirContext.forR4(), oo); 
+						if (oo != null) {
+							throw new UnprocessableEntityException(FhirContext.forR4(), oo);
 						}
-						
+
 						// update message.focus().
 						List<Reference> references = messageHeader.getFocus();
 						for (Reference reference : references) {
 							updateReference(reference);
 						}
+
+						createMessageHeader(client, messageHeader);
+//						createComposition(client, entries);
 					} else {
 						ThrowFHIRExceptions.unprocessableEntityException(
 								"We currently support only observation-provided Message event");
-					}					
+					}
 				} else {
-					ThrowFHIRExceptions.unprocessableEntityException(
-							"We currently support only MessageHeader.eventCoding");
+					ThrowFHIRExceptions
+							.unprocessableEntityException("We currently support only MessageHeader.eventCoding");
 				}
 			}
 		} else {
-			ThrowFHIRExceptions.unprocessableEntityException(
-					"The bundle must be a MESSAGE type");
+			ThrowFHIRExceptions.unprocessableEntityException("The bundle must be a MESSAGE type");
 		}
-				
+
 		return theContent;
 	}
 }
