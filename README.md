@@ -4,7 +4,9 @@ FHIR Resource providers and database connector to fhirBase. This library handles
 ## Installation
 This is a jar file so that it cannot be execulted without being instantiated by Server module. All the resource providers MUST be instantiated by a software that will be using this library. Do the follows to generate fhir-fhirbase jar file.
 
-```In the fhir-fhirbase folder, do "mvn clean install".```
+```
+In the fhir-fhirbase folder, do "mvn clean install".
+```
 
 ## Additional operation API implemented.
 1. Transaction Operation: The transaction API is https://<base URI>/  Payload must be batch type Bundle
