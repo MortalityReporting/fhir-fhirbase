@@ -18,6 +18,7 @@ package edu.gatech.chai.fhironfhirbase.provider;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -159,6 +160,9 @@ public class SystemTransactionProvider {
 			if (resource instanceof Patient) {
 				Patient patient = (Patient) resource;
 				patientId = null;
+				
+				// We need to check if this patient resource has an identifier for case number.
+				boolean caseNumberExists = false;
 				for (Identifier identifier : patient.getIdentifier()) {
 					// do search only on the case number.
 					CodeableConcept identifierType = identifier.getType();
@@ -166,16 +170,17 @@ public class SystemTransactionProvider {
 						continue;
 					}
 
-					Coding identifierCoding = identifierType.getCodingFirstRep();
-					if (identifierCoding.isEmpty()) {
+					Coding identifierTypeCoding = identifierType.getCodingFirstRep();
+					if (identifierTypeCoding.isEmpty()) {
 						continue;
 					}
 
-					if (!"urn:mdi:temporary:code".equalsIgnoreCase(identifierCoding.getSystem())
-							|| !"1000007".equalsIgnoreCase(identifierCoding.getCode())) {
+					if (!"urn:mdi:temporary:code".equalsIgnoreCase(identifierTypeCoding.getSystem())
+							|| !"1000007".equalsIgnoreCase(identifierTypeCoding.getCode())) {
 						continue;
 					}
 
+					caseNumberExists = true;
 					Bundle responseBundle = client
 							.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly()
 									.systemAndCode(identifier.getSystem(), identifier.getValue()))
@@ -191,6 +196,18 @@ public class SystemTransactionProvider {
 					}
 				}
 
+				if (caseNumberExists == false) {
+					Coding caseNumberTypeCoding = new Coding("urn:mdi:temporary:code", "1000007", "Case Number");
+					Identifier newIdentifier = new Identifier(); 
+					CodeableConcept caseType = new CodeableConcept();
+					caseType.addCoding(caseNumberTypeCoding);
+					newIdentifier.setType(caseType);
+					newIdentifier.setSystem("urn:mdi:cms:unknown");
+					newIdentifier.setValue(UUID.randomUUID().toString());
+					
+					patient.addIdentifier(newIdentifier);
+				}
+				
 				if (patientId != null && !patientId.isEmpty()) {
 					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
 						referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
