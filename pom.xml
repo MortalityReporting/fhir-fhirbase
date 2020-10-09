@@ -16,7 +16,7 @@
 	<groupId>edu.gatech.chai</groupId>
 	<artifactId>fhir-fhirbase</artifactId>
 	<packaging>jar</packaging>
-	<version>0.0.1</version>
+	<version>1.0.0</version>
 	<name>fhir-fhirbase</name>
 	<description>FHIR Wrapper for Fhirbase</description>
 	<url>http://maven.apache.org</url>
