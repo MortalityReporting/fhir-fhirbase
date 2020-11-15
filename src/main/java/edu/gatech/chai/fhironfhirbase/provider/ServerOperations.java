@@ -94,47 +94,57 @@ public class ServerOperations {
 	}
 
 	private void createComposition(IGenericClient client, List<BundleEntryComponent> entries) {
-		for (String patientId : patientIds) {
-			// Check if we already have a composition for the same patient
-			Bundle responseBundle = client.search().forResource(Composition.class)
-					.where(Composition.SUBJECT.hasAnyOfIds(patientId))
-					.and(Composition.TYPE.exactly().systemAndCode("http://loinc.org", "11502-2"))
-					.returnBundle(Bundle.class).execute();
+		// This method must be called for lab report ONLY.
+		// For the lab report, we must have only one patientId. 
+		// If we have more than one patientId, then it must be for something else and
+		// we should not create composition.
+		if (patientIds.size() != 1) return;
+		
+		String patientId = patientIds.get(0);
+		
+//		// Check if we already have a composition for the same patient
+//		Bundle responseBundle = client.search().forResource(Composition.class)
+//				.where(Composition.SUBJECT.hasAnyOfIds(patientId))
+//				.and(Composition.TYPE.exactly().systemAndCode("http://loinc.org", "11502-2"))
+//				.returnBundle(Bundle.class).execute();
 
-			Composition composition;
-			boolean create = true;
-			if (responseBundle.getTotal() > 0) {
-				composition = (Composition) responseBundle.getEntryFirstRep().getResource();
-				create = false; // we should update
-			} else {
-				// Create a composition for this batch write.
-				composition = new Composition();
-				composition
-						.setType(new CodeableConcept(new Coding("http://loinc.org", "64297-5", "Death certificate")));
-			}
+//		Composition composition;
+//		boolean create = true;
+//		if (responseBundle.getTotal() > 0) {
+//			composition = (Composition) responseBundle.getEntryFirstRep().getResource();
+//			create = false; // we should update
+//		} else {
+//			// Create a composition for this batch write.
+		Composition composition = new Composition();
+		composition
+				.setType(new CodeableConcept(new Coding("http://loinc.org", "11502-2", "Laboratory report")));
+//		}
 
-			// Walk through the entries again and add the entries to composition
-			SectionComponent sectionComponent = new SectionComponent();
-			for (BundleEntryComponent entry : entries) {
-				Resource resource = entry.getResource();
-				if (resource instanceof Patient) {
-					composition.setSubject(new Reference(resource.getIdElement()));
-				}
-				sectionComponent.addEntry(new Reference(resource));
+		// Walk through the entries again and add the entries to composition
+		SectionComponent sectionComponent = new SectionComponent();
+		for (BundleEntryComponent entry : entries) {
+			Resource resource = entry.getResource();
+			if (resource instanceof MessageHeader) {
+				continue;
 			}
-
-			composition.getSection().add(sectionComponent);
-			MethodOutcome mo;
-			if (create) {
-				mo = client.create().resource(composition).encodedJson().prettyPrint().execute();
-			} else {
-				mo = client.update().resource(composition).encodedJson().prettyPrint().execute();
+			
+			if (resource instanceof Patient) {
+				composition.setSubject(new Reference("Patient/"+resource.getIdElement().getIdPart()));
 			}
-
-			if (mo.getId() == null) {
-				logger.debug("Failed to create a composition for the batch upload.");
-			}
+			sectionComponent.addEntry(new Reference(resource));
 		}
+
+		composition.getSection().add(sectionComponent);
+		MethodOutcome mo;
+		mo = client.create().resource(composition).encodedJson().prettyPrint().execute();
+//		} else {
+//			mo = client.update().resource(composition).encodedJson().prettyPrint().execute();
+//		}
+
+		if (mo.getId() == null) {
+			logger.debug("Failed to create a composition for the batch upload.");
+		}
+	
 	}
 	
 	private void createMessageHeader(IGenericClient client, MessageHeader messageHeader) {
@@ -175,6 +185,9 @@ public class ServerOperations {
 					int total = responseBundle.getTotal();
 					if (total > 0) {
 						patientId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
+						if (patientId == null || patientId.isEmpty()) {
+							logger.error("Found exising Patient. But patientId is null or empty");
+						}
 						break;
 					}
 				}
@@ -327,7 +340,7 @@ public class ServerOperations {
 						}
 
 						createMessageHeader(client, messageHeader);
-//						createComposition(client, entries);
+						createComposition(client, entries);
 					} else {
 						ThrowFHIRExceptions.unprocessableEntityException(
 								"We currently support only observation-provided Message event");
