@@ -33,6 +33,7 @@ import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -48,7 +49,9 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setTableName(RelatedPersonResourceProvider.getType().toLowerCase());
 		setMyResourceType(RelatedPersonResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	public static String getType() {
@@ -75,6 +78,9 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 			e.printStackTrace();
 		}
 
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 		return retVal;
 	}
 
@@ -85,6 +91,10 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	@Read()

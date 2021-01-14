@@ -35,6 +35,7 @@ import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -49,7 +50,8 @@ public class ConceptMapResourceProvider extends BaseResourceProvider {
 	@PostConstruct
     private void postConstruct() {
 		setMyResourceType(ConceptMapResourceProvider.getType());		
-		getTotalSize("SELECT count(*) FROM "+ConceptMapResourceProvider.getType().toLowerCase()+";");
+		int totalSize = getTotalSize("SELECT count(*) FROM "+ConceptMapResourceProvider.getType().toLowerCase()+";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	@Override

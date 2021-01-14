@@ -49,6 +49,7 @@ import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -64,7 +65,9 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setTableName(ProcedureResourceProvider.getType().toLowerCase());
 		setMyResourceType(ProcedureResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	@Override
@@ -94,7 +97,10 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 			retVal.setCreated(false);
 			e.printStackTrace();
 		}
-		
+	
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 		return retVal;
 	}
 
@@ -129,6 +135,10 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	/**
@@ -214,7 +224,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 		
 		String fromStatement = "procedure proc";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codes", "proc.resource->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "proc.resource->'code'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

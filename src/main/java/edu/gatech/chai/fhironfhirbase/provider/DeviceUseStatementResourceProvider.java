@@ -52,6 +52,7 @@ import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.MyDeviceUseStatement;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -67,7 +68,9 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setTableName(DeviceUseStatementResourceProvider.getType().toLowerCase());
 		setMyResourceType(DeviceUseStatementResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	@Override
@@ -103,6 +106,9 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 			e.printStackTrace();
 		}
 		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 		return retVal;
 	}
 
@@ -144,6 +150,10 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	@Search()

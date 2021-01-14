@@ -22,6 +22,7 @@ import java.util.List;
 import javax.annotation.PostConstruct;
 
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.Condition;
@@ -69,7 +70,8 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setMyResourceType(ConditionResourceProvider.getType());
 		setTableName(ConditionResourceProvider.getType().toLowerCase());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	public static String getType() {
@@ -106,6 +108,9 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 			retVal.setCreated(false);
 		}
 		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+		
 		return retVal;
 	}
 
@@ -116,6 +121,10 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	/**
@@ -201,7 +210,7 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 		
 		String fromStatement = "condition c";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codes", "c.resource->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "c.resource->'code'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

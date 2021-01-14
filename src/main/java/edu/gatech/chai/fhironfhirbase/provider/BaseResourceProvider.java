@@ -97,7 +97,6 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 
 		try {
 			totalSize = fhirbaseMapping.getSize(query);
-			ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 		} catch (Exception e) {
 
 			totalSize = 0;

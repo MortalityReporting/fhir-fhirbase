@@ -47,6 +47,7 @@ import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 /**
  * This is a simple resource provider which only implements "read/GET" methods,
@@ -70,7 +71,8 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 		setTableName(OrganizationResourceProvider.getType().toLowerCase());
 		setMyResourceType(OrganizationResourceProvider.getType());
 
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	public static String getType() {
@@ -104,6 +106,9 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 			retVal.setCreated(false);
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 		
 		return retVal;
 	}
@@ -164,6 +169,9 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	@Search()

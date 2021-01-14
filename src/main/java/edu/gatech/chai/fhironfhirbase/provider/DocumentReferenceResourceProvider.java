@@ -50,6 +50,7 @@ import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -66,7 +67,9 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 		setTableName(DocumentReferenceResourceProvider.getType().toLowerCase());
 		setMyResourceType(DocumentReferenceResourceProvider.getType());
 
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	public static String getType() {
@@ -93,6 +96,9 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 			e.printStackTrace();
 		}
 		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 		return retVal;
 	}
 
@@ -103,6 +109,9 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	@Read()

@@ -55,6 +55,7 @@ import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -70,7 +71,9 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setTableName(MedicationRequestResourceProvider.getType().toLowerCase());
 		setMyResourceType(MedicationRequestResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	public static String getType() {
@@ -102,6 +105,9 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 			e.printStackTrace();
 		}
 
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 		return retVal;
 	}
 
@@ -112,6 +118,9 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	@Update()
@@ -195,7 +204,7 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 		
 		String fromStatement = "medicationrequest mr";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codes", "mr.resource->'medicationCodeableConcept'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "mr.resource->'medicationCodeableConcept'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

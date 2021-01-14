@@ -28,6 +28,7 @@ import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -43,7 +44,10 @@ public class LocationResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setTableName(LocationResourceProvider.getType().toLowerCase());
 		setMyResourceType(LocationResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	public static String getType() {
@@ -70,6 +74,9 @@ public class LocationResourceProvider extends BaseResourceProvider {
 			e.printStackTrace();
 		}
 		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 		return retVal;
 	}
 
@@ -80,6 +87,9 @@ public class LocationResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	@Read()

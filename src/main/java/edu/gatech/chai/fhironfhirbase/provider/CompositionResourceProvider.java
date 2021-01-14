@@ -67,6 +67,7 @@ import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -81,7 +82,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setTableName(CompositionResourceProvider.getType().toLowerCase());
 		setMyResourceType(CompositionResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	public static String getType() {
@@ -107,6 +109,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			retVal.setCreated(false);
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 
 		return retVal;
 	}
@@ -118,6 +123,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	@Search()

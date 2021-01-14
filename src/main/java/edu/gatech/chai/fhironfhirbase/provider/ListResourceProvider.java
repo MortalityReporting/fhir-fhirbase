@@ -32,6 +32,7 @@ import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -47,7 +48,8 @@ public class ListResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setTableName(ListResourceProvider.getType().toLowerCase());
 		setMyResourceType(ListResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	public static String getType() {
@@ -73,6 +75,9 @@ public class ListResourceProvider extends BaseResourceProvider {
 			e.printStackTrace();
 		}
 		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+		
 		return retVal;
 	}
 
@@ -83,6 +88,9 @@ public class ListResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	@Read()
@@ -151,7 +159,7 @@ public class ListResourceProvider extends BaseResourceProvider {
 		
 		String fromStatement = "list l";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codes", "l.resource->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "l.resource->'code'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

@@ -42,6 +42,7 @@ import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -57,7 +58,9 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setTableName(MedicationResourceProvider.getType().toLowerCase());
 		setMyResourceType(MedicationResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	@Override
@@ -116,7 +119,7 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 		
 		String fromStatement = "medication m";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codes", "m.resource->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "m.resource->'code'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);

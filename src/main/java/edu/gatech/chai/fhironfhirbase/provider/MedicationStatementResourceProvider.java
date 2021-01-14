@@ -51,6 +51,7 @@ import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
+import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
@@ -66,7 +67,9 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 	private void postConstruct() {
 		setTableName(MedicationStatementResourceProvider.getType().toLowerCase());
 		setMyResourceType(MedicationStatementResourceProvider.getType());
-		getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	@Override
@@ -97,6 +100,9 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 			e.printStackTrace();
 		}
 
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 		return retVal;
 	}
 
@@ -107,6 +113,10 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		
+		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
+		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
+
 	}
 
 	@Update()
@@ -180,7 +190,7 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 		
 		String fromStatement = "medicationstatement ms";
 		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codes",
+			fromStatement = constructFromStatementPath(fromStatement, "codings",
 					"ms.resource->'medicationCodeableConcept'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
 			if (where != null && !where.isEmpty()) {
