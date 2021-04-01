@@ -49,7 +49,7 @@ public class ConceptMapResourceProvider extends BaseResourceProvider {
 
 	@PostConstruct
     private void postConstruct() {
-		setMyResourceType(ConceptMapResourceProvider.getType());		
+		setMyResourceType(ConceptMapResourceProvider.getType());
 		int totalSize = getTotalSize("SELECT count(*) FROM "+ConceptMapResourceProvider.getType().toLowerCase()+";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

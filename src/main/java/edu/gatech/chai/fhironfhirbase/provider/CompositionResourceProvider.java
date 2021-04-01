@@ -33,6 +33,7 @@ import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.PractitionerRole;
 import org.hl7.fhir.r4.model.Procedure;
+import org.hl7.fhir.r4.model.Procedure.ProcedurePerformerComponent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Scope;
@@ -309,6 +310,28 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		return bundleEntry;
 	}
+	
+	private Resource processReference(IGenericClient client, List<BundleEntryComponent> bundleEntries, 
+			List<String> addedResource, List<String> addedPractitioner, Composition composition, Reference reference) {
+		Resource resource = null;
+		if (reference != null && !reference.isEmpty()) {
+			String referenceId = reference.getReferenceElement().getValue();
+			if (!addedResource.contains(referenceId)) {
+				resource = (Resource) client.read()
+						.resource(reference.getReferenceElement().getResourceType())
+						.withId(reference.getReferenceElement().getIdPart()).encodedJson()
+						.execute();
+				bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource));
+				addedResource.add(referenceId);
+
+				if (resource instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
+					addedPractitioner.add(resource.getIdElement().getIdPart());
+				}
+			}
+		}
+		
+		return resource;
+	}
 
 	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
 	public Bundle generateDocumentOperation(RequestDetails theRequestDetails, @IdParam IdType theCompositionId,
@@ -456,21 +479,22 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						// get performer (practitioner)
 						List<Reference> obsPerformers = observation.getPerformer();
 						for (Reference reference : obsPerformers) {
-							if (reference != null && !reference.isEmpty()) {
-								String referenceId = reference.getReferenceElement().getValue();
-								if (!addedResource.contains(referenceId)) {
-									Resource resource = (Resource) client.read()
-											.resource(reference.getReferenceElement().getResourceType())
-											.withId(reference.getReferenceElement().getIdPart()).encodedJson()
-											.execute();
-									bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource));
-									addedResource.add(referenceId);
-
-									if (resource instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
-										addedPractitioner.add(resource.getIdElement().getIdPart());
-									}
-								}
-							}
+							processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference);
+//							if (reference != null && !reference.isEmpty()) {
+//								String referenceId = reference.getReferenceElement().getValue();
+//								if (!addedResource.contains(referenceId)) {
+//									Resource resource = (Resource) client.read()
+//											.resource(reference.getReferenceElement().getResourceType())
+//											.withId(reference.getReferenceElement().getIdPart()).encodedJson()
+//											.execute();
+//									bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource));
+//									addedResource.add(referenceId);
+//
+//									if (resource instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
+//										addedPractitioner.add(resource.getIdElement().getIdPart());
+//									}
+//								}
+//							}
 						}
 					}
 				}
@@ -490,27 +514,52 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 						// Get asserter
 						Reference reference = condition.getAsserter();
-						if (reference != null && !reference.isEmpty()) {
-							String referenceId = reference.getReferenceElement().getValue();
-							if (!addedResource.contains(referenceId)) {
-								Resource resource = (Resource) client.read()
-										.resource(reference.getReferenceElement().getResourceType())
-										.withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
-								bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource));
-								addedResource.add(referenceId);
+						processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference);
+//						if (reference != null && !reference.isEmpty()) {
+//							String referenceId = reference.getReferenceElement().getValue();
+//							if (!addedResource.contains(referenceId)) {
+//								Resource resource = (Resource) client.read()
+//										.resource(reference.getReferenceElement().getResourceType())
+//										.withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
+//								bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource));
+//								addedResource.add(referenceId);
+//
+//								if (resource instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
+//									addedPractitioner.add(resource.getIdElement().getIdPart());
+//								}
+//
+//							}
+//						}
+					}
+				}
 
-								if (resource instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
-									addedPractitioner.add(resource.getIdElement().getIdPart());
-								}
-
-							}
+				// Procedure
+				Bundle relProcedureBundle = client.search().forResource(Procedure.class)
+						.where(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+				List<BundleEntryComponent> relProcedureEntries = relProcedureBundle.getEntry();
+				for (BundleEntryComponent relProcedureEntry : relProcedureEntries) {
+					Procedure procedure = (Procedure) relProcedureEntry.getResource();
+					if (procedure != null && !procedure.isEmpty()) {
+						// First add this resource to section and entry of this bundle document.
+						if (!addedResource.contains("Procedure/" + procedure.getIdElement().getIdPart())) {
+							bundleEntries.add(addToSectAndEntryofDoc(composition,
+									"Procedure/" + procedure.getIdElement().getIdPart(), procedure));
+							addedResource.add("Procedure/" + procedure.getIdElement().getIdPart());
+						}
+						
+						// Get performer.actor
+						ProcedurePerformerComponent performer = procedure.getPerformerFirstRep();
+						if (!performer.isEmpty()) {
+							Reference reference = performer.getActor();
+							processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference);
 						}
 					}
 				}
 
+
 				// Practitioner referenced resources
 				for (String idPart : addedPractitioner) {
-					// Get List (this is Cause of Death pathway
+					// Get List (this is Cause of Death pathway)
 					Bundle listBundle = client.search().forResource(ListResource.class)
 							.where(ListResource.SOURCE.hasId("Practitioner/" + idPart)).returnBundle(Bundle.class)
 							.execute();
@@ -553,19 +602,20 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						}
 					}
 				}
-
-				// Procedure
-				Bundle relProcedureBundle = client.search().forResource(Procedure.class)
-						.where(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-				List<BundleEntryComponent> relProcedureEntries = relProcedureBundle.getEntry();
-				for (BundleEntryComponent relProcedureEntry : relProcedureEntries) {
-					Procedure procedure = (Procedure) relProcedureEntry.getResource();
-					if (procedure != null && !procedure.isEmpty()) {
-						// First add this resource to section and entry of this bundle document.
-						if (!addedResource.contains("Procedure/" + procedure.getIdElement().getIdPart())) {
+				
+				// List resource, which is a pathway for cause of death, must be included from
+				// certifier. However, if this is missed and the list has subject, then use it to 
+				// include here. 
+				Bundle listBundle = client.search().forResource(ListResource.class)
+						.where(ListResource.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+				List<BundleEntryComponent> listEntries = listBundle.getEntry();
+				for (BundleEntryComponent entry : listEntries) {
+					ListResource list = (ListResource) entry.getResource();
+					if (list != null && !list.isEmpty()) {
+						if (!addedResource.contains("List/" + list.getIdElement().getIdPart())) {
 							bundleEntries.add(addToSectAndEntryofDoc(composition,
-									"Procedure/" + procedure.getIdElement().getIdPart(), procedure));
-							addedResource.add("Procedure/" + procedure.getIdElement().getIdPart());
+									"List/" + list.getIdElement().getIdPart(), list));
+							addedResource.add("List/" + list.getIdElement().getIdPart());
 						}
 					}
 				}
