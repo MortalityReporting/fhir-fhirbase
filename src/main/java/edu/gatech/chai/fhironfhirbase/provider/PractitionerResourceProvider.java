@@ -293,7 +293,7 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 		 * reject them
 		 */
 		if (thePractitioner.getName().isEmpty()) {
-			ThrowFHIRExceptions.unprocessableEntityException(
+			ThrowFHIRExceptions.unprocessableEntityException(getFhirContext(), 
 					"No name provided, Practictioner resources must have at least one name.");
 		}
 	}

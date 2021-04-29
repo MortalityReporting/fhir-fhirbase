@@ -420,7 +420,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = "_count") IntegerType theCount) {
 
 		if (thePatientId == null) {
-			ThrowFHIRExceptions.unprocessableEntityException("Patient Id must be present");
+			ThrowFHIRExceptions.unprocessableEntityException(getFhirContext(), "Patient Id must be present");
 		}
 
 		Date startDate = null;
@@ -707,14 +707,16 @@ public class PatientResourceProvider extends BaseResourceProvider {
 		/*
 		 * Our server will have a rule that patients must have a family name or we will
 		 * reject them
+		 * 
+		 * commenting out this name validation as VRDR for MDI may not have names.
 		 */
-		if (thePatient.getNameFirstRep().getFamily().isEmpty()) {
-			OperationOutcome outcome = new OperationOutcome();
-			CodeableConcept detailCode = new CodeableConcept();
-			detailCode.setText("No family name provided, Patient resources must have at least one family name.");
-			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-		}
+//		if (thePatient.getNameFirstRep().getFamily().isEmpty()) {
+//			OperationOutcome outcome = new OperationOutcome();
+//			CodeableConcept detailCode = new CodeableConcept();
+//			detailCode.setText("No family name provided, Patient resources must have at least one family name.");
+//			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+//			throw new UnprocessableEntityException(getFhirContext(), outcome);
+//		}
 	}
 
 	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {

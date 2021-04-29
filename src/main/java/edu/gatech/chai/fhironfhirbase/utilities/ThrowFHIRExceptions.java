@@ -25,12 +25,12 @@ import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 
 public class ThrowFHIRExceptions {
 
-	public static UnprocessableEntityException unprocessableEntityException(String message) {
+	public static UnprocessableEntityException unprocessableEntityException(FhirContext theContext, String message) {
 		OperationOutcome outcome = new OperationOutcome();
 		CodeableConcept detailCode = new CodeableConcept();
 		detailCode.setText(message);
 		outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-		throw new UnprocessableEntityException(FhirContext.forDstu3(), outcome);
+		throw new UnprocessableEntityException(theContext, outcome);
 	}
 	
 	public static InternalErrorException internalErrorException(String message) {

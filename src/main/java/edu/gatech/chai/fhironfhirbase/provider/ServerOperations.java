@@ -342,16 +342,16 @@ public class ServerOperations {
 						createMessageHeader(client, messageHeader);
 						createComposition(client, entries);
 					} else {
-						ThrowFHIRExceptions.unprocessableEntityException(
+						ThrowFHIRExceptions.unprocessableEntityException(ctx, 
 								"We currently support only observation-provided Message event");
 					}
 				} else {
 					ThrowFHIRExceptions
-							.unprocessableEntityException("We currently support only MessageHeader.eventCoding");
+							.unprocessableEntityException(ctx, "We currently support only MessageHeader.eventCoding");
 				}
 			}
 		} else {
-			ThrowFHIRExceptions.unprocessableEntityException("The bundle must be a MESSAGE type");
+			ThrowFHIRExceptions.unprocessableEntityException(ctx, "The bundle must be a MESSAGE type");
 		}
 
 		return theContent;
