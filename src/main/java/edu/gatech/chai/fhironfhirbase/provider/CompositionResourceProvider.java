@@ -26,6 +26,7 @@ import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.RelatedPerson;
 import org.hl7.fhir.r4.model.Resource;
+import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.UriType;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
@@ -62,10 +63,15 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
 import ca.uhn.fhir.rest.param.DateParam;
+import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
+import ca.uhn.fhir.rest.param.StringOrListParam;
+import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
+import ca.uhn.fhir.rest.param.UriOrListParam;
+import ca.uhn.fhir.rest.param.UriParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
@@ -336,10 +342,80 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		return resource;
 	}
 
+	private void setupClientForAuth(IGenericClient client) {
+		String authBasic = System.getenv("AUTH_BASIC");
+		String authBearer = System.getenv("AUTH_BEARER");
+		if (authBasic != null && !authBasic.isEmpty()) {
+			String[] auth = authBasic.split(":");
+			if (auth.length == 2) {
+				client.registerInterceptor(new BasicAuthInterceptor(auth[0], auth[1]));
+			}
+		} else if (authBearer != null && !authBearer.isEmpty()) {
+			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
+		}
+	}
+
+	@Operation(name = "$mdi-documents", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
+	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
+			@IdParam(optional=true) IdType theCompositionId,
+			@OperationParam(name = "id") UriOrListParam theIds, 
+			@OperationParam(name = "decedent.address") StringOrListParam theAddresses,
+			@OperationParam(name = "decedent.address-city") StringOrListParam theAddressCities,
+			@OperationParam(name = "decedent.address-postalcode") StringOrListParam theAddressPostalCodes,
+			@OperationParam(name = "decedent.address-state") StringOrListParam theAddressStates,
+			@OperationParam(name = "decedent.address-use") TokenOrListParam theAddressUses,
+			@OperationParam(name = "decedent.birthdate") DateRangeParam theBirthDateRange,
+			@OperationParam(name = "decedent.death-date") DateRangeParam theDeathDateRange,
+			@OperationParam(name = "decedent.email") TokenOrListParam theEmails,
+			@OperationParam(name = "decedent.family") StringOrListParam theFamilies,
+			@OperationParam(name = "decedent.gender") TokenOrListParam theGenders,
+			@OperationParam(name = "decedent.given") StringOrListParam theGivens,
+			@OperationParam(name = "decedent.identifier") TokenOrListParam theIdentifiers,
+			@OperationParam(name = "decedent.name") StringOrListParam theNames,
+			@OperationParam(name = "decedent.phone") StringOrListParam thePhones,
+			@OperationParam(name = "decedent.telecom") TokenOrListParam theTelecoms,
+			@OperationParam(name = "case-id") StringOrListParam theCaseIds) {
+				
+		OperationOutcome outcome = new OperationOutcome();
+		
+		String myFhirServerBase = theRequestDetails.getFhirServerBase();
+		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
+		setupClientForAuth(client);
+
+		if (theCompositionId != null) {
+			// if we have the composition id, then all search parameters will be ignored.
+			Bundle returned = (Bundle) client.operation().onInstance(theCompositionId).named("$document").withNoParameters(Parameters.class).execute();
+			
+		}
+
+		if (theIds != null) {
+			for (UriParam theId: theIds.getValuesAsQueryTokens()) {
+				String id = theId.getValue();				
+				System.out.println("MDI-DOCUMENT: key=id, value="+id);
+			}
+		}
+		
+		if (theCaseIds != null) {
+			for (StringParam theCaseId: theCaseIds.getValuesAsQueryTokens()) {
+				System.out.println("MDI-DOCUMENT: case-id="+theCaseId.getValue());
+
+				// Search the composition that has the identifier with this value.
+
+			}
+		}
+		
+		Bundle retBundle = new Bundle();
+		retBundle.setType(BundleTypeEnum.SEARCHSET);
+
+		return retBundle;
+	}
+	
 	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
-	public Bundle generateDocumentOperation(RequestDetails theRequestDetails, @IdParam IdType theCompositionId,
-			@OperationParam(name = "id") UriType theIdUri, @OperationParam(name = "persist") BooleanType thePersist,
-			@OperationParam(name = "graph") UriType theGraph) {
+	public Bundle generateDocumentOperation(RequestDetails theRequestDetails, 
+			@IdParam IdType theCompositionId,
+			@OperationParam(name = "id") UriParam theIdUri, 
+			@OperationParam(name = "persist") BooleanType thePersist,
+			@OperationParam(name = "graph") UriParam theGraph) {
 
 		OperationOutcome outcome = new OperationOutcome();
 		if (thePersist != null && !thePersist.isEmpty()) {
@@ -360,7 +436,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 			} else {
 				String compositionId = null;
-				compositionId = theIdUri.getId();
+				compositionId = theIdUri.getValue();
 				if (compositionId.startsWith("http")) {
 					// We do not support the external composition.
 					outcome.addIssue().setSeverity(IssueSeverity.WARNING).setDetails(
@@ -409,17 +485,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
-
-		String authBasic = System.getenv("AUTH_BASIC");
-		String authBearer = System.getenv("AUTH_BEARER");
-		if (authBasic != null && !authBasic.isEmpty()) {
-			String[] auth = authBasic.split(":");
-			if (auth.length == 2) {
-				client.registerInterceptor(new BasicAuthInterceptor(auth[0], auth[1]));
-			}
-		} else if (authBearer != null && !authBearer.isEmpty()) {
-			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
-		}
+		setupClientForAuth(client);
 
 		String metaProfile = "";
 		if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "64297-5".equalsIgnoreCase(typeCode)) {
