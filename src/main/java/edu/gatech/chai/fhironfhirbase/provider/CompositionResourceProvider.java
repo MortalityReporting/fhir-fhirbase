@@ -384,14 +384,21 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		if (theCompositionId != null) {
 			// if we have the composition id, then all search parameters will be ignored.
-			Bundle returned = (Bundle) client.operation().onInstance(theCompositionId).named("$document").withNoParameters(Parameters.class).execute();
-			
+			return (Bundle) client.operation().onInstance(theCompositionId).named("$document").withNoParameters(Parameters.class).execute();
 		}
 
+		Bundle retBundle = new Bundle();
+		retBundle.setType(BundleTypeEnum.SEARCHSET);
+
 		if (theIds != null) {
+
 			for (UriParam theId: theIds.getValuesAsQueryTokens()) {
-				String id = theId.getValue();				
-				System.out.println("MDI-DOCUMENT: key=id, value="+id);
+				String id = theId.getValue();
+				Bundle compositionBundle = (Bundle) client.operation().onInstance(new IdType("Composition", id)).named("$document").withNoParameters(Parameters.class).execute();
+				BundleEntryComponent entryComponent = new BundleEntryComponent();
+				entryComponent.setFullUrl(compositionBundle.getId());
+				entryComponent.setResource(compositionBundle);
+				retBundle.addEntry(entryComponent);
 			}
 		}
 		
@@ -404,9 +411,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			}
 		}
 		
-		Bundle retBundle = new Bundle();
-		retBundle.setType(BundleTypeEnum.SEARCHSET);
-
 		return retBundle;
 	}
 	
