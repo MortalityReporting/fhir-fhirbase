@@ -391,7 +391,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		retBundle.setType(BundleTypeEnum.SEARCHSET);
 
 		if (theIds != null) {
-
+			// Composition ID tokens. This is to retrieve documents for the IDs.
+			// This will ignore other search parameters.
 			for (UriParam theId: theIds.getValuesAsQueryTokens()) {
 				String id = theId.getValue();
 				Bundle compositionBundle = (Bundle) client.operation().onInstance(new IdType("Composition", id)).named("$document").withNoParameters(Parameters.class).execute();
