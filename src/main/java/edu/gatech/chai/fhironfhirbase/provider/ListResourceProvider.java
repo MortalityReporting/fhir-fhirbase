@@ -26,6 +26,7 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
@@ -148,10 +149,11 @@ public class ListResourceProvider extends BaseResourceProvider {
 	@Search()
 	public IBundleProvider findListResourceByParams(
 			@OptionalParam(name = ListResource.SP_CODE) TokenOrListParam theOrCodes,
-			@OptionalParam(name = ListResource.SP_SUBJECT) ReferenceOrListParam theSubjects,
+			@OptionalParam(name = ListResource.SP_SUBJECT, chainBlacklist = {"",
+					USCorePatient.SP_NAME }) ReferenceAndListParam theSubjects,
 			@OptionalParam(name = ListResource.SP_SOURCE) ReferenceOrListParam theSources,
 			@OptionalParam(name = ListResource.SP_PATIENT, chainWhitelist = { "",
-					USCorePatient.SP_NAME }) ReferenceOrListParam thePatients,
+					USCorePatient.SP_NAME }) ReferenceAndListParam thePatients,
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
@@ -167,23 +169,25 @@ public class ListResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
-		if (theSubjects != null) {
-			for (ReferenceParam theSubject : theSubjects.getValuesAsQueryTokens()) {
-				String where = constructSubjectWhereParameter(theSubject, "l");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
+		if (theSubjects != null || thePatients != null) {
+			fromStatement += " join patient p on l.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+	
+			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
 			}
-			returnAll = false;
-		}
+			fromStatement = updatedFromStatement;
 
-		if (thePatients != null) {
-			for (ReferenceParam thePatient : thePatients.getValuesAsQueryTokens()) {
-				String where = constructPatientWhereParameter(thePatient, "l");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
+			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
 			}
+			fromStatement = updatedFromStatement;
+			
 			returnAll = false;
 		}
 		

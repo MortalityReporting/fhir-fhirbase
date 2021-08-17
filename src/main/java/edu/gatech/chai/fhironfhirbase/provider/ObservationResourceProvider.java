@@ -49,6 +49,7 @@ import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.param.DateParam;
+import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
@@ -159,9 +160,9 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Observation.SP_CODE) TokenOrListParam theOrCodes,
 			@OptionalParam(name = Observation.SP_DATE) DateParam theDate,
 			@OptionalParam(name = Observation.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME,
-					USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam thePatients,
-			@OptionalParam(name = Observation.SP_SUBJECT, chainWhitelist = {
-					"", USCorePatient.SP_NAME, USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam theSubjects,
+					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam thePatients,
+			@OptionalParam(name = Observation.SP_SUBJECT, chainWhitelist = {"", USCorePatient.SP_NAME, 
+					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam theSubjects,
 			@Sort SortSpec theSort,
 
 			@IncludeParam(allow = { "Observation:based-on", "Observation:context", "Observation:device",
@@ -192,30 +193,32 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
-		if (theSubjects != null) {
-			for (ReferenceParam theSubject : theSubjects.getValuesAsQueryTokens()) {
-				String where = constructSubjectWhereParameter(theSubject, "o");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
-			}
-			returnAll = false;
-		}
+		if (theSubjects != null || thePatients != null) {
+			fromStatement += " join patient p on o.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 
-		if (thePatients != null) {
-			for (ReferenceParam thePatient : thePatients.getValuesAsQueryTokens()) {
-				String where = constructPatientWhereParameter(thePatient, "o");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
+			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
 			}
+			fromStatement = updatedFromStatement;
+
+			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
+			}
+			fromStatement = updatedFromStatement;
+			
 			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;

@@ -43,6 +43,7 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenParam;
@@ -165,8 +166,8 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 	@Search()
 	public IBundleProvider findEncounterByParams(@OptionalParam(name = Encounter.SP_RES_ID) TokenParam theEncounterId,
 			@OptionalParam(name = Encounter.SP_PATIENT, chainWhitelist = { "",
-					USCorePatient.SP_NAME }) ReferenceOrListParam thePatients,
-			@OptionalParam(name = Encounter.SP_SUBJECT) ReferenceOrListParam theSubjects,
+					USCorePatient.SP_NAME }) ReferenceAndListParam thePatients,
+			@OptionalParam(name = Encounter.SP_SUBJECT) ReferenceAndListParam theSubjects,
 			@OptionalParam(name = Encounter.SP_DIAGNOSIS) ReferenceParam theDiagnosis, @Sort SortSpec theSort,
 
 			@IncludeParam(allow = { "Encounter:appointment", "Encounter:diagnosis", "Encounter:episodeofcare",
@@ -186,25 +187,25 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
-		// With OMOP, we only support subject to be patient.
-		// If the subject has only ID part, we assume that is patient.
-		if (theSubjects != null) {
-			for (ReferenceParam theSubject : theSubjects.getValuesAsQueryTokens()) {
-				String where = constructSubjectWhereParameter(theSubject, "e");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
-			}
-			returnAll = false;
-		}
+		if (theSubjects != null || thePatients != null) {
+			fromStatement += " join patient p on e.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 
-		if (thePatients != null) {
-			for (ReferenceParam thePatient : thePatients.getValuesAsQueryTokens()) {
-				String where = constructPatientWhereParameter(thePatient, "e");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
+			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
 			}
+			fromStatement = updatedFromStatement;
+
+			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
+			}
+			fromStatement = updatedFromStatement;
+			
 			returnAll = false;
 		}
 

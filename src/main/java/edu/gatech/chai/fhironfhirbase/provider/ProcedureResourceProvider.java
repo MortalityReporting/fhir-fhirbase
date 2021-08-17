@@ -45,10 +45,11 @@ import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.param.DateParam;
-import ca.uhn.fhir.rest.param.ReferenceOrListParam;
+import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
+import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
@@ -212,8 +213,10 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Procedure.SP_IDENTIFIER) TokenParam theProcecureIdentifier,
 			@OptionalParam(name = Procedure.SP_DATE) DateParam theDateParam,
 			@OptionalParam(name = Procedure.SP_ENCOUNTER) ReferenceParam theEncounterParam,
-			@OptionalParam(name = Procedure.SP_SUBJECT) ReferenceOrListParam theSubjectParams,
-			@OptionalParam(name = Procedure.SP_PATIENT) ReferenceOrListParam thePatientParams,
+			@OptionalParam(name = Procedure.SP_SUBJECT, chainWhitelist = { "", USCorePatient.SP_NAME,
+					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam theSubjects,
+			@OptionalParam(name = Procedure.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME,
+					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam thePatients,
 			@OptionalParam(name = Procedure.SP_PERFORMER) ReferenceParam thePerformerParam, @Sort SortSpec theSort,
 
 			@IncludeParam(allow = { "Procedure:patient", "Procedure:performer",
@@ -258,23 +261,26 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 			whereParameters.add("proc.resource->>'encounter' like '%" + theEncounterParam.getValue() + "%'");
 			returnAll = false;
 		}
-		if (theSubjectParams != null) {
-			for (ReferenceParam theSubject : theSubjectParams.getValuesAsQueryTokens()) {
-				String where = constructSubjectWhereParameter(theSubject, "proc");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
-			}
-			returnAll = false;
-		}
 
-		if (thePatientParams != null) {
-			for (ReferenceParam thePatient : thePatientParams.getValuesAsQueryTokens()) {
-				String where = constructPatientWhereParameter(thePatient, "proc");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
+		if (theSubjects != null || thePatients != null) {
+			fromStatement += " join patient p on proc.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+
+			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
 			}
+			fromStatement = updatedFromStatement;
+
+			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
+			}
+			fromStatement = updatedFromStatement;
+			
 			returnAll = false;
 		}
 
@@ -285,8 +291,8 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;

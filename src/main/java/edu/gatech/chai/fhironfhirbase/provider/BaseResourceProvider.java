@@ -6,22 +6,30 @@ import java.util.Date;
 import java.util.List;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.OperationOutcome;
+import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ParamPrefixEnum;
+import ca.uhn.fhir.rest.param.ReferenceAndListParam;
+import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
+import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.operation.FhirbaseMapping;
-import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
-import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 public abstract class BaseResourceProvider implements IResourceProvider {
+	private static final Logger logger = LoggerFactory.getLogger(BaseResourceProvider.class);
+
 	protected int preferredPageSize = 30;
 	
 	private FhirbaseMapping fhirbaseMapping;
@@ -108,10 +116,10 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 
 	protected String constructWhereStatement(List<String> whereParameters, SortSpec theSort) {
 		String whereStatement = "";
-		if (whereParameters.size() > 0) {
+		if (!whereParameters.isEmpty()) {
 			whereStatement = " WHERE ";
 			for (String whereParameter : whereParameters) {
-				whereStatement += whereParameter + " AND ";
+				whereStatement += "(" + whereParameter + ") AND ";
 			}
 
 			whereStatement = whereStatement.substring(0, whereStatement.length() - 5);
@@ -125,6 +133,27 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return whereStatement;
 	}
 	
+	protected String constructFromStatementPatientChain(String fromStatement, String chainName) {
+		if (USCorePatient.SP_ADDRESS_CITY.equals(chainName)
+			|| USCorePatient.SP_ADDRESS_COUNTRY.equals(chainName)
+			|| USCorePatient.SP_ADDRESS_POSTALCODE.equals(chainName)
+			|| USCorePatient.SP_ADDRESS_STATE.equals(chainName)
+			|| USCorePatient.SP_ADDRESS_USE.equals(chainName)) {
+			fromStatement = constructFromStatementPath(fromStatement, "addresses", "p.resource->'address'");
+		} else if (USCorePatient.SP_FAMILY.equals(chainName)
+			|| USCorePatient.SP_GIVEN.equals(chainName)) {
+			fromStatement = constructFromStatementPath(fromStatement, "names", "p.resource->'name'");
+		} else if (USCorePatient.SP_EMAIL.equals(chainName)
+			|| USCorePatient.SP_PHONE.equals(chainName)
+			|| USCorePatient.SP_TELECOM.equals(chainName)) {
+			fromStatement = constructFromStatementPath(fromStatement, "telecoms", "p.resource->'contact'->'telecom'");
+		} else if (USCorePatient.SP_IDENTIFIER.equals(chainName)) {
+			fromStatement = constructFromStatementPath(fromStatement, "identifiers", "p.resource->'identifier'");
+		}
+
+		return fromStatement;
+	}
+
 	protected String constructFromStatementJson(String fromStatement, String alias, String json) {
 		if (!fromStatement.contains(alias)) {
 			fromStatement += ", json_array_elements("+json+") " + alias;
@@ -141,6 +170,36 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return fromStatement;
 	}
 
+	protected String constructFromWherePatients(String fromStatement, List<String> whereParameters, ReferenceAndListParam theReferenceParts) {
+		if (theReferenceParts != null) {
+			for (ReferenceOrListParam theReferences : theReferenceParts.getValuesAsQueryTokens()) {
+				String whereOr = "";
+				for (ReferenceParam theReference : theReferences.getValuesAsQueryTokens()) {
+					if (theReference.getResourceType() != null && !"Patient".equals(theReference.getResourceType())) {
+						logger.warn("Unsupported resource found: " + theReference.getResourceType());
+						return "";
+					}
+
+					String where = constructPatientWhereParameter(theReference);
+					if (whereOr.isEmpty()) {
+						whereOr = where;
+					} else {
+						whereOr += " or " + where;
+					}
+					if (theReference.getChain() != null && !theReference.getChain().isEmpty()) {
+						fromStatement = constructFromStatementPatientChain(fromStatement, theReference.getChain());
+					}	
+				}
+
+				if (whereOr != null && !whereOr.isEmpty()) {
+					whereParameters.add(whereOr);
+				}
+			}
+		}
+
+		return fromStatement;
+	}
+
 //	protected String constructFromStatementTokens(TokenOrListParam tokenList, String fromStatement, String alias, String pathToCoding) {
 //		List<TokenParam> tokens = tokenList.getValuesAsQueryTokens();
 //		if (tokens.size() > 0) {
@@ -152,9 +211,9 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 //		return fromStatement;
 //	}
 	
-	protected String constructIdentifierWhereParameter(TokenParam theToken) {
-		return null;
-	}
+	// protected String constructIdentifierWhereParameter(TokenParam theToken) {
+	// 	return null;
+	// }
 	
 	protected String constructTypeWhereParameter(TokenOrListParam theOrTypes) {
 		List<TokenParam> types = theOrTypes.getValuesAsQueryTokens();
@@ -234,60 +293,125 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		}
 		return null;
 	}
-
-	protected String constructSubjectWhereParameter(ReferenceParam theSubject, String tableAlias) {
-		if (theSubject != null) {
-//			if (theSubject.getResourceType() != null && 
-//					theSubject.getResourceType().equals(PatientResourceProvider.getType())) {
-//				return constructPatientWhereParameter(theSubject, tableAlias);
-//			} else {
-//				// If resource is null, we assume Patient.
-//				if (theSubject.getResourceType() == null) {
-//					return constructPatientWhereParameter(theSubject, tableAlias);
-//				} 
-//			}
-
-			if (theSubject.getResourceType() != null) { 
-				return tableAlias + ".resource->'subject'->>'reference' like '%" + theSubject.getValue() + "%'";
-			} else {
-				return constructPatientWhereParameter(theSubject, tableAlias);
-			}
-			
-		}
-		
-		return null;
-	}
 	
-	protected String constructPatientWhereParameter(ReferenceParam thePatient, String tableAlias) {
+	protected String constructPatientWhereParameter(ReferenceParam thePatient) {
+		String where = "";
+
 		if (thePatient != null) {
+			String theValue = thePatient.getValue();
+
 			String patientChain = thePatient.getChain();
 			if (patientChain != null) {
 				if (USCorePatient.SP_NAME.equals(patientChain)) {
-					String thePatientName = thePatient.getValue();
-					String where = patientNameSearch(thePatientName, tableAlias);
-					if (where != null && !where.isEmpty()) {
-						return where;
+					if (where.isEmpty()) {
+						where = "p.resource->>'name' like " + "'%" + theValue + "%'";
+ 					} else {
+						where += " and p.resource->>'name' like " + "'%" + theValue + "%'";
+					}
+				} else if (USCorePatient.SP_ADDRESS_CITY.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "addresses @> '{\"city\":\""+ theValue +"\"}'";
+ 					} else {
+						where += " and addresses @> '{\"city\":\""+ theValue +"\"}'";
+					}
+				} else if (USCorePatient.SP_ADDRESS_COUNTRY.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "addresses @> '{\"country\":\""+ theValue +"\"}'";
+ 					} else {
+						where += " and addresses @> '{\"country\":\""+ theValue +"\"}'";
+					}
+				} else if (USCorePatient.SP_ADDRESS_POSTALCODE.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "addresses @> '{\"postalCode\":\""+ theValue +"\"}'";
+ 					} else {
+						where += " and addresses @> '{\"postalCode\":\""+ theValue +"\"}'";
+					}
+				} else if (USCorePatient.SP_ADDRESS_STATE.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "addresses @> '{\"state\":\""+ theValue +"\"}'";
+ 					} else {
+						where += " and addresses @> '{\"state\":\""+ theValue +"\"}'";
+					}
+				} else if (USCorePatient.SP_ADDRESS_USE.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "addresses @> '{\"use\":\""+ theValue +"\"}'";
+ 					} else {
+						where += " and addresses @> '{\"use\":\""+ theValue +"\"}'";
+					}
+				} else if (USCorePatient.SP_BIRTHDATE.equals(patientChain)) {
+					DateParam theDateParam = thePatient.toDateParam(getFhirContext());
+					String birthDateWhere = constructDateWhereParameter(theDateParam, "patient", "birthDate");
+					if (where.isEmpty()) {
+						where = birthDateWhere;
+ 					} else {
+						where += " and " + birthDateWhere;
+					}
+				} else if (USCorePatient.SP_DEATH_DATE.equals(patientChain)) {
+					DateParam theDateParam = thePatient.toDateParam(getFhirContext());
+					String deathDateWhere = constructDateWhereParameter(theDateParam, "patient", "deceasedDateTime");
+					if (where.isEmpty()) {
+						where = deathDateWhere;
+ 					} else {
+						where += " and " + deathDateWhere;
+					}
+				} else if (USCorePatient.SP_EMAIL.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "telecoms @> '{\"system\":\"email\", \"value\":\""+ theValue +"\"}'";
+ 					} else {
+						where += " and telecoms @> '{\"system\":\"email\", \"value\":\""+ theValue +"\"}'";
+					}
+				} else if (USCorePatient.SP_FAMILY.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "names @> '{\"family\":\""+ theValue +"\"}'";
+ 					} else {
+						where += " and names @> '{\"family\":\""+ theValue +"\"}'";
+					}
+				} else if (USCorePatient.SP_GENDER.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "p.resource->>'gender' = " + "'" + theValue + "'";
+ 					} else {
+						where += " and p.resource->>'gender' = " + "'" + theValue + "'";
+					}
+				} else if (USCorePatient.SP_GIVEN.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "names @> '{\"given\":[\""+ theValue + "\"]}'";
+ 					} else {
+						where += " and names @> '{\"given\":[\""+ theValue + "\"]}'";
+					}
+				} else if (USCorePatient.SP_PHONE.equals(patientChain)) {
+					if (where.isEmpty()) {
+						where = "telecoms @> '{\"system\":\"phone\", \"value\":\""+ theValue +"\"}'";
+ 					} else {
+						where += " and telecoms @> '{\"system\":\"phone\", \"value\":\""+ theValue +"\"}'";
+					}
+				} else if (USCorePatient.SP_TELECOM.equals(patientChain)) {
+					TokenParam tokenPatient = thePatient.toTokenParam(getFhirContext());
+					if (where.isEmpty()) {
+						where = "telecoms @> '{\"system\":\"" + tokenPatient.getSystem() + "\", \"value\":\""+ tokenPatient.getValue() +"\"}'";
+ 					} else {
+						where += " and telecoms @> '{\"system\":\"" + tokenPatient.getSystem() + "\", \"value\":\""+ tokenPatient.getValue() +"\"}'";
 					}
 				} else if (USCorePatient.SP_IDENTIFIER.equals(patientChain)) {
 					TokenParam identifierToken = thePatient.toTokenParam(getFhirContext());
-					String where = identifierSearch(identifierToken, tableAlias);
-					if (where != null && !where.isEmpty()) {
-						return where;
+					if (where.isEmpty()) {
+						where = "identifiers @> '{\"system\":\"" + identifierToken.getSystem() + "\", \"value\":\""+ identifierToken.getValue() +"\"}'";
+ 					} else {
+						where += " and identifiers @> '{\"system\":\"" + identifierToken.getSystem() + "\", \"value\":\""+ identifierToken.getValue() +"\"}'";
 					}
 				}
-			} 
-			
-			return tableAlias + ".resource->'subject'->>'reference' like '%Patient/" + thePatient.getValue() + "%'";
+			} else {
+				where = "p.resource->>'id' like '" + thePatient.getIdPart() + "'";
+			}
 		}
 
-		return null;
+		return where;
 	}
 
 	protected String constructCodeWhereParameter(TokenOrListParam theOrCodes) {
 		List<TokenParam> codes = theOrCodes.getValuesAsQueryTokens();
 
 		String whereCodings = "";
-		if (codes.size() > 0) {
+		if (!codes.isEmpty()) {
 			for (TokenParam code : codes) {
 				String system = code.getSystem();
 				String value = code.getValue();
@@ -314,68 +438,76 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return whereCodings;
 	}
 
-	protected String patientNameSearch(String name, String alias) {
-		String sql = "SELECT * FROM patient WHERE resource->>name like '" + name + "'";
-		List<IBaseResource> patientResources;
-		
-		String retVal = null;
-		try {
-			patientResources = fhirbaseMapping.search(sql, USCorePatient.class);
-			for (IBaseResource patientResource: patientResources) {
-				String id = patientResource.getIdElement().getIdPart();
-				if (retVal == null) {
-					retVal = alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
-				} else {
-					retVal = retVal + " or " + alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
-				}
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-			ThrowFHIRExceptions.internalErrorException(e.getMessage());
-		}
-
-		return retVal;
+	protected void throwSimulatedOO(String errorCode) {
+		OperationOutcome outcome = new OperationOutcome();
+		CodeableConcept detailCode = new CodeableConcept();
+		detailCode.setText(errorCode);
+		outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+		throw new InvalidRequestException(errorCode, outcome);
 	}
+
+	// protected String patientNameSearch(String name, String alias) {
+	// 	String sql = "SELECT * FROM patient WHERE resource->>name like '" + name + "'";
+	// 	List<IBaseResource> patientResources;
+		
+	// 	String retVal = null;
+	// 	try {
+	// 		patientResources = fhirbaseMapping.search(sql, USCorePatient.class);
+	// 		for (IBaseResource patientResource: patientResources) {
+	// 			String id = patientResource.getIdElement().getIdPart();
+	// 			if (retVal == null) {
+	// 				retVal = alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
+	// 			} else {
+	// 				retVal = retVal + " or " + alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
+	// 			}
+	// 		}
+	// 	} catch (Exception e) {
+	// 		e.printStackTrace();
+	// 		ThrowFHIRExceptions.internalErrorException(e.getMessage());
+	// 	}
+
+	// 	return retVal;
+	// }
 	
-	protected String identifierSearch(TokenParam identifierToken, String alias) {
-		String retVal = null;
+	// protected String identifierSearch(TokenParam identifierToken, String alias) {
+	// 	String retVal = null;
 		
-		String sql = "SELECT * FROM patient p " + constructFromStatementPath("", "identifiers", "p.resource->'identifier'") + " WHERE ";
-		List<IBaseResource> resources;
+	// 	String sql = "SELECT * FROM patient p " + constructFromStatementPath("", "identifiers", "p.resource->'identifier'") + " WHERE ";
+	// 	List<IBaseResource> resources;
 		
-		String system = identifierToken.getSystem();
-		String value = identifierToken.getValue();
+	// 	String system = identifierToken.getSystem();
+	// 	String value = identifierToken.getValue();
 		
-		try {
-			String where = null;
-			if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
-				where = "identifiers @> '{\"system\": \"" + system + "\", \"value\": \"" + value + "\"}'::jsonb";
-			} else if (system != null && !system.isEmpty()) {
-				where = "identifiers @> '{\"system\": \"" + system + "\"}'::jsonb";
-			} else if (value != null && !value.isEmpty()){
-				where = "identifiers @> '{\"value\": \"" + value + "\"}'::jsonb";
-			}
+	// 	try {
+	// 		String where = null;
+	// 		if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
+	// 			where = "identifiers @> '{\"system\": \"" + system + "\", \"value\": \"" + value + "\"}'::jsonb";
+	// 		} else if (system != null && !system.isEmpty()) {
+	// 			where = "identifiers @> '{\"system\": \"" + system + "\"}'::jsonb";
+	// 		} else if (value != null && !value.isEmpty()){
+	// 			where = "identifiers @> '{\"value\": \"" + value + "\"}'::jsonb";
+	// 		}
 
-			if (where == null) return null;
+	// 		if (where == null) return null;
 			
-			sql += where; 
-			resources = fhirbaseMapping.search(sql, USCorePatient.class);
+	// 		sql += where; 
+	// 		resources = fhirbaseMapping.search(sql, USCorePatient.class);
 
-			for (IBaseResource resource: resources) {
-				String id = resource.getIdElement().getIdPart();
+	// 		for (IBaseResource resource: resources) {
+	// 			String id = resource.getIdElement().getIdPart();
 				
-				if (retVal == null) {
-					retVal = alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
-				} else {
-					retVal = retVal + " or " + alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
-				}				
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-			ThrowFHIRExceptions.internalErrorException(e.getMessage());
-		}
+	// 			if (retVal == null) {
+	// 				retVal = alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
+	// 			} else {
+	// 				retVal = retVal + " or " + alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
+	// 			}				
+	// 		}
+	// 	} catch (Exception e) {
+	// 		e.printStackTrace();
+	// 		ThrowFHIRExceptions.internalErrorException(e.getMessage());
+	// 	}
 
-		return retVal;
-	}
+	// 	return retVal;
+	// }
 
 }

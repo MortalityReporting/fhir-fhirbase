@@ -161,8 +161,16 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 		String fromStatement = getTableName() + " rp";
 
 		if (thePatients != null) {
+			fromStatement += " join patient p on rp.resource->'patient'->>'reference' = concat('Patient/', p.resource->>'id')";
+		}
+
+		if (thePatients != null) {
 			for (ReferenceParam thePatient : thePatients.getValuesAsQueryTokens()) {
-				String where = constructPatientWhereParameter(thePatient, "rp");
+				String where = constructPatientWhereParameter(thePatient);
+				if (thePatient.getChain() != null && !thePatient.getChain().isEmpty()) {
+					fromStatement = constructFromStatementPatientChain(fromStatement, thePatient.getChain());
+				}
+
 				if (where != null && !where.isEmpty()) {
 					whereParameters.add(where);
 				}

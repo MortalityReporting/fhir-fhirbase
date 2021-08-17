@@ -8,10 +8,13 @@ import java.util.UUID;
 
 import javax.annotation.PostConstruct;
 
+import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.BooleanType;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
+import org.hl7.fhir.r4.model.Bundle.BundleLinkComponent;
+import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
@@ -23,6 +26,7 @@ import org.hl7.fhir.r4.model.ListResource;
 import org.hl7.fhir.r4.model.Meta;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
+import org.hl7.fhir.r4.model.Parameters;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.RelatedPerson;
 import org.hl7.fhir.r4.model.Resource;
@@ -62,12 +66,14 @@ import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
+import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.DateRangeParam;
-import ca.uhn.fhir.rest.param.ReferenceOrListParam;
-import ca.uhn.fhir.rest.param.ReferenceParam;
+import ca.uhn.fhir.rest.param.ReferenceAndListParam;
+import ca.uhn.fhir.rest.param.StringAndListParam;
 import ca.uhn.fhir.rest.param.StringOrListParam;
 import ca.uhn.fhir.rest.param.StringParam;
+import ca.uhn.fhir.rest.param.TokenAndListParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.param.UriOrListParam;
@@ -163,10 +169,38 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	public IBundleProvider findCompositionsByParams(
 			@OptionalParam(name = Composition.SP_TYPE) TokenOrListParam theOrTypes,
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
-			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME,
-					USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam thePatients,
-			@OptionalParam(name = Composition.SP_SUBJECT, chainWhitelist = { "", USCorePatient.SP_NAME,
-					USCorePatient.SP_IDENTIFIER }) ReferenceOrListParam theSubjects,
+			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", 
+					USCorePatient.SP_ADDRESS_CITY,
+					USCorePatient.SP_ADDRESS_COUNTRY,
+					USCorePatient.SP_ADDRESS_POSTALCODE,
+					USCorePatient.SP_ADDRESS_STATE,
+					USCorePatient.SP_ADDRESS_USE,
+					USCorePatient.SP_BIRTHDATE,
+					USCorePatient.SP_DEATH_DATE,
+					USCorePatient.SP_EMAIL,
+					USCorePatient.SP_FAMILY,
+					USCorePatient.SP_GENDER,
+					USCorePatient.SP_GIVEN,
+					USCorePatient.SP_NAME,
+					USCorePatient.SP_PHONE,
+					USCorePatient.SP_TELECOM,
+					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam thePatients,
+			@OptionalParam(name = Composition.SP_SUBJECT, chainWhitelist = { "", 
+					USCorePatient.SP_ADDRESS_CITY,
+					USCorePatient.SP_ADDRESS_COUNTRY,
+					USCorePatient.SP_ADDRESS_POSTALCODE,
+					USCorePatient.SP_ADDRESS_STATE,
+					USCorePatient.SP_ADDRESS_USE,
+					USCorePatient.SP_BIRTHDATE,
+					USCorePatient.SP_DEATH_DATE,
+					USCorePatient.SP_EMAIL,
+					USCorePatient.SP_FAMILY,
+					USCorePatient.SP_GENDER,
+					USCorePatient.SP_GIVEN,
+					USCorePatient.SP_NAME,
+					USCorePatient.SP_PHONE,
+					USCorePatient.SP_TELECOM,
+					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam theSubjects,
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
@@ -192,37 +226,36 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
-		if (theSubjects != null) {
-			for (ReferenceParam theSubject : theSubjects.getValuesAsQueryTokens()) {
-				String where = constructSubjectWhereParameter(theSubject, "comp");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
-			}
+		if (theSubjects != null || thePatients != null) {
+			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 
-			returnAll = false;
-		}
-
-		if (thePatients != null) {
-			for (ReferenceParam thePatient : thePatients.getValuesAsQueryTokens()) {
-				String where = constructPatientWhereParameter(thePatient, "comp");
-				if (where != null && !where.isEmpty()) {
-					whereParameters.add(where);
-				}
+			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
 			}
+			fromStatement = updatedFromStatement;
+
+			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
+			}
+			fromStatement = updatedFromStatement;
 
 			returnAll = false;
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty())
-				return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
-		String query = "SELECT * FROM " + fromStatement + whereStatement;
+		String query = "SELECT comp.resource as resource FROM " + fromStatement + whereStatement;
 
 		logger.debug("query count:" + queryCount + "\nquery:" + query);
 
@@ -359,59 +392,265 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
 			@IdParam(optional=true) IdType theCompositionId,
 			@OperationParam(name = "id") UriOrListParam theIds, 
-			@OperationParam(name = "decedent.address") StringOrListParam theAddresses,
-			@OperationParam(name = "decedent.address-city") StringOrListParam theAddressCities,
-			@OperationParam(name = "decedent.address-postalcode") StringOrListParam theAddressPostalCodes,
-			@OperationParam(name = "decedent.address-state") StringOrListParam theAddressStates,
-			@OperationParam(name = "decedent.address-use") TokenOrListParam theAddressUses,
+			@OperationParam(name = "decedent.address-city") StringAndListParam theAddressCities,
+			@OperationParam(name = "decedent.address-postalcode") StringAndListParam theAddressPostalCodes,
+			@OperationParam(name = "decedent.address-state") StringAndListParam theAddressStates,
+			@OperationParam(name = "decedent.address-use") TokenAndListParam theAddressUses,
 			@OperationParam(name = "decedent.birthdate") DateRangeParam theBirthDateRange,
 			@OperationParam(name = "decedent.death-date") DateRangeParam theDeathDateRange,
-			@OperationParam(name = "decedent.email") TokenOrListParam theEmails,
-			@OperationParam(name = "decedent.family") StringOrListParam theFamilies,
-			@OperationParam(name = "decedent.gender") TokenOrListParam theGenders,
-			@OperationParam(name = "decedent.given") StringOrListParam theGivens,
-			@OperationParam(name = "decedent.identifier") TokenOrListParam theIdentifiers,
-			@OperationParam(name = "decedent.name") StringOrListParam theNames,
-			@OperationParam(name = "decedent.phone") StringOrListParam thePhones,
-			@OperationParam(name = "decedent.telecom") TokenOrListParam theTelecoms,
+			@OperationParam(name = "decedent.email") TokenAndListParam theEmails,
+			@OperationParam(name = "decedent.family") StringAndListParam theFamilies,
+			@OperationParam(name = "decedent.gender") TokenAndListParam theGenders,
+			@OperationParam(name = "decedent.given") StringAndListParam theGivens,
+			@OperationParam(name = "decedent.identifier") TokenAndListParam theIdentifiers,
+			@OperationParam(name = "decedent.name") StringAndListParam theNames,
+			@OperationParam(name = "decedent.phone") TokenAndListParam thePhones,
+			@OperationParam(name = "decedent.telecom") TokenAndListParam theTelecoms,
 			@OperationParam(name = "case-id") StringOrListParam theCaseIds) {
 				
-		OperationOutcome outcome = new OperationOutcome();
-		
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
 		setupClientForAuth(client);
 
-		if (theCompositionId != null) {
-			// if we have the composition id, then all search parameters will be ignored.
-			return (Bundle) client.operation().onInstance(theCompositionId).named("$document").withNoParameters(Parameters.class).execute();
-		}
+		int totalSize = 0;
 
 		Bundle retBundle = new Bundle();
-		retBundle.setType(BundleTypeEnum.SEARCHSET);
+		if (theCompositionId != null) {
+			// if we have the composition id, then all search parameters will be ignored.
+			return client
+				.operation()
+				.onInstance(theCompositionId)
+				.named("$document")
+				.withNoParameters(Parameters.class)
+				.returnResourceType(Bundle.class)
+				.execute();
+		}
+
+		retBundle.setType(BundleType.SEARCHSET);
+		retBundle.setId(UUID.randomUUID().toString());
+		retBundle.setTotal(totalSize);
+		BundleLinkComponent bundleLinkComponent = new BundleLinkComponent(new StringType("self"), new UriType (theRequestDetails.getCompleteUrl()));
+		retBundle.addLink(bundleLinkComponent);
 
 		if (theIds != null) {
 			// Composition ID tokens. This is to retrieve documents for the IDs.
 			// This will ignore other search parameters.
 			for (UriParam theId: theIds.getValuesAsQueryTokens()) {
 				String id = theId.getValue();
-				Bundle compositionBundle = (Bundle) client.operation().onInstance(new IdType("Composition", id)).named("$document").withNoParameters(Parameters.class).execute();
+				Bundle compositionBundle = client
+					.operation().onInstance(new IdType("Composition", id))
+					.named("$document")
+					.withNoParameters(Parameters.class)
+					.returnResourceType(Bundle.class)
+					.execute();
 				BundleEntryComponent entryComponent = new BundleEntryComponent();
 				entryComponent.setFullUrl(compositionBundle.getId());
 				entryComponent.setResource(compositionBundle);
 				retBundle.addEntry(entryComponent);
+
+				totalSize++;
 			}
+
+			retBundle.setTotal(totalSize);
+
+			return retBundle;
 		}
 		
 		if (theCaseIds != null) {
 			for (StringParam theCaseId: theCaseIds.getValuesAsQueryTokens()) {
-				System.out.println("MDI-DOCUMENT: case-id="+theCaseId.getValue());
+				logger.debug("MDI-DOCUMENT: case-id="+theCaseId.getValue());
 
 				// Search the composition that has the identifier with this value.
 
 			}
 		}
-		
+
+		IQuery<IBaseBundle> query = client.search().forResource(Composition.class);
+
+		List<String> addressCitySearchParams = new ArrayList<String>();
+		if (theAddressCities != null) {
+			for (StringOrListParam theAddressCitiesAnd : theAddressCities.getValuesAsQueryTokens()) {
+				addressCitySearchParams.clear();
+				for (StringParam theAddressCity : theAddressCitiesAnd.getValuesAsQueryTokens()) {
+					addressCitySearchParams.add(theAddressCity.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_CITY.matches().values(addressCitySearchParams)));
+			}
+		}
+
+		List<String> addressPostalCodeSearchParams = new ArrayList<String>();
+		if (theAddressPostalCodes != null) {
+			for (StringOrListParam theAddressPostalCodesAnd : theAddressPostalCodes.getValuesAsQueryTokens()) {
+				addressPostalCodeSearchParams.clear();
+				for (StringParam theAddressPostalCode : theAddressPostalCodesAnd.getValuesAsQueryTokens()) {
+					addressPostalCodeSearchParams.add(theAddressPostalCode.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_POSTALCODE.matches().values(addressPostalCodeSearchParams)));
+			}
+		}
+
+		List<String> addressStateSearchParams = new ArrayList<String>();
+		if (theAddressStates != null) {
+			for (StringOrListParam theAddressStatesAnd : theAddressStates.getValuesAsQueryTokens()) {
+				addressStateSearchParams.clear();
+				for (StringParam theAddressState : theAddressStatesAnd.getValuesAsQueryTokens()) {
+					addressStateSearchParams.add(theAddressState.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_STATE.matches().values(addressStateSearchParams)));
+			}
+		}
+
+		List<String> addressUseSearchParams = new ArrayList<String>();
+		if (theAddressUses != null) {
+			for (TokenOrListParam theAddressUseAnd: theAddressUses.getValuesAsQueryTokens()) {
+				addressUseSearchParams.clear();
+				for (TokenParam theAddressUse : theAddressUseAnd.getValuesAsQueryTokens()) {
+					addressUseSearchParams.add(theAddressUse.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_USE.exactly().codes(addressCitySearchParams)));
+			}
+		}
+
+		if (theBirthDateRange != null) {
+			DateParam lowerDateParam = theBirthDateRange.getLowerBound();
+			DateParam upperDateParam = theBirthDateRange.getUpperBound();
+			if (lowerDateParam != null && upperDateParam != null) {
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())))
+					.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
+
+			} else if (lowerDateParam != null) {
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())));
+			} else if (upperDateParam != null) {
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
+			}
+		}
+
+		List<String> emailSearchParams = new ArrayList<String>();
+		if (theEmails != null) {
+			for (TokenOrListParam theEmailAnd: theEmails.getValuesAsQueryTokens()) {
+				emailSearchParams.clear();
+				for (TokenParam theEmail : theEmailAnd.getValuesAsQueryTokens()) {
+					emailSearchParams.add(theEmail.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.EMAIL.exactly().codes(emailSearchParams)));
+			}
+		}
+
+		List<String> familySearchParams = new ArrayList<String>();
+		if (theFamilies != null) {
+			for (StringOrListParam theFamilyAnd : theFamilies.getValuesAsQueryTokens()) {
+				familySearchParams.clear();
+				for (StringParam theFamily : theFamilyAnd.getValuesAsQueryTokens()) {
+					familySearchParams.add(theFamily.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
+			}
+		}
+
+		List<String> genderSearchParams = new ArrayList<String>();
+		if (theGenders != null) {
+			for (TokenOrListParam theGenderAnd: theGenders.getValuesAsQueryTokens()) {
+				genderSearchParams.clear();
+				for (TokenParam theGender : theGenderAnd.getValuesAsQueryTokens()) {
+					genderSearchParams.add(theGender.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
+			}
+		}
+
+		List<String> givenSearchParams = new ArrayList<String>();
+		if (theGivens != null) {
+			for (StringOrListParam theGivenAnd : theGivens.getValuesAsQueryTokens()) {
+				givenSearchParams.clear();
+				for (StringParam theGiven : theGivenAnd.getValuesAsQueryTokens()) {
+					givenSearchParams.add(theGiven.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));
+			}
+		}
+
+		List<String> identifierSearchParams = new ArrayList<String>();
+		if (theIdentifiers != null) {
+			for (TokenOrListParam theIdentifierAnd: theIdentifiers.getValuesAsQueryTokens()) {
+				identifierSearchParams.clear();
+				for (TokenParam theIdentifier : theIdentifierAnd.getValuesAsQueryTokens()) {
+					identifierSearchParams.add(theIdentifier.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.IDENTIFIER.exactly().codes(identifierSearchParams)));
+			}
+		}
+
+		List<String> nameSearchParams = new ArrayList<String>();
+		if (theNames != null) {
+			for (StringOrListParam theNamesAnd: theNames.getValuesAsQueryTokens()) {
+				nameSearchParams.clear();
+				for (StringParam theName : theNamesAnd.getValuesAsQueryTokens()) {
+					String nameValue = theName.getValue();
+					if ("ERROR:DEMO-ERROR".equals(nameValue)) {
+						throwSimulatedOO(nameValue);
+					}
+					nameSearchParams.add(nameValue);
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.NAME.matches().values(nameSearchParams)));
+			}
+
+		}
+
+		List<String> phoneSearchParams = new ArrayList<String>();
+		if (thePhones != null) {
+			for (TokenOrListParam thePhoneAnd: thePhones.getValuesAsQueryTokens()) {
+				phoneSearchParams.clear();
+				for (TokenParam thePhone : thePhoneAnd.getValuesAsQueryTokens()) {
+					phoneSearchParams.add(thePhone.getValue());
+				}
+				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.PHONE.exactly().codes(phoneSearchParams)));
+			}
+
+		}
+
+		List<String> telecomSearchParams = new ArrayList<String>();
+		if (theTelecoms != null) {
+			for (TokenOrListParam theTelecomAnd: theTelecoms.getValuesAsQueryTokens()) {
+				telecomSearchParams.clear();
+				String systemName = "";
+				for (TokenParam theTelecom : theTelecomAnd.getValuesAsQueryTokens()) {
+					if (systemName.isEmpty()) {
+						systemName = theTelecom.getSystem();
+					}
+					telecomSearchParams.add(theTelecom.getValue());
+				}
+
+				if (systemName.isEmpty()) {
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.TELECOM.exactly().codes(telecomSearchParams)));
+				} else {
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.TELECOM.exactly().systemAndValues(systemName, telecomSearchParams)));
+				}
+			}
+
+		}
+
+		Bundle compositionsBundle = query.returnBundle(Bundle.class).execute();
+
+		List<BundleEntryComponent> entries = compositionsBundle.getEntry();
+		for (BundleEntryComponent entry : entries) {
+			String compositionId = entry.getResource().getIdElement().getIdPart();
+
+			Bundle compositionBundle = client
+				.operation().onInstance(new IdType("Composition", compositionId))
+				.named("$document")
+				.withNoParameters(Parameters.class)
+				.returnResourceType(Bundle.class)
+				.execute();
+			BundleEntryComponent entryComponent = new BundleEntryComponent();
+			entryComponent.setFullUrl(compositionBundle.getId());
+			entryComponent.setResource(compositionBundle);
+			retBundle.addEntry(entryComponent);
+
+			totalSize++;
+		}
+
+		retBundle.setTotal(totalSize);
+
 		return retBundle;
 	}
 	
@@ -782,7 +1021,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		return retBundle;
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 
@@ -805,6 +1044,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
+			logger.debug("calling database: "+myQuery);
 			try {
 				retVal.addAll(getFhirbaseMapping().search(myQuery, getResourceType()));
 			} catch (SQLException e) {

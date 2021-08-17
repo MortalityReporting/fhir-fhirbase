@@ -39,6 +39,8 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.param.ReferenceAndListParam;
+import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
@@ -161,7 +163,7 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 
 	@Search()
 	public IBundleProvider findDevicesByParams(
-			@OptionalParam(name=MyDevice.SP_PATIENT, chainWhitelist={"", USCorePatient.SP_NAME}) ReferenceParam thePatient, 
+			@OptionalParam(name=MyDevice.SP_PATIENT, chainWhitelist={"", USCorePatient.SP_NAME}) ReferenceAndListParam thePatients, 
 			@OptionalParam(name=MyDevice.SP_TYPE) TokenOrListParam theOrTypes,
 			@Sort SortSpec theSort
 			) {
@@ -180,12 +182,19 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 		
-		if (thePatient != null) {
-			String where = constructPatientWhereParameter(thePatient, "d");
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
+		if (thePatients != null) {
+			fromStatement += " join patient p on d.resource->'patient'->>'reference' = concat('Patient/', p.resource->>'id')";
+
+			String updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+			if (updatedFromStatement.isEmpty()) {
+				// unsupported resource is included in the search chain
+				return null;
 			}
+
+			fromStatement = updatedFromStatement;
+			
 			returnAll = false;
+
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);		
