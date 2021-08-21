@@ -163,8 +163,8 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) { 
+			return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
@@ -228,7 +228,7 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 		// TODO: Add validation here
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 
@@ -243,8 +243,6 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
 			
-			List<String> includes = new ArrayList<String>();
-
 			String myQuery = query;			
 			if (toIndex - fromIndex > 0) {
 				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;

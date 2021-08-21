@@ -59,8 +59,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 @Scope("prototype")
 public class PractitionerResourceProvider extends BaseResourceProvider {
 
-	private int preferredPageSize = 30;
-
 	public PractitionerResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
@@ -218,8 +216,8 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
@@ -298,7 +296,7 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 		}
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 
@@ -313,8 +311,6 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
 			
-			List<String> includes = new ArrayList<String>();
-
 			String myQuery = query;			
 			if (toIndex - fromIndex > 0) {
 				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;

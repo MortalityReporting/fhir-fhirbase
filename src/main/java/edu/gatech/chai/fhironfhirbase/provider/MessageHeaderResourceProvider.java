@@ -147,8 +147,8 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			 return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
@@ -211,7 +211,7 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 		return retVal;
 	}
 	
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 
@@ -226,9 +226,6 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
 			
-			// _Include
-			List<String> includes = new ArrayList<String>();
-
 			String myQuery = query;			
 			if (toIndex - fromIndex > 0) {
 				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;

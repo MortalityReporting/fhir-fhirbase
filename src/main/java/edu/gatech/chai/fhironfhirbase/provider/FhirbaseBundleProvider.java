@@ -28,7 +28,7 @@ public abstract class FhirbaseBundleProvider implements IBundleProvider {
 	Integer preferredPageSize;
 	Integer totalSize;
 
-	public FhirbaseBundleProvider (String query) {
+	protected FhirbaseBundleProvider (String query) {
 		this.searchTime = InstantType.withCurrentTime();
 		this.query = query;
 	}

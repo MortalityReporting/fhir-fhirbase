@@ -207,24 +207,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		String fromStatement = getTableName() + " comp";
 
 		boolean returnAll = true;
-		if (theOrTypes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "types", "comp.resource->'type'->'coding'");
-			String where = constructTypeWhereParameter(theOrTypes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-
-			returnAll = false;
-		}
-
-		if (theDate != null) {
-			String where = constructDateWhereParameter(theDate, "comp", "date");
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-
-			returnAll = false;
-		}
 
 		if (theSubjects != null || thePatients != null) {
 			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
@@ -244,6 +226,25 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				return null;
 			}
 			fromStatement = updatedFromStatement;
+
+			returnAll = false;
+		}
+
+		if (theOrTypes != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "types", "comp.resource->'type'->'coding'");
+			String where = constructTypeWhereParameter(theOrTypes);
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
+
+			returnAll = false;
+		}
+
+		if (theDate != null) {
+			String where = constructDateWhereParameter(theDate, "comp", "date");
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
 
 			returnAll = false;
 		}

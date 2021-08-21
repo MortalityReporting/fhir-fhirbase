@@ -100,25 +100,9 @@ public class ServerOperations {
 		// we should not create composition.
 		if (patientIds.size() != 1) return;
 		
-		String patientId = patientIds.get(0);
-		
-//		// Check if we already have a composition for the same patient
-//		Bundle responseBundle = client.search().forResource(Composition.class)
-//				.where(Composition.SUBJECT.hasAnyOfIds(patientId))
-//				.and(Composition.TYPE.exactly().systemAndCode("http://loinc.org", "11502-2"))
-//				.returnBundle(Bundle.class).execute();
-
-//		Composition composition;
-//		boolean create = true;
-//		if (responseBundle.getTotal() > 0) {
-//			composition = (Composition) responseBundle.getEntryFirstRep().getResource();
-//			create = false; // we should update
-//		} else {
-//			// Create a composition for this batch write.
 		Composition composition = new Composition();
 		composition
 				.setType(new CodeableConcept(new Coding("http://loinc.org", "11502-2", "Laboratory report")));
-//		}
 
 		// Walk through the entries again and add the entries to composition
 		SectionComponent sectionComponent = new SectionComponent();
@@ -137,9 +121,6 @@ public class ServerOperations {
 		composition.getSection().add(sectionComponent);
 		MethodOutcome mo;
 		mo = client.create().resource(composition).encodedJson().prettyPrint().execute();
-//		} else {
-//			mo = client.update().resource(composition).encodedJson().prettyPrint().execute();
-//		}
 
 		if (mo.getId() == null) {
 			logger.debug("Failed to create a composition for the batch upload.");
@@ -161,22 +142,6 @@ public class ServerOperations {
 			if (resource instanceof Patient) {
 				Patient patient = (Patient) resource;
 				for (Identifier identifier : patient.getIdentifier()) {
-					// do search only on the case number.
-//					CodeableConcept identifierType = identifier.getType();
-//					if (identifierType.isEmpty()) {
-//						continue;
-//					}
-//
-//					Coding identifierCoding = identifierType.getCodingFirstRep();
-//					if (identifierCoding.isEmpty()) {
-//						continue;
-//					}
-//
-//					if (!"urn:mdi:temporary:code".equalsIgnoreCase(identifierCoding.getSystem())
-//							|| !"1000007".equalsIgnoreCase(identifierCoding.getCode())) {
-//						continue;
-//					}
-
 					Bundle responseBundle = client
 							.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly()
 									.systemAndCode(identifier.getSystem(), identifier.getValue()))
@@ -200,7 +165,7 @@ public class ServerOperations {
 					patient.setId(patientId);
 				} else {
 					MethodOutcome outcome = client.create().resource(patient).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated()) {
+					if (outcome.getCreated().booleanValue()) {
 						patientId = outcome.getId().getIdPart();
 						referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
 						patientIds.add("Patient/" + patientId);
@@ -268,7 +233,7 @@ public class ServerOperations {
 					}
 				} else {
 					MethodOutcome outcome = client.create().resource(observation).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated()) {
+					if (outcome.getCreated().booleanValue()) {
 						observationId = outcome.getId().getIdPart();
 					} else {
 						return (OperationOutcome) outcome.getOperationOutcome();
@@ -287,7 +252,7 @@ public class ServerOperations {
 	}
 
 	@Operation(name = "$process-message")
-	public Bundle ProcessMessageOperation(@OperationParam(name = "content") Bundle theContent,
+	public Bundle processMessageOperation(@OperationParam(name = "content") Bundle theContent,
 			@OperationParam(name = "async") BooleanType theAsync,
 			@OperationParam(name = "response-url") UriType theUri) {
 		String requestUrl = System.getenv("INTERNAL_FHIR_REQUEST_URL");
@@ -314,7 +279,7 @@ public class ServerOperations {
 			List<BundleEntryComponent> entries = theContent.getEntry();
 
 			// Evaluate the first entry, which must be MessageHeader
-			if (entries != null && entries.size() > 0 && entries.get(0).getResource() != null
+			if (entries != null && !entries.isEmpty() && entries.get(0).getResource() != null
 					&& entries.get(0).getResource().getResourceType() == ResourceType.MessageHeader) {
 				messageHeader = (MessageHeader) entries.get(0).getResource();
 

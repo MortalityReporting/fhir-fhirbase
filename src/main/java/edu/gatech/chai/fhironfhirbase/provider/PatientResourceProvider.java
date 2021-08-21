@@ -26,7 +26,6 @@ import javax.annotation.PostConstruct;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.instance.model.api.IPrimitiveType;
 import org.hl7.fhir.r4.model.CodeType;
-import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.DateType;
@@ -43,8 +42,6 @@ import org.hl7.fhir.r4.model.Location;
 import org.hl7.fhir.r4.model.MedicationRequest;
 import org.hl7.fhir.r4.model.MedicationStatement;
 import org.hl7.fhir.r4.model.Observation;
-import org.hl7.fhir.r4.model.OperationOutcome;
-import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.hl7.fhir.r4.model.Organization;
@@ -77,7 +74,6 @@ import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenParam;
-import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
@@ -396,8 +392,8 @@ public class PatientResourceProvider extends BaseResourceProvider {
 		// Complete Query.
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
@@ -548,7 +544,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 					boolean exists = false;
 					for (IBaseResource moreRes : moreLists) {
 						ListResource moreList = (ListResource) moreRes;
-						if (listId == moreList.getIdElement().getId()) {
+						if (listId.equals(moreList.getIdElement().getId())) {
 							exists = true;
 							break;
 						}
@@ -719,7 +715,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 //		}
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 

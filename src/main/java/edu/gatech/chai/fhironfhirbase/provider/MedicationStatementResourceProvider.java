@@ -46,7 +46,6 @@ import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
-import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
@@ -57,8 +56,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Service
 @Scope("prototype")
 public class MedicationStatementResourceProvider extends BaseResourceProvider {
-
-	private int preferredPageSize = 30;
 
 	public MedicationStatementResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -241,8 +238,8 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			 return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
@@ -283,7 +280,7 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 //		}
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 
 		public MyBundleProvider(String query) {
 			super(query);
@@ -292,8 +289,6 @@ public class MedicationStatementResourceProvider extends BaseResourceProvider {
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
-			// _Include
-			List<String> includes = new ArrayList<String>();
 
 			String myQuery = query;			
 			if (toIndex - fromIndex > 0) {

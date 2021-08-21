@@ -39,7 +39,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Scope("prototype")
 public class RelatedPersonResourceProvider extends BaseResourceProvider {
 	protected FhirbaseMapping fhirbaseMapping;
-	private int preferredPageSize = 30;
 
 	public RelatedPersonResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -180,8 +179,8 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			 return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
@@ -198,7 +197,7 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 	private void validateResource(RelatedPerson relatedPerson) {
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		public MyBundleProvider(String query) {
 			super(query);
 			setPreferredPageSize(preferredPageSize);
@@ -207,10 +206,6 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
-
-			// _Include
-			// TODO: do this later
-			List<String> includes = new ArrayList<String>();
 
 			String myQuery = query;			
 			if (toIndex - fromIndex > 0) {

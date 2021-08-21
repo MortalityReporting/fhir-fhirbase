@@ -34,7 +34,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Scope("prototype")
 public class LocationResourceProvider extends BaseResourceProvider {
 	protected FhirbaseMapping fhirbaseMapping;
-	private int preferredPageSize = 30;
 
 	public LocationResourceProvider(FhirContext ctx) {
 		super(ctx);

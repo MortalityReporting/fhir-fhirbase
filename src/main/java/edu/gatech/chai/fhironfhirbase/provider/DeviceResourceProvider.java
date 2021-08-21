@@ -40,8 +40,6 @@ import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
-import ca.uhn.fhir.rest.param.ReferenceOrListParam;
-import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.model.MyDevice;
@@ -51,8 +49,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Service
 @Scope("prototype")
 public class DeviceResourceProvider extends BaseResourceProvider {
-
-	private int preferredPageSize = 30;
 
 	public DeviceResourceProvider(FhirContext ctx) {
 		super(ctx);

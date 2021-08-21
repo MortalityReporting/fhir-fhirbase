@@ -18,7 +18,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Scope("prototype")
 public class ParametersResourceProvider extends BaseResourceProvider {
 	private static final Logger logger = LoggerFactory.getLogger(ParametersResourceProvider.class);
-	private int preferredPageSize = 30;
 
 	public ParametersResourceProvider(FhirContext ctx) {
 		super(ctx);

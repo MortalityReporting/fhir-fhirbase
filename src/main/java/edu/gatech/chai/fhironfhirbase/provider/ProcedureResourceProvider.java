@@ -56,8 +56,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Scope("prototype")
 public class ProcedureResourceProvider extends BaseResourceProvider {
 
-	private int preferredPageSize = 30;
-
 	public ProcedureResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
@@ -226,6 +224,29 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 		boolean returnAll = true;
 		
 		String fromStatement = "procedure proc";
+
+		if (theSubjects != null || thePatients != null) {
+			fromStatement += " join patient p on proc.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+
+			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
+			}
+			fromStatement = updatedFromStatement;
+
+			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
+			}
+			fromStatement = updatedFromStatement;
+			
+			returnAll = false;
+		}
+		
 		if (theOrCodes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "codings", "proc.resource->'code'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
@@ -262,28 +283,6 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
-		if (theSubjects != null || thePatients != null) {
-			fromStatement += " join patient p on proc.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
-
-			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
-			if (updatedFromStatement.isEmpty()) {
-				// This means that we have unsupported resource. Since this is to search, we should discard all and
-				// return null.
-				return null;
-			}
-			fromStatement = updatedFromStatement;
-
-			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
-			if (updatedFromStatement.isEmpty()) {
-				// This means that we have unsupported resource. Since this is to search, we should discard all and
-				// return null.
-				return null;
-			}
-			fromStatement = updatedFromStatement;
-			
-			returnAll = false;
-		}
-
 		if (thePerformerParam != null) {
 			whereParameters.add("proc.resource->>'performer' like '%" + theEncounterParam.getValue() + "%'");
 			returnAll = false;
@@ -313,7 +312,7 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 	private void validateResource(Procedure theProcedure) {
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 

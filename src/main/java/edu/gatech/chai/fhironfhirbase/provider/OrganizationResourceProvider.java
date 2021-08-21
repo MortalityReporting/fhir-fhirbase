@@ -22,7 +22,6 @@ import java.util.Set;
 
 import javax.annotation.PostConstruct;
 
-//import org.hl7.fhir.dstu3.model.ContactPoint.ContactPointUse;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Organization;
@@ -60,8 +59,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Service
 @Scope("prototype")
 public class OrganizationResourceProvider extends BaseResourceProvider {
-	private int preferredPageSize = 30;
-
 	public OrganizationResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
@@ -203,8 +200,8 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) { 
+			return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
@@ -220,7 +217,7 @@ public class OrganizationResourceProvider extends BaseResourceProvider {
 	private void validateResource(Organization theOrganization) {
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 

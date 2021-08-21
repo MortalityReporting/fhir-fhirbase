@@ -210,15 +210,6 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 		boolean returnAll = true;
 		
 		String fromStatement = "condition c";
-		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codings", "c.resource->'code'->'coding'");
-			String where = constructCodeWhereParameter(theOrCodes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			
-			returnAll = false;
-		}
 
 		if (theSubjects != null || thePatients != null) {
 			fromStatement += " join patient p on c.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
@@ -238,6 +229,16 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 				return null;
 			}
 			fromStatement = updatedFromStatement;
+			
+			returnAll = false;
+		}
+		
+		if (theOrCodes != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "c.resource->'code'->'coding'");
+			String where = constructCodeWhereParameter(theOrCodes);
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
 			
 			returnAll = false;
 		}

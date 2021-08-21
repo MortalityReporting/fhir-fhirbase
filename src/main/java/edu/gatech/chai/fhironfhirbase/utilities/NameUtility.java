@@ -22,9 +22,12 @@ import java.util.regex.Pattern;
 import org.hl7.fhir.r4.model.HumanName;
 
 public class NameUtility {
-	private static final String stdNameTextFormat = "(\\w+), (\\w+)";
-	private static final Pattern stdNamePattern =  Pattern.compile(stdNameTextFormat);
-	private static final String stdNameFormat = "{0}, {1}";
+	private static final String STDNAMETEXTFORMAT = "(\\w+), (\\w+)";
+	private static final Pattern stdNamePattern =  Pattern.compile(STDNAMETEXTFORMAT);
+	private static final String STDNAMEFORMAT = "{0}, {1}";
+
+	private NameUtility() {}
+
 	public static HumanName nametoFHIRHumanName(String family, String given) {
 		HumanName retVal = new HumanName();
 		retVal.setFamily(family);
@@ -46,6 +49,6 @@ public class NameUtility {
 	}
 	
 	public static String givenFamilyToText(String family, String given) {
-		return MessageFormat.format(stdNameFormat, family, given);
+		return MessageFormat.format(STDNAMEFORMAT, family, given);
 	}
 }

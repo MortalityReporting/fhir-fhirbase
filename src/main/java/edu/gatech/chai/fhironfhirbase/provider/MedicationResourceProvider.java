@@ -48,8 +48,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Scope("prototype")
 public class MedicationResourceProvider extends BaseResourceProvider {
 
-	private int preferredPageSize = 30;
-
 	public MedicationResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
@@ -129,8 +127,8 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			 return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
@@ -173,7 +171,7 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 		// }
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		public MyBundleProvider(String query) {
 			super(query);
 			setPreferredPageSize(preferredPageSize);
@@ -183,9 +181,6 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
 			
-			// _Include
-			List<String> includes = new ArrayList<String>();
-
 			String myQuery = query;			
 			if (toIndex - fromIndex > 0) {
 				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;

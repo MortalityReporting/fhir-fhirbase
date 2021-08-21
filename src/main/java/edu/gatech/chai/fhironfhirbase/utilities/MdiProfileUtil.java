@@ -14,6 +14,8 @@ import org.hl7.fhir.r4.model.RelatedPerson;
 
 public class MdiProfileUtil {
 
+	private MdiProfileUtil() {}
+
 	private static Map<String, String> singletonMap;
 	static {
 		singletonMap = new HashMap<String, String>();
@@ -51,7 +53,6 @@ public class MdiProfileUtil {
 		
 		List<Coding> codings = codeableConcept.getCoding();
 		for (Coding coding: codings) {
-			String system = coding.getSystem();
 			String code = coding.getCode();
 			
 			// it seems code itself is sufficient to check.

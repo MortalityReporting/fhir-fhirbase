@@ -46,7 +46,6 @@ import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
-import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
@@ -56,8 +55,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Service
 @Scope("prototype")
 public class DocumentReferenceResourceProvider extends BaseResourceProvider {
-
-	private int preferredPageSize = 30;
 
 	public DocumentReferenceResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -239,8 +236,8 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
-		if (!returnAll) {
-			if (whereStatement == null || whereStatement.isEmpty()) return null;
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) { 
+			return null;
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
@@ -252,7 +249,7 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 		return myBundleProvider;
 	}
 
-	class MyBundleProvider extends FhirbaseBundleProvider implements IBundleProvider {
+	class MyBundleProvider extends FhirbaseBundleProvider {
 		Set<Include> theIncludes;
 		Set<Include> theReverseIncludes;
 
@@ -297,8 +294,11 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 		}
 	}
 
-	// TODO: Add more validation code here.
+	/* TODO: 
+	 * Add more validation code here.
+	 */
 	private void validateResource(DocumentReference theDocumentReference) {
+		
 	}
 
 }
