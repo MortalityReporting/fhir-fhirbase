@@ -190,22 +190,6 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 		boolean returnAll = true;
 		
 		String fromStatement = "documentreference dr";
-		if (theOrTypes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "types", "dr.resource->'type'->'coding'");
-			String where = constructTypeWhereParameter(theOrTypes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
-		}
-
-		if (theDate != null) {
-			String where = constructDateWhereParameter(theDate, "dr", "date");
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
-		}
 
 		if (theSubjects != null || thePatients != null) {
 			fromStatement += " join patient p on dr.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
@@ -227,6 +211,23 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 			fromStatement = updatedFromStatement;
 			
 			returnAll = false;			
+		}
+
+		if (theOrTypes != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "types", "dr.resource->'type'->'coding'");
+			String where = constructTypeWhereParameter(theOrTypes);
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
+			returnAll = false;
+		}
+
+		if (theDate != null) {
+			String where = constructDateWhereParameter(theDate, "dr", "date");
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
+			returnAll = false;
 		}
 
 		if (theEncounter != null) {

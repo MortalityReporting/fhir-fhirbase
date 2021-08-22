@@ -169,15 +169,6 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 		
 		String fromStatement = "device d";
 
-		if (theOrTypes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "types", "d.resource->'type'->'coding'");
-			String where = constructTypeWhereParameter(theOrTypes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
-		}
-		
 		if (thePatients != null) {
 			fromStatement += " join patient p on d.resource->'patient'->>'reference' = concat('Patient/', p.resource->>'id')";
 
@@ -193,6 +184,15 @@ public class DeviceResourceProvider extends BaseResourceProvider {
 
 		}
 
+		if (theOrTypes != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "types", "d.resource->'type'->'coding'");
+			String where = constructTypeWhereParameter(theOrTypes);
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
+			returnAll = false;
+		}
+		
 		String whereStatement = constructWhereStatement(whereParameters, theSort);		
 
 		if (!returnAll) {

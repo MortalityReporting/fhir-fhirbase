@@ -173,13 +173,6 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 		
 		String fromStatement = "deviceusestatement du";
 
-		if (theDeviceUseStatementIds != null) {
-			for (TokenParam theDeviceUseStatementId : theDeviceUseStatementIds.getValuesAsQueryTokens()) {
-				whereParameters.add("du.id = '" + theDeviceUseStatementId.getValue() + "'");
-			}
-			returnAll = false;
-		}
-
 		if (theSubjects != null || thePatients != null) {
 			fromStatement += " join patient p on du.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 
@@ -199,6 +192,13 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 			}
 			fromStatement = updatedFromStatement;
 			
+			returnAll = false;
+		}
+
+		if (theDeviceUseStatementIds != null) {
+			for (TokenParam theDeviceUseStatementId : theDeviceUseStatementIds.getValuesAsQueryTokens()) {
+				whereParameters.add("du.id = '" + theDeviceUseStatementId.getValue() + "'");
+			}
 			returnAll = false;
 		}
 

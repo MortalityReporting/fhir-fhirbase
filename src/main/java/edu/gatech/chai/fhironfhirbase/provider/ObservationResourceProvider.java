@@ -172,22 +172,6 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 		boolean returnAll = true;
 		
 		String fromStatement = getTableName() + " o";
-		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codings", "o.resource->'code'->'coding'");
-			String where = constructCodeWhereParameter(theOrCodes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
-		}
-
-		if (theDate != null) {
-			String where = constructDateWhereParameter(theDate, "o", "effectiveDateTime");
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
-		}
 
 		if (theSubjects != null || thePatients != null) {
 			fromStatement += " join patient p on o.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
@@ -208,6 +192,23 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 			}
 			fromStatement = updatedFromStatement;
 			
+			returnAll = false;
+		}
+		
+		if (theOrCodes != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "o.resource->'code'->'coding'");
+			String where = constructCodeWhereParameter(theOrCodes);
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
+			returnAll = false;
+		}
+
+		if (theDate != null) {
+			String where = constructDateWhereParameter(theDate, "o", "effectiveDateTime");
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
 			returnAll = false;
 		}
 

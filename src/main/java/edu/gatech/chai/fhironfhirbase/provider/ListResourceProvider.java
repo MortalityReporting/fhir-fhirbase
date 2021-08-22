@@ -160,14 +160,6 @@ public class ListResourceProvider extends BaseResourceProvider {
 		boolean returnAll = true;
 		
 		String fromStatement = "list l";
-		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codings", "l.resource->'code'->'coding'");
-			String where = constructCodeWhereParameter(theOrCodes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
-		}
 
 		if (theSubjects != null || thePatients != null) {
 			fromStatement += " join patient p on l.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
@@ -191,6 +183,15 @@ public class ListResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 		
+		if (theOrCodes != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "l.resource->'code'->'coding'");
+			String where = constructCodeWhereParameter(theOrCodes);
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
+			returnAll = false;
+		}
+
 		if (theSources != null) {
 			for (ReferenceParam theSource : theSources.getValuesAsQueryTokens()) {
 				String where = constructReferenceWhereParameter(theSource, "l", "source");

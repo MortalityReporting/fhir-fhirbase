@@ -203,6 +203,29 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 		boolean returnAll = true;
 		
 		String fromStatement = "medicationrequest mr";
+
+		if (theSubjects != null || thePatients != null) {
+			fromStatement += " join patient p on mr.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+
+			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
+			}
+			fromStatement = updatedFromStatement;
+
+			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+			if (updatedFromStatement.isEmpty()) {
+				// This means that we have unsupported resource. Since this is to search, we should discard all and
+				// return null.
+				return null;
+			}
+			fromStatement = updatedFromStatement;
+			
+			returnAll = false;
+		}
+
 		if (theOrCodes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "codings", "mr.resource->'medicationCodeableConcept'->'coding'");
 			String where = constructCodeWhereParameter(theOrCodes);
@@ -238,28 +261,6 @@ public class MedicationRequestResourceProvider extends BaseResourceProvider {
 			//TODO: Medication.code needs to be implemented.
 			whereParameters
 					.add("mr.resource->medicationReference->>reference like '%" + theMedication.getIdPart() + "%'");
-			returnAll = false;
-		}
-
-		if (theSubjects != null || thePatients != null) {
-			fromStatement += " join patient p on mr.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
-
-			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
-			if (updatedFromStatement.isEmpty()) {
-				// This means that we have unsupported resource. Since this is to search, we should discard all and
-				// return null.
-				return null;
-			}
-			fromStatement = updatedFromStatement;
-
-			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
-			if (updatedFromStatement.isEmpty()) {
-				// This means that we have unsupported resource. Since this is to search, we should discard all and
-				// return null.
-				return null;
-			}
-			fromStatement = updatedFromStatement;
-			
 			returnAll = false;
 		}
 

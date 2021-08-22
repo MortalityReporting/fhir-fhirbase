@@ -182,11 +182,6 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 		
 		String fromStatement = "encounter e";
 
-		if (theEncounterId != null) {
-			whereParameters.add("e.id = '" + theEncounterId.getValue() + "'");
-			returnAll = false;
-		}
-
 		if (theSubjects != null || thePatients != null) {
 			fromStatement += " join patient p on e.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 
@@ -206,6 +201,11 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 			}
 			fromStatement = updatedFromStatement;
 			
+			returnAll = false;
+		}
+
+		if (theEncounterId != null) {
+			whereParameters.add("e.id = '" + theEncounterId.getValue() + "'");
 			returnAll = false;
 		}
 
