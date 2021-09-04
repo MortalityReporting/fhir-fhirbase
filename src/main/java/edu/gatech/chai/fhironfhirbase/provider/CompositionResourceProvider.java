@@ -86,6 +86,8 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Scope("prototype")
 public class CompositionResourceProvider extends BaseResourceProvider {
 	private static final Logger logger = LoggerFactory.getLogger(CompositionResourceProvider.class);
+	private static final String NQ_EVENT_DETAIL = "event-detail";
+	private static final String SP_DEATH_LOCATION = "death-location";
 
 	public CompositionResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -169,6 +171,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	public IBundleProvider findCompositionsByParams(
 			@OptionalParam(name = Composition.SP_TYPE) TokenOrListParam theOrTypes,
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
+			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
 			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", 
 					USCorePatient.SP_ADDRESS_CITY,
 					USCorePatient.SP_ADDRESS_COUNTRY,
@@ -206,11 +209,20 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = getTableName() + " comp";
 
+		// Set up join statements.
+		if (theSubjects != null || thePatients != null) {
+			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+		}
+
+		if (theDeathLocations != null) {
+			fromStatement += " join observation o on comp.resource->'subject'->>'reference' = o.resource->'subject'->>'reference'";
+			fromStatement += " join location l on o.resource->'extension'->0->>'url' = 'http://hl7.org/fhir/us/vrdr/StructureDefinition/Observation-Location' " 
+				+ "and o.resource->'extension'->0->'valueReference'->>'reference' = concat('Location/', l.resource->>'id')";
+		}
+
 		boolean returnAll = true;
 
 		if (theSubjects != null || thePatients != null) {
-			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
-
 			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
 			if (updatedFromStatement.isEmpty()) {
 				// This means that we have unsupported resource. Since this is to search, we should discard all and
@@ -228,6 +240,21 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			fromStatement = updatedFromStatement;
 
 			returnAll = false;
+		}
+
+		if (theDeathLocations != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "deathlocation", "o.resource->'code'->'coding'");
+			whereParameters.add("deathlocation @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+			String districtOrWhere = "";
+			for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
+				if (districtOrWhere == null || districtOrWhere.isEmpty()) {
+					districtOrWhere = "l.resource->'address'->>'district' like '%" + theDeathLocation.getValue() + "%'";
+				} else {
+					districtOrWhere += " or l.resource->'address'->>'district' like '%" + theDeathLocation.getValue() + "%'";
+				}
+			}
+
+			whereParameters.add(districtOrWhere);
 		}
 
 		if (theOrTypes != null) {
@@ -389,6 +416,43 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 	}
 
+	@Search(queryName=CompositionResourceProvider.NQ_EVENT_DETAIL)
+	public IBundleProvider searchByNamedQuery(
+		@RequiredParam(name="case-id") TokenAndListParam theCaseIds,
+		@Sort SortSpec theSort) {
+
+		List<String> whereParameters = new ArrayList<String>();
+		String fromStatement = getTableName() + " comp";
+		fromStatement += " join procedure proc on comp.resource->'event'->'detail'->>'reference' = concat('Procedure/', proc.resource->>'id')";
+
+		boolean returnAll = true;
+
+		fromStatement = constructFromStatementPath(fromStatement, "identifiers", "proc.resource->'identifier'");
+		for (TokenOrListParam theCaseIdAnd : theCaseIds.getValuesAsQueryTokens()) {
+			String where = constructIdentifierWhereParameter(theCaseIdAnd);
+			if (where != null && !where.isEmpty()) {
+				whereParameters.add(where);
+			}
+			returnAll = false;
+		}
+
+		String whereStatement = constructWhereStatement(whereParameters, theSort);
+
+		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
+			return null;
+		}
+
+		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
+		String query = "SELECT comp.resource as resource FROM " + fromStatement + whereStatement;
+
+		logger.debug("query count:" + queryCount + "\nquery:" + query);
+
+		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
+		myBundleProvider.setTotalSize(getTotalSize(queryCount));
+		myBundleProvider.setPreferredPageSize(preferredPageSize);
+		return myBundleProvider;
+	}
+
 	@Operation(name = "$mdi-documents", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
 			@IdParam(optional=true) IdType theCompositionId,
@@ -407,7 +471,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = "decedent.name") StringAndListParam theNames,
 			@OperationParam(name = "decedent.phone") TokenAndListParam thePhones,
 			@OperationParam(name = "decedent.telecom") TokenAndListParam theTelecoms,
-			@OperationParam(name = "case-id") StringOrListParam theCaseIds) {
+			@OperationParam(name = "vrdr-death-certification.identifier") TokenAndListParam theCaseIds,
+			@OperationParam(name = "vrdr-death-location.district") StringOrListParam theDeathLocations,
+			@OperationParam(name = "vrdr-death-date.value-date") DateRangeParam theProfileDeathDateRange) {
 				
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
@@ -457,200 +523,236 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			return retBundle;
 		}
 		
-		if (theCaseIds != null) {
-			for (StringParam theCaseId: theCaseIds.getValuesAsQueryTokens()) {
-				logger.debug("MDI-DOCUMENT: case-id="+theCaseId.getValue());
-
-				// Search the composition that has the identifier with this value.
-
-			}
-		}
-
+		Bundle compositionsBundle = null;
 		IQuery<IBaseBundle> query = client.search().forResource(Composition.class);
 
-		List<String> addressCitySearchParams = new ArrayList<String>();
-		if (theAddressCities != null) {
-			for (StringOrListParam theAddressCitiesAnd : theAddressCities.getValuesAsQueryTokens()) {
-				addressCitySearchParams.clear();
-				for (StringParam theAddressCity : theAddressCitiesAnd.getValuesAsQueryTokens()) {
-					addressCitySearchParams.add(theAddressCity.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_CITY.matches().values(addressCitySearchParams)));
-			}
-		}
-
-		List<String> addressPostalCodeSearchParams = new ArrayList<String>();
-		if (theAddressPostalCodes != null) {
-			for (StringOrListParam theAddressPostalCodesAnd : theAddressPostalCodes.getValuesAsQueryTokens()) {
-				addressPostalCodeSearchParams.clear();
-				for (StringParam theAddressPostalCode : theAddressPostalCodesAnd.getValuesAsQueryTokens()) {
-					addressPostalCodeSearchParams.add(theAddressPostalCode.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_POSTALCODE.matches().values(addressPostalCodeSearchParams)));
-			}
-		}
-
-		List<String> addressStateSearchParams = new ArrayList<String>();
-		if (theAddressStates != null) {
-			for (StringOrListParam theAddressStatesAnd : theAddressStates.getValuesAsQueryTokens()) {
-				addressStateSearchParams.clear();
-				for (StringParam theAddressState : theAddressStatesAnd.getValuesAsQueryTokens()) {
-					addressStateSearchParams.add(theAddressState.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_STATE.matches().values(addressStateSearchParams)));
-			}
-		}
-
-		List<String> addressUseSearchParams = new ArrayList<String>();
-		if (theAddressUses != null) {
-			for (TokenOrListParam theAddressUseAnd: theAddressUses.getValuesAsQueryTokens()) {
-				addressUseSearchParams.clear();
-				for (TokenParam theAddressUse : theAddressUseAnd.getValuesAsQueryTokens()) {
-					addressUseSearchParams.add(theAddressUse.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_USE.exactly().codes(addressCitySearchParams)));
-			}
-		}
-
-		if (theBirthDateRange != null) {
-			DateParam lowerDateParam = theBirthDateRange.getLowerBound();
-			DateParam upperDateParam = theBirthDateRange.getUpperBound();
-			if (lowerDateParam != null && upperDateParam != null) {
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())))
-					.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
-
-			} else if (lowerDateParam != null) {
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())));
-			} else if (upperDateParam != null) {
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
-			}
-		}
-
-		List<String> emailSearchParams = new ArrayList<String>();
-		if (theEmails != null) {
-			for (TokenOrListParam theEmailAnd: theEmails.getValuesAsQueryTokens()) {
-				emailSearchParams.clear();
-				for (TokenParam theEmail : theEmailAnd.getValuesAsQueryTokens()) {
-					emailSearchParams.add(theEmail.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.EMAIL.exactly().codes(emailSearchParams)));
-			}
-		}
-
-		List<String> familySearchParams = new ArrayList<String>();
-		if (theFamilies != null) {
-			for (StringOrListParam theFamilyAnd : theFamilies.getValuesAsQueryTokens()) {
-				familySearchParams.clear();
-				for (StringParam theFamily : theFamilyAnd.getValuesAsQueryTokens()) {
-					familySearchParams.add(theFamily.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
-			}
-		}
-
-		List<String> genderSearchParams = new ArrayList<String>();
-		if (theGenders != null) {
-			for (TokenOrListParam theGenderAnd: theGenders.getValuesAsQueryTokens()) {
-				genderSearchParams.clear();
-				for (TokenParam theGender : theGenderAnd.getValuesAsQueryTokens()) {
-					genderSearchParams.add(theGender.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
-			}
-		}
-
-		List<String> givenSearchParams = new ArrayList<String>();
-		if (theGivens != null) {
-			for (StringOrListParam theGivenAnd : theGivens.getValuesAsQueryTokens()) {
-				givenSearchParams.clear();
-				for (StringParam theGiven : theGivenAnd.getValuesAsQueryTokens()) {
-					givenSearchParams.add(theGiven.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));
-			}
-		}
-
-		List<String> identifierSearchParams = new ArrayList<String>();
-		if (theIdentifiers != null) {
-			for (TokenOrListParam theIdentifierAnd: theIdentifiers.getValuesAsQueryTokens()) {
-				identifierSearchParams.clear();
-				for (TokenParam theIdentifier : theIdentifierAnd.getValuesAsQueryTokens()) {
-					identifierSearchParams.add(theIdentifier.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.IDENTIFIER.exactly().codes(identifierSearchParams)));
-			}
-		}
-
-		List<String> nameSearchParams = new ArrayList<String>();
-		if (theNames != null) {
-			for (StringOrListParam theNamesAnd: theNames.getValuesAsQueryTokens()) {
-				nameSearchParams.clear();
-				for (StringParam theName : theNamesAnd.getValuesAsQueryTokens()) {
-					String nameValue = theName.getValue();
-					if ("ERROR:DEMO-ERROR".equals(nameValue)) {
-						throwSimulatedOO(nameValue);
+		if (theCaseIds != null) {
+			String namedQuery = "";
+			String caseIdOr = null;
+			String caseIdsAnd = null;
+			for (TokenOrListParam theCaseIdAnd: theCaseIds.getValuesAsQueryTokens()) {
+				caseIdOr = null;
+				for (TokenParam theIdentifier : theCaseIdAnd.getValuesAsQueryTokens()) {
+					if (caseIdOr == null) {
+						caseIdOr = theIdentifier.getSystem() + "|" + theIdentifier.getValue();
+					} else {
+						caseIdOr = caseIdOr.concat("," + theIdentifier.getSystem() + "|" + theIdentifier.getValue());
 					}
-					nameSearchParams.add(nameValue);
 				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.NAME.matches().values(nameSearchParams)));
-			}
-
-		}
-
-		List<String> phoneSearchParams = new ArrayList<String>();
-		if (thePhones != null) {
-			for (TokenOrListParam thePhoneAnd: thePhones.getValuesAsQueryTokens()) {
-				phoneSearchParams.clear();
-				for (TokenParam thePhone : thePhoneAnd.getValuesAsQueryTokens()) {
-					phoneSearchParams.add(thePhone.getValue());
-				}
-				query = query.and(Composition.PATIENT.hasChainedProperty(Patient.PHONE.exactly().codes(phoneSearchParams)));
-			}
-
-		}
-
-		List<String> telecomSearchParams = new ArrayList<String>();
-		if (theTelecoms != null) {
-			for (TokenOrListParam theTelecomAnd: theTelecoms.getValuesAsQueryTokens()) {
-				telecomSearchParams.clear();
-				String systemName = "";
-				for (TokenParam theTelecom : theTelecomAnd.getValuesAsQueryTokens()) {
-					if (systemName.isEmpty()) {
-						systemName = theTelecom.getSystem();
-					}
-					telecomSearchParams.add(theTelecom.getValue());
-				}
-
-				if (systemName.isEmpty()) {
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.TELECOM.exactly().codes(telecomSearchParams)));
+				if (caseIdsAnd == null) {
+					caseIdsAnd = "case-id=" + caseIdOr;
 				} else {
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.TELECOM.exactly().systemAndValues(systemName, telecomSearchParams)));
+					caseIdsAnd = "&case-id=" + caseIdOr;
 				}
 			}
 
+			if (caseIdsAnd != null && !caseIdsAnd.isEmpty()) {
+				namedQuery = "Composition?_query=" + CompositionResourceProvider.NQ_EVENT_DETAIL + "&" +caseIdsAnd;
+				compositionsBundle = client.search()
+					.byUrl(namedQuery)
+					.returnBundle(Bundle.class)
+					.execute();
+			}
+		} else {
+			List<String> addressCitySearchParams = new ArrayList<String>();
+			if (theAddressCities != null) {
+				for (StringOrListParam theAddressCitiesAnd : theAddressCities.getValuesAsQueryTokens()) {
+					addressCitySearchParams.clear();
+					for (StringParam theAddressCity : theAddressCitiesAnd.getValuesAsQueryTokens()) {
+						addressCitySearchParams.add(theAddressCity.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_CITY.matches().values(addressCitySearchParams)));
+				}
+			}
+
+			List<String> addressPostalCodeSearchParams = new ArrayList<String>();
+			if (theAddressPostalCodes != null) {
+				for (StringOrListParam theAddressPostalCodesAnd : theAddressPostalCodes.getValuesAsQueryTokens()) {
+					addressPostalCodeSearchParams.clear();
+					for (StringParam theAddressPostalCode : theAddressPostalCodesAnd.getValuesAsQueryTokens()) {
+						addressPostalCodeSearchParams.add(theAddressPostalCode.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_POSTALCODE.matches().values(addressPostalCodeSearchParams)));
+				}
+			}
+
+			List<String> addressStateSearchParams = new ArrayList<String>();
+			if (theAddressStates != null) {
+				for (StringOrListParam theAddressStatesAnd : theAddressStates.getValuesAsQueryTokens()) {
+					addressStateSearchParams.clear();
+					for (StringParam theAddressState : theAddressStatesAnd.getValuesAsQueryTokens()) {
+						addressStateSearchParams.add(theAddressState.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_STATE.matches().values(addressStateSearchParams)));
+				}
+			}
+
+			List<String> addressUseSearchParams = new ArrayList<String>();
+			if (theAddressUses != null) {
+				for (TokenOrListParam theAddressUseAnd: theAddressUses.getValuesAsQueryTokens()) {
+					addressUseSearchParams.clear();
+					for (TokenParam theAddressUse : theAddressUseAnd.getValuesAsQueryTokens()) {
+						addressUseSearchParams.add(theAddressUse.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_USE.exactly().codes(addressCitySearchParams)));
+				}
+			}
+
+			if (theBirthDateRange != null) {
+				DateParam lowerDateParam = theBirthDateRange.getLowerBound();
+				DateParam upperDateParam = theBirthDateRange.getUpperBound();
+				if (lowerDateParam != null && upperDateParam != null) {
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())))
+						.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
+
+				} else if (lowerDateParam != null) {
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())));
+				} else if (upperDateParam != null) {
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
+				}
+			}
+
+			List<String> emailSearchParams = new ArrayList<String>();
+			if (theEmails != null) {
+				for (TokenOrListParam theEmailAnd: theEmails.getValuesAsQueryTokens()) {
+					emailSearchParams.clear();
+					for (TokenParam theEmail : theEmailAnd.getValuesAsQueryTokens()) {
+						emailSearchParams.add(theEmail.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.EMAIL.exactly().codes(emailSearchParams)));
+				}
+			}
+
+			List<String> familySearchParams = new ArrayList<String>();
+			if (theFamilies != null) {
+				for (StringOrListParam theFamilyAnd : theFamilies.getValuesAsQueryTokens()) {
+					familySearchParams.clear();
+					for (StringParam theFamily : theFamilyAnd.getValuesAsQueryTokens()) {
+						familySearchParams.add(theFamily.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
+				}
+			}
+
+			List<String> genderSearchParams = new ArrayList<String>();
+			if (theGenders != null) {
+				for (TokenOrListParam theGenderAnd: theGenders.getValuesAsQueryTokens()) {
+					genderSearchParams.clear();
+					for (TokenParam theGender : theGenderAnd.getValuesAsQueryTokens()) {
+						genderSearchParams.add(theGender.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
+				}
+			}
+
+			List<String> givenSearchParams = new ArrayList<String>();
+			if (theGivens != null) {
+				for (StringOrListParam theGivenAnd : theGivens.getValuesAsQueryTokens()) {
+					givenSearchParams.clear();
+					for (StringParam theGiven : theGivenAnd.getValuesAsQueryTokens()) {
+						givenSearchParams.add(theGiven.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));
+				}
+			}
+
+			List<String> identifierSearchParams = new ArrayList<String>();
+			if (theIdentifiers != null) {
+				for (TokenOrListParam theIdentifierAnd: theIdentifiers.getValuesAsQueryTokens()) {
+					identifierSearchParams.clear();
+					for (TokenParam theIdentifier : theIdentifierAnd.getValuesAsQueryTokens()) {
+						identifierSearchParams.add(theIdentifier.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.IDENTIFIER.exactly().codes(identifierSearchParams)));
+				}
+			}
+
+			List<String> nameSearchParams = new ArrayList<String>();
+			if (theNames != null) {
+				for (StringOrListParam theNamesAnd: theNames.getValuesAsQueryTokens()) {
+					nameSearchParams.clear();
+					for (StringParam theName : theNamesAnd.getValuesAsQueryTokens()) {
+						String nameValue = theName.getValue();
+						if ("ERROR:DEMO-ERROR".equals(nameValue)) {
+							throwSimulatedOO(nameValue);
+						}
+						nameSearchParams.add(nameValue);
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.NAME.matches().values(nameSearchParams)));
+				}
+
+			}
+
+			List<String> phoneSearchParams = new ArrayList<String>();
+			if (thePhones != null) {
+				for (TokenOrListParam thePhoneAnd: thePhones.getValuesAsQueryTokens()) {
+					phoneSearchParams.clear();
+					for (TokenParam thePhone : thePhoneAnd.getValuesAsQueryTokens()) {
+						phoneSearchParams.add(thePhone.getValue());
+					}
+					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.PHONE.exactly().codes(phoneSearchParams)));
+				}
+
+			}
+
+			List<String> telecomSearchParams = new ArrayList<String>();
+			if (theTelecoms != null) {
+				for (TokenOrListParam theTelecomAnd: theTelecoms.getValuesAsQueryTokens()) {
+					telecomSearchParams.clear();
+					String systemName = "";
+					for (TokenParam theTelecom : theTelecomAnd.getValuesAsQueryTokens()) {
+						if (systemName.isEmpty()) {
+							systemName = theTelecom.getSystem();
+						}
+						telecomSearchParams.add(theTelecom.getValue());
+					}
+
+					if (systemName.isEmpty()) {
+						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.TELECOM.exactly().codes(telecomSearchParams)));
+					} else {
+						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.TELECOM.exactly().systemAndValues(systemName, telecomSearchParams)));
+					}
+				}
+
+			}
+
+			// Death Location is ONLY referenced from Death Date Observation. 
+			// Thus, we need to search Death Date and Location at the same time.
+			List<String> deathLocationSearchParams = new ArrayList<String>();
+			if (theDeathLocations != null) {
+				for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
+					deathLocationSearchParams.add(theDeathLocation.getValue());
+				}
+				query = query.and(
+					(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_DEATH_LOCATION))
+						.matches()
+						.values(deathLocationSearchParams));
+			}
+
+			compositionsBundle = query.returnBundle(Bundle.class).execute();
 		}
 
-		Bundle compositionsBundle = query.returnBundle(Bundle.class).execute();
+		if (compositionsBundle != null && !compositionsBundle.isEmpty()) {
+			List<BundleEntryComponent> entries = compositionsBundle.getEntry();
+			for (BundleEntryComponent entry : entries) {
+				String compositionId = entry.getResource().getIdElement().getIdPart();
 
-		List<BundleEntryComponent> entries = compositionsBundle.getEntry();
-		for (BundleEntryComponent entry : entries) {
-			String compositionId = entry.getResource().getIdElement().getIdPart();
+				Bundle compositionBundle = client
+					.operation().onInstance(new IdType("Composition", compositionId))
+					.named("$document")
+					.withNoParameters(Parameters.class)
+					.returnResourceType(Bundle.class)
+					.execute();
+				BundleEntryComponent entryComponent = new BundleEntryComponent();
+				entryComponent.setFullUrl(compositionBundle.getId());
+				entryComponent.setResource(compositionBundle);
+				retBundle.addEntry(entryComponent);
 
-			Bundle compositionBundle = client
-				.operation().onInstance(new IdType("Composition", compositionId))
-				.named("$document")
-				.withNoParameters(Parameters.class)
-				.returnResourceType(Bundle.class)
-				.execute();
-			BundleEntryComponent entryComponent = new BundleEntryComponent();
-			entryComponent.setFullUrl(compositionBundle.getId());
-			entryComponent.setResource(compositionBundle);
-			retBundle.addEntry(entryComponent);
+				totalSize++;
+			}
 
-			totalSize++;
+			retBundle.setTotal(totalSize);
 		}
-
-		retBundle.setTotal(totalSize);
 
 		return retBundle;
 	}
@@ -823,21 +925,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					List<Reference> obsPerformers = observation.getPerformer();
 					for (Reference reference : obsPerformers) {
 						processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
-//							if (reference != null && !reference.isEmpty()) {
-//								String referenceId = reference.getReferenceElement().getValue();
-//								if (!addedResource.contains(referenceId)) {
-//									Resource resource = (Resource) client.read()
-//											.resource(reference.getReferenceElement().getResourceType())
-//											.withId(reference.getReferenceElement().getIdPart()).encodedJson()
-//											.execute();
-//									bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource));
-//									addedResource.add(referenceId);
-//
-//									if (resource instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
-//										addedPractitioner.add(resource.getIdElement().getIdPart());
-//									}
-//								}
-//							}
 					}
 				}
 			}

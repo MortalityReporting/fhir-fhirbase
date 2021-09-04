@@ -20,6 +20,8 @@ import ca.uhn.fhir.rest.param.ParamPrefixEnum;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
+import ca.uhn.fhir.rest.param.StringOrListParam;
+import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
@@ -199,27 +201,12 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 
 		return fromStatement;
 	}
-
-//	protected String constructFromStatementTokens(TokenOrListParam tokenList, String fromStatement, String alias, String pathToCoding) {
-//		List<TokenParam> tokens = tokenList.getValuesAsQueryTokens();
-//		if (tokens.size() > 0) {
-//			if (!fromStatement.contains(alias)) {
-//				fromStatement += ", jsonb_array_elements("+pathToCoding+") " + alias;
-//			}
-//		}
-//		
-//		return fromStatement;
-//	}
-	
-	// protected String constructIdentifierWhereParameter(TokenParam theToken) {
-	// 	return null;
-	// }
 	
 	protected String constructTypeWhereParameter(TokenOrListParam theOrTypes) {
 		List<TokenParam> types = theOrTypes.getValuesAsQueryTokens();
 
 		String whereCodings = "";
-		if (types.size() > 0) {
+		if (!types.isEmpty()) {
 			for (TokenParam type : types) {
 				String system = type.getSystem();
 				String value = type.getValue();
@@ -438,6 +425,37 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return whereCodings;
 	}
 
+	protected String constructIdentifierWhereParameter(TokenOrListParam theOrIdentifiers) {
+		List<TokenParam> identifiers = theOrIdentifiers.getValuesAsQueryTokens();
+
+		String whereCodings = "";
+		if (!identifiers.isEmpty()) {
+			for (TokenParam identifier : identifiers) {
+				String system = identifier.getSystem();
+				String value = identifier.getValue();
+
+				if (!whereCodings.isEmpty()) {
+					whereCodings += " OR ";
+				}
+				if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
+					whereCodings += "identifiers @> '{\"system\": \"" + system + "\", \"value\": \"" + value + "\"}'::jsonb";
+				} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
+					whereCodings += "identifiers @> '{\"system\": \"" + system + "\"}'::jsonb";
+				} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
+					whereCodings += "identifiers @> '{\"value\": \"" + value + "\"}'::jsonb";
+				} else {
+					whereCodings += "identifiers @> '{\"system\": \"\", \"value\": \"\"}'::jsonb";
+				}
+			}
+
+			if (!whereCodings.isEmpty()) {
+				whereCodings = "(" + whereCodings + ")";
+			}
+		}
+
+		return whereCodings;
+	}
+
 	protected void throwSimulatedOO(String errorCode) {
 		OperationOutcome outcome = new OperationOutcome();
 		CodeableConcept detailCode = new CodeableConcept();
@@ -445,69 +463,4 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
 		throw new InvalidRequestException(errorCode, outcome);
 	}
-
-	// protected String patientNameSearch(String name, String alias) {
-	// 	String sql = "SELECT * FROM patient WHERE resource->>name like '" + name + "'";
-	// 	List<IBaseResource> patientResources;
-		
-	// 	String retVal = null;
-	// 	try {
-	// 		patientResources = fhirbaseMapping.search(sql, USCorePatient.class);
-	// 		for (IBaseResource patientResource: patientResources) {
-	// 			String id = patientResource.getIdElement().getIdPart();
-	// 			if (retVal == null) {
-	// 				retVal = alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
-	// 			} else {
-	// 				retVal = retVal + " or " + alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
-	// 			}
-	// 		}
-	// 	} catch (Exception e) {
-	// 		e.printStackTrace();
-	// 		ThrowFHIRExceptions.internalErrorException(e.getMessage());
-	// 	}
-
-	// 	return retVal;
-	// }
-	
-	// protected String identifierSearch(TokenParam identifierToken, String alias) {
-	// 	String retVal = null;
-		
-	// 	String sql = "SELECT * FROM patient p " + constructFromStatementPath("", "identifiers", "p.resource->'identifier'") + " WHERE ";
-	// 	List<IBaseResource> resources;
-		
-	// 	String system = identifierToken.getSystem();
-	// 	String value = identifierToken.getValue();
-		
-	// 	try {
-	// 		String where = null;
-	// 		if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
-	// 			where = "identifiers @> '{\"system\": \"" + system + "\", \"value\": \"" + value + "\"}'::jsonb";
-	// 		} else if (system != null && !system.isEmpty()) {
-	// 			where = "identifiers @> '{\"system\": \"" + system + "\"}'::jsonb";
-	// 		} else if (value != null && !value.isEmpty()){
-	// 			where = "identifiers @> '{\"value\": \"" + value + "\"}'::jsonb";
-	// 		}
-
-	// 		if (where == null) return null;
-			
-	// 		sql += where; 
-	// 		resources = fhirbaseMapping.search(sql, USCorePatient.class);
-
-	// 		for (IBaseResource resource: resources) {
-	// 			String id = resource.getIdElement().getIdPart();
-				
-	// 			if (retVal == null) {
-	// 				retVal = alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
-	// 			} else {
-	// 				retVal = retVal + " or " + alias + ".resource->'subject'->>'reference' like '%Patient/" + id + "%'";
-	// 			}				
-	// 		}
-	// 	} catch (Exception e) {
-	// 		e.printStackTrace();
-	// 		ThrowFHIRExceptions.internalErrorException(e.getMessage());
-	// 	}
-
-	// 	return retVal;
-	// }
-
 }
