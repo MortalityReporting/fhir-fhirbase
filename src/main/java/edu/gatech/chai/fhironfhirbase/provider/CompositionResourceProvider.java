@@ -269,30 +269,11 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		if (theDeathDate != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
 			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
-			String deathDateWhere = "";
-			DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'");
-			String lowerBound = formatter.format(theDeathDate.getLowerBoundAsInstant());
-			if (theDeathDate.getLowerBound() != null && !theDeathDate.getLowerBound().isEmpty()
-				&& theDeathDate.getUpperBound() != null && !theDeathDate.getUpperBound().isEmpty()) {
-				// We have both lower and upper.
-				String upperBound = formatter.format(theDeathDate.getUpperBoundAsInstant());
-				deathDateWhere = "o.resource->>'valueDateTime' >= '" + lowerBound 
-					+ "' and o.resource->>'valueDateTime' <= '" + upperBound + "'";
-			} else {
-				if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == theDeathDate.getLowerBound().getPrefix()) {
-					deathDateWhere = "o.resource->>'valueDateTime' >= " + "'" + lowerBound + "'";
-				} else if (ParamPrefixEnum.GREATERTHAN == theDeathDate.getLowerBound().getPrefix()) {
-					deathDateWhere = "o.resource->>'valueDateTime' > " + "'" + lowerBound + "'";
-				} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == theDeathDate.getLowerBound().getPrefix()) {
-					deathDateWhere = "o.resource->>'valueDateTime' <= " + "'" + lowerBound + "'";
-				} else if (ParamPrefixEnum.LESSTHAN == theDeathDate.getLowerBound().getPrefix()) {
-					deathDateWhere = "o.resource->>'valueDateTime' < " + "'" + lowerBound + "'";
-				} else {
-					deathDateWhere = "o.resource->>'valueDateTime' = " + "'" + lowerBound + "'";
-				}
-			}
+			String deathDateWhere = constructDateRangeWhereParameter(theDeathDate, "o", "valueDateTime");
 
-			whereParameters.add(deathDateWhere);
+			if (deathDateWhere != null && !deathDateWhere.isEmpty()) {
+				whereParameters.add(deathDateWhere);
+			}
 		}
 
 		if (theOrTypes != null) {
@@ -491,6 +472,44 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		return myBundleProvider;
 	}
 
+	private IQuery<IBaseBundle> queryForDates (IQuery<IBaseBundle> query, DateOrListParam dateRange) {
+		List<DateParam> dates = dateRange.getValuesAsQueryTokens();
+		boolean shouldQuery = false;
+		for (DateParam date : dates) {
+			logger.debug("Date Received: " + date.getValueAsString());
+			ParamPrefixEnum prefix = date.getPrefix();
+			if (prefix == null) {
+				query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+					.exactly().day(date.getValue()));
+			} else {
+				if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == prefix) {
+					query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+						.afterOrEquals().day(date.getValue()));
+				} else if (ParamPrefixEnum.GREATERTHAN == prefix) {
+					query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+						.after().day(date.getValue()));
+				} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == prefix) {
+					query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+						.beforeOrEquals().day(date.getValue()));
+				} else if (ParamPrefixEnum.LESSTHAN == prefix) {
+					query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+						.before().day(date.getValue()));
+				} else {
+					query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+						.exactly().day(date.getValue()));
+				}						
+			}
+
+			shouldQuery = true;
+		}
+
+		if (shouldQuery) {
+			return query;
+		} else {
+			return null;
+		}
+	}
+
 	@Operation(name = "$mdi-documents", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
 			@IdParam(optional=true) IdType theCompositionId,
@@ -499,7 +518,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = "decedent.address-postalcode") StringAndListParam theAddressPostalCodes,
 			@OperationParam(name = "decedent.address-state") StringAndListParam theAddressStates,
 			@OperationParam(name = "decedent.address-use") TokenAndListParam theAddressUses,
-			@OperationParam(name = "decedent.birthdate") DateRangeParam theBirthDateRange,
+			@OperationParam(name = "decedent.birthdate") DateOrListParam theBirthDateRange,
 			@OperationParam(name = "decedent.email") TokenAndListParam theEmails,
 			@OperationParam(name = "decedent.family") StringAndListParam theFamilies,
 			@OperationParam(name = "decedent.gender") TokenAndListParam theGenders,
@@ -642,17 +661,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			}
 
 			if (theBirthDateRange != null) {
-				DateParam lowerDateParam = theBirthDateRange.getLowerBound();
-				DateParam upperDateParam = theBirthDateRange.getUpperBound();
-				if (lowerDateParam != null && upperDateParam != null) {
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())))
-						.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
-					shouldQuery = true;
-				} else if (lowerDateParam != null) {
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())));
-					shouldQuery = true;
-				} else if (upperDateParam != null) {
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
+				IQuery<IBaseBundle> queryDates = queryForDates(query, theBirthDateRange);
+				if (queryDates != null) {
+					query = queryDates;
 					shouldQuery = true;
 				}
 			}
@@ -788,32 +799,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 			// Death Date 
 			if (theProfileDeathDateRange != null) {
-				List<DateParam> dates = theProfileDeathDateRange.getValuesAsQueryTokens();
-				for (DateParam date : dates) {
-					logger.debug("Date Received: " + date.getValueAsString());
-					ParamPrefixEnum prefix = date.getPrefix();
-					if (prefix == null) {
-						query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
-							.exactly().day(date.getValue()));
-					} else {
-						if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == prefix) {
-							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
-								.afterOrEquals().day(date.getValue()));
-						} else if (ParamPrefixEnum.GREATERTHAN == prefix) {
-							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
-								.after().day(date.getValue()));
-						} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == prefix) {
-							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
-								.beforeOrEquals().day(date.getValue()));
-						} else if (ParamPrefixEnum.LESSTHAN == prefix) {
-							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
-								.before().day(date.getValue()));
-						} else {
-							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
-								.exactly().day(date.getValue()));
-						}						
-					}
-
+				IQuery<IBaseBundle> queryDates = queryForDates(query, theProfileDeathDateRange);
+				if (queryDates != null) {
+					query = queryDates;
 					shouldQuery = true;
 				}
 			}

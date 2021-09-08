@@ -1,5 +1,6 @@
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.text.DateFormat;
 import java.text.Format;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.param.DateParam;
+import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.param.ParamPrefixEnum;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
@@ -244,6 +246,34 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 
 	}
 
+	protected String constructDateRangeWhereParameter(DateRangeParam theDateRange, String tableAlias, String column) {
+		String dateWhere = "";
+
+		DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'");
+		String lowerBound = formatter.format(theDateRange.getLowerBoundAsInstant());
+		if (theDateRange.getLowerBound() != null && !theDateRange.getLowerBound().isEmpty()
+			&& theDateRange.getUpperBound() != null && !theDateRange.getUpperBound().isEmpty()) {
+			// We have both lower and upper.
+			String upperBound = formatter.format(theDateRange.getUpperBoundAsInstant());
+			dateWhere = tableAlias + ".resource->>'" + column + "' >= '" + lowerBound 
+				+ "' and " + tableAlias + ".resource->>'" + column + "' <= '" + upperBound + "'";
+		} else {
+			if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == theDateRange.getLowerBound().getPrefix()) {
+				dateWhere = tableAlias + ".resource->>'" + column + "' >= " + "'" + lowerBound + "'";
+			} else if (ParamPrefixEnum.GREATERTHAN == theDateRange.getLowerBound().getPrefix()) {
+				dateWhere = tableAlias + ".resource->>'" + column + "' > " + "'" + lowerBound + "'";
+			} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == theDateRange.getLowerBound().getPrefix()) {
+				dateWhere = tableAlias + ".resource->>'" + column + "' <= " + "'" + lowerBound + "'";
+			} else if (ParamPrefixEnum.LESSTHAN == theDateRange.getLowerBound().getPrefix()) {
+				dateWhere = tableAlias + ".resource->>'" + column + "' < " + "'" + lowerBound + "'";
+			} else {
+				dateWhere = tableAlias + ".resource->>'" + column + "' = " + "'" + lowerBound + "'";
+			}
+		}
+
+		return dateWhere;
+	}
+
 	protected String constructDateWhereParameter(DateParam theDate, String tableAlias, String column) {
 		Format formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		String dateString = formatter.format(theDate.getValue());
@@ -260,7 +290,7 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 			inequality = "<=";
 		}
 		
-		return "("+tableAlias+".resource->>'"+column+"')::timestamp " + inequality + " '" + dateString + "'::timestamp";		
+		return tableAlias+".resource->>'"+column+"' " + inequality + " '" + dateString + "'";		
 	}
 
 	protected String constructDatePeriodWhereParameter(Date startDate, Date endDate, String tableAlias, String column) {
@@ -268,7 +298,7 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		String where = "";
 		if (startDate != null) {
 			String startDateString = formatter.format(startDate);
-			where += "(" + tableAlias + ".resource->>'" + column + "')::timestamp >= '" + startDateString + "'::timestamp";
+			where += tableAlias + ".resource->>'" + column + "' >= '" + startDateString + "'";
 		}
 		
 		if (endDate != null) {
@@ -276,7 +306,7 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 			if (where != null && !where.isEmpty()) {
 				where += " AND ";
 			}
-			where += "(" + tableAlias + ".resource->>'" + column + "')::timestamp <= '" + endDateString + "'::timestamp";
+			where += tableAlias + ".resource->>'" + column + "' <= '" + endDateString + "'";
 		}
 		
 		return where;
