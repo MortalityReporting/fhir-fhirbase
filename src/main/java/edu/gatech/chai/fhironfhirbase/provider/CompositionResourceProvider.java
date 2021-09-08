@@ -843,6 +843,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			}
 
 			retBundle.setTotal(totalSize);
+		} else {
+			throwSimulatedOO("No or No Known Parameters are received.");
 		}
 
 		return retBundle;
