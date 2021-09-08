@@ -202,6 +202,16 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return fromStatement;
 	}
 	
+	protected void addToWhereParemters(List<String> whereParameters, String where) {
+		for (String whereParameter : whereParameters) {
+			if (where.equals(whereParameter)) {
+				return;
+			}
+		}
+
+		whereParameters.add(where);
+	}
+
 	protected String constructTypeWhereParameter(TokenOrListParam theOrTypes) {
 		List<TokenParam> types = theOrTypes.getValuesAsQueryTokens();
 

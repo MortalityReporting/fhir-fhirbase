@@ -1,6 +1,9 @@
 package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.sql.SQLException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -67,8 +70,10 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
 import ca.uhn.fhir.rest.gclient.IQuery;
+import ca.uhn.fhir.rest.param.DateOrListParam;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.DateRangeParam;
+import ca.uhn.fhir.rest.param.ParamPrefixEnum;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.StringAndListParam;
 import ca.uhn.fhir.rest.param.StringOrListParam;
@@ -86,8 +91,9 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Scope("prototype")
 public class CompositionResourceProvider extends BaseResourceProvider {
 	private static final Logger logger = LoggerFactory.getLogger(CompositionResourceProvider.class);
-	private static final String NQ_EVENT_DETAIL = "event-detail";
-	private static final String SP_DEATH_LOCATION = "death-location";
+	public static final String NQ_EVENT_DETAIL = "event-detail";
+	public static final String SP_DEATH_LOCATION = "vrdr-death-location.district";
+	public static final String SP_DEATH_DATE = "vrdr-death-date.value-date";
 
 	public CompositionResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -172,6 +178,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Composition.SP_TYPE) TokenOrListParam theOrTypes,
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
+			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE) DateRangeParam theDeathDate,
 			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", 
 					USCorePatient.SP_ADDRESS_CITY,
 					USCorePatient.SP_ADDRESS_COUNTRY,
@@ -214,8 +221,11 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 		}
 
-		if (theDeathLocations != null) {
+		if (theDeathLocations != null || theDeathDate != null) {
 			fromStatement += " join observation o on comp.resource->'subject'->>'reference' = o.resource->'subject'->>'reference'";
+		}
+
+		if (theDeathLocations != null) {
 			fromStatement += " join location l on o.resource->'extension'->0->>'url' = 'http://hl7.org/fhir/us/vrdr/StructureDefinition/Observation-Location' " 
 				+ "and o.resource->'extension'->0->'valueReference'->>'reference' = concat('Location/', l.resource->>'id')";
 		}
@@ -243,8 +253,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 
 		if (theDeathLocations != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "deathlocation", "o.resource->'code'->'coding'");
-			whereParameters.add("deathlocation @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
+			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
 			String districtOrWhere = "";
 			for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
 				if (districtOrWhere == null || districtOrWhere.isEmpty()) {
@@ -255,6 +265,35 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			}
 
 			whereParameters.add(districtOrWhere);
+		}
+
+		if (theDeathDate != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
+			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+			String deathDateWhere = "";
+			DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'");
+			String lowerBound = formatter.format(theDeathDate.getLowerBoundAsInstant());
+			if (theDeathDate.getLowerBound() != null && !theDeathDate.getLowerBound().isEmpty()
+				&& theDeathDate.getUpperBound() != null && !theDeathDate.getUpperBound().isEmpty()) {
+				// We have both lower and upper.
+				String upperBound = formatter.format(theDeathDate.getUpperBoundAsInstant());
+				deathDateWhere = "o.resource->>'valueDateTime' >= '" + lowerBound 
+					+ "' and o.resource->>'valueDateTime' <= '" + upperBound + "'";
+			} else {
+				if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == theDeathDate.getLowerBound().getPrefix()) {
+					deathDateWhere = "o.resource->>'valueDateTime' >= " + "'" + lowerBound + "'";
+				} else if (ParamPrefixEnum.GREATERTHAN == theDeathDate.getLowerBound().getPrefix()) {
+					deathDateWhere = "o.resource->>'valueDateTime' > " + "'" + lowerBound + "'";
+				} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == theDeathDate.getLowerBound().getPrefix()) {
+					deathDateWhere = "o.resource->>'valueDateTime' <= " + "'" + lowerBound + "'";
+				} else if (ParamPrefixEnum.LESSTHAN == theDeathDate.getLowerBound().getPrefix()) {
+					deathDateWhere = "o.resource->>'valueDateTime' < " + "'" + lowerBound + "'";
+				} else {
+					deathDateWhere = "o.resource->>'valueDateTime' = " + "'" + lowerBound + "'";
+				}
+			}
+
+			whereParameters.add(deathDateWhere);
 		}
 
 		if (theOrTypes != null) {
@@ -462,7 +501,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = "decedent.address-state") StringAndListParam theAddressStates,
 			@OperationParam(name = "decedent.address-use") TokenAndListParam theAddressUses,
 			@OperationParam(name = "decedent.birthdate") DateRangeParam theBirthDateRange,
-			@OperationParam(name = "decedent.death-date") DateRangeParam theDeathDateRange,
 			@OperationParam(name = "decedent.email") TokenAndListParam theEmails,
 			@OperationParam(name = "decedent.family") StringAndListParam theFamilies,
 			@OperationParam(name = "decedent.gender") TokenAndListParam theGenders,
@@ -473,7 +511,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = "decedent.telecom") TokenAndListParam theTelecoms,
 			@OperationParam(name = "vrdr-death-certification.identifier") TokenAndListParam theCaseIds,
 			@OperationParam(name = "vrdr-death-location.district") StringOrListParam theDeathLocations,
-			@OperationParam(name = "vrdr-death-date.value-date") DateRangeParam theProfileDeathDateRange) {
+			@OperationParam(name = "vrdr-death-date.value-date", max = 2) DateOrListParam theProfileDeathDateRange) {
 				
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
@@ -554,6 +592,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					.execute();
 			}
 		} else {
+			boolean shouldQuery = false;
+
 			List<String> addressCitySearchParams = new ArrayList<String>();
 			if (theAddressCities != null) {
 				for (StringOrListParam theAddressCitiesAnd : theAddressCities.getValuesAsQueryTokens()) {
@@ -562,6 +602,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						addressCitySearchParams.add(theAddressCity.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_CITY.matches().values(addressCitySearchParams)));
+					shouldQuery = true;
 				}
 			}
 
@@ -573,6 +614,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						addressPostalCodeSearchParams.add(theAddressPostalCode.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_POSTALCODE.matches().values(addressPostalCodeSearchParams)));
+					shouldQuery = true;
 				}
 			}
 
@@ -584,6 +626,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						addressStateSearchParams.add(theAddressState.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_STATE.matches().values(addressStateSearchParams)));
+					shouldQuery = true;
 				}
 			}
 
@@ -595,6 +638,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						addressUseSearchParams.add(theAddressUse.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_USE.exactly().codes(addressCitySearchParams)));
+					shouldQuery = true;
 				}
 			}
 
@@ -604,11 +648,13 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				if (lowerDateParam != null && upperDateParam != null) {
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())))
 						.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
-
+					shouldQuery = true;
 				} else if (lowerDateParam != null) {
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(lowerDateParam.getValue())));
+					shouldQuery = true;
 				} else if (upperDateParam != null) {
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(upperDateParam.getValue())));
+					shouldQuery = true;
 				}
 			}
 
@@ -620,6 +666,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						emailSearchParams.add(theEmail.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.EMAIL.exactly().codes(emailSearchParams)));
+					shouldQuery = true;
 				}
 			}
 
@@ -631,6 +678,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						familySearchParams.add(theFamily.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
+					shouldQuery = true;
 				}
 			}
 
@@ -642,6 +690,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						genderSearchParams.add(theGender.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
+					shouldQuery = true;
 				}
 			}
 
@@ -653,6 +702,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						givenSearchParams.add(theGiven.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));
+					shouldQuery = true;
 				}
 			}
 
@@ -664,6 +714,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						identifierSearchParams.add(theIdentifier.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.IDENTIFIER.exactly().codes(identifierSearchParams)));
+					shouldQuery = true;
 				}
 			}
 
@@ -679,6 +730,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						nameSearchParams.add(nameValue);
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.NAME.matches().values(nameSearchParams)));
+					shouldQuery = true;
 				}
 
 			}
@@ -691,6 +743,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						phoneSearchParams.add(thePhone.getValue());
 					}
 					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.PHONE.exactly().codes(phoneSearchParams)));
+					shouldQuery = true;
 				}
 
 			}
@@ -712,6 +765,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					} else {
 						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.TELECOM.exactly().systemAndValues(systemName, telecomSearchParams)));
 					}
+
+					shouldQuery = true;
 				}
 
 			}
@@ -726,10 +781,47 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				query = query.and(
 					(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_DEATH_LOCATION))
 						.matches()
-						.values(deathLocationSearchParams));
+						.values(deathLocationSearchParams)
+					);
+
+				shouldQuery = true;
 			}
 
-			compositionsBundle = query.returnBundle(Bundle.class).execute();
+			// Death Date 
+			if (theProfileDeathDateRange != null) {
+				List<DateParam> dates = theProfileDeathDateRange.getValuesAsQueryTokens();
+				for (DateParam date : dates) {
+					logger.debug("Date Received: " + date.getValueAsString());
+					ParamPrefixEnum prefix = date.getPrefix();
+					if (prefix == null) {
+						query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+							.exactly().day(date.getValue()));
+					} else {
+						if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == prefix) {
+							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+								.afterOrEquals().day(date.getValue()));
+						} else if (ParamPrefixEnum.GREATERTHAN == prefix) {
+							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+								.after().day(date.getValue()));
+						} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == prefix) {
+							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+								.beforeOrEquals().day(date.getValue()));
+						} else if (ParamPrefixEnum.LESSTHAN == prefix) {
+							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+								.before().day(date.getValue()));
+						} else {
+							query = query.and((new ca.uhn.fhir.rest.gclient.DateClientParam(CompositionResourceProvider.SP_DEATH_DATE))
+								.exactly().day(date.getValue()));
+						}						
+					}
+
+					shouldQuery = true;
+				}
+			}
+
+			if (shouldQuery) {
+				compositionsBundle = query.returnBundle(Bundle.class).execute();
+			}
 		}
 
 		if (compositionsBundle != null && !compositionsBundle.isEmpty()) {
@@ -765,13 +857,11 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = "graph") UriParam theGraph) {
 
 		OperationOutcome outcome = new OperationOutcome();
-		if (thePersist != null && !thePersist.isEmpty()) {
-			if (thePersist.getValue()) {
-				// We can't store this bundler.
-				outcome.addIssue().setSeverity(IssueSeverity.ERROR)
-						.setDetails((new CodeableConcept()).setText("This server do not support Bundle persist"));
-				throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-			}
+		if (thePersist != null && !thePersist.isEmpty() && thePersist.getValue().booleanValue()) {
+			// We can't store this bundler.
+			outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+					.setDetails((new CodeableConcept()).setText("This server do not support Bundle persist"));
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
 		if (theCompositionId == null || theCompositionId.isEmpty()) {
@@ -945,21 +1035,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					// Get asserter
 					Reference reference = condition.getAsserter();
 					processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
-//						if (reference != null && !reference.isEmpty()) {
-//							String referenceId = reference.getReferenceElement().getValue();
-//							if (!addedResource.contains(referenceId)) {
-//								Resource resource = (Resource) client.read()
-//										.resource(reference.getReferenceElement().getResourceType())
-//										.withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
-//								bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource));
-//								addedResource.add(referenceId);
-//
-//								if (resource instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
-//									addedPractitioner.add(resource.getIdElement().getIdPart());
-//								}
-//
-//							}
-//						}
 				}
 			}
 
