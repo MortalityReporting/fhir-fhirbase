@@ -257,9 +257,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			String districtOrWhere = "";
 			for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
 				if (districtOrWhere == null || districtOrWhere.isEmpty()) {
-					districtOrWhere = "l.resource->'address'->>'district' like '%" + theDeathLocation.getValue() + "%'";
+					districtOrWhere = "lower(l.resource->'address'->>'district') like lower('%" + theDeathLocation.getValue() + "%')";
 				} else {
-					districtOrWhere += " or l.resource->'address'->>'district' like '%" + theDeathLocation.getValue() + "%'";
+					districtOrWhere += " or lower(l.resource->'address'->>'district') like lower('%" + theDeathLocation.getValue() + "%')";
 				}
 			}
 

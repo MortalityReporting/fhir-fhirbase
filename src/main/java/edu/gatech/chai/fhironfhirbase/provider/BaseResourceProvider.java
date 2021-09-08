@@ -259,15 +259,15 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 				+ "' and " + tableAlias + ".resource->>'" + column + "' <= '" + upperBound + "'";
 		} else {
 			if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == theDateRange.getLowerBound().getPrefix()) {
-				dateWhere = tableAlias + ".resource->>'" + column + "' >= " + "'" + lowerBound + "'";
+				dateWhere = tableAlias + ".resource->>'" + column + "' >= '" + lowerBound + "'";
 			} else if (ParamPrefixEnum.GREATERTHAN == theDateRange.getLowerBound().getPrefix()) {
-				dateWhere = tableAlias + ".resource->>'" + column + "' > " + "'" + lowerBound + "'";
+				dateWhere = tableAlias + ".resource->>'" + column + "' > '" + lowerBound + "'";
 			} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == theDateRange.getLowerBound().getPrefix()) {
-				dateWhere = tableAlias + ".resource->>'" + column + "' <= " + "'" + lowerBound + "'";
+				dateWhere = tableAlias + ".resource->>'" + column + "' <= '" + lowerBound + "'";
 			} else if (ParamPrefixEnum.LESSTHAN == theDateRange.getLowerBound().getPrefix()) {
-				dateWhere = tableAlias + ".resource->>'" + column + "' < " + "'" + lowerBound + "'";
+				dateWhere = tableAlias + ".resource->>'" + column + "' < '" + lowerBound + "'";
 			} else {
-				dateWhere = tableAlias + ".resource->>'" + column + "' = " + "'" + lowerBound + "'";
+				dateWhere = tableAlias + ".resource->>'" + column + "' = '" + lowerBound + "'";
 			}
 		}
 
@@ -331,21 +331,21 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 			if (patientChain != null) {
 				if (USCorePatient.SP_NAME.equals(patientChain)) {
 					if (where.isEmpty()) {
-						where = "p.resource->>'name' like " + "'%" + theValue + "%'";
+						where = "lower(p.resource->>'name') like " + "lower('%" + theValue + "%')";
  					} else {
-						where += " and p.resource->>'name' like " + "'%" + theValue + "%'";
+						where += " and lower(p.resource->>'name') like " + "lower('%" + theValue + "%')";
 					}
 				} else if (USCorePatient.SP_ADDRESS_CITY.equals(patientChain)) {
 					if (where.isEmpty()) {
-						where = "addresses @> '{\"city\":\""+ theValue +"\"}'";
+						where = "lower(addresses::text)::jsonb @> lower('{\"city\":\""+ theValue +"\"}')::jsonb";
  					} else {
-						where += " and addresses @> '{\"city\":\""+ theValue +"\"}'";
+						where += " and lower(addresses::text)::jsonb @> lower('{\"city\":\""+ theValue +"\"}')::jsonb";
 					}
 				} else if (USCorePatient.SP_ADDRESS_COUNTRY.equals(patientChain)) {
 					if (where.isEmpty()) {
-						where = "addresses @> '{\"country\":\""+ theValue +"\"}'";
+						where = "lower(addresses::text)::jsonb @> lower('{\"country\":\""+ theValue +"\"}')::jsonb";
  					} else {
-						where += " and addresses @> '{\"country\":\""+ theValue +"\"}'";
+						where += " and lower(addresses::text)::jsonb @> lower('{\"country\":\""+ theValue +"\"}')::jsonb";
 					}
 				} else if (USCorePatient.SP_ADDRESS_POSTALCODE.equals(patientChain)) {
 					if (where.isEmpty()) {
@@ -355,9 +355,9 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 					}
 				} else if (USCorePatient.SP_ADDRESS_STATE.equals(patientChain)) {
 					if (where.isEmpty()) {
-						where = "addresses @> '{\"state\":\""+ theValue +"\"}'";
+						where = "lower(addresses::text)::jsonb @> lower('{\"state\":\""+ theValue +"\"}')::jsonb";
  					} else {
-						where += " and addresses @> '{\"state\":\""+ theValue +"\"}'";
+						where += " and lower(addresses::text)::jsonb @> lower('{\"state\":\""+ theValue +"\"}')::jsonb";
 					}
 				} else if (USCorePatient.SP_ADDRESS_USE.equals(patientChain)) {
 					if (where.isEmpty()) {
@@ -383,15 +383,15 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 					}
 				} else if (USCorePatient.SP_EMAIL.equals(patientChain)) {
 					if (where.isEmpty()) {
-						where = "telecoms @> '{\"system\":\"email\", \"value\":\""+ theValue +"\"}'";
+						where = "lower(telecoms::text)::jsonb @> lower('{\"system\":\"email\", \"value\":\""+ theValue +"\"}')::jsonb";
  					} else {
-						where += " and telecoms @> '{\"system\":\"email\", \"value\":\""+ theValue +"\"}'";
+						where += " and lower(telecoms::text)::jsonb @> lower('{\"system\":\"email\", \"value\":\""+ theValue +"\"}')::jsonb";
 					}
 				} else if (USCorePatient.SP_FAMILY.equals(patientChain)) {
 					if (where.isEmpty()) {
-						where = "names @> '{\"family\":\""+ theValue +"\"}'";
+						where = "lower(names::text)::jsonb @> lower('{\"family\":\""+ theValue +"\"}')::jsonb";
  					} else {
-						where += " and names @> '{\"family\":\""+ theValue +"\"}'";
+						where += " and lower(names::text)::jsonb @> lower('{\"family\":\""+ theValue +"\"}')::jsonb";
 					}
 				} else if (USCorePatient.SP_GENDER.equals(patientChain)) {
 					if (where.isEmpty()) {
@@ -401,9 +401,9 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 					}
 				} else if (USCorePatient.SP_GIVEN.equals(patientChain)) {
 					if (where.isEmpty()) {
-						where = "names @> '{\"given\":[\""+ theValue + "\"]}'";
+						where = "lower(names::text)::jsonb @> lower('{\"given\":[\""+ theValue + "\"]}')::jsonb";
  					} else {
-						where += " and names @> '{\"given\":[\""+ theValue + "\"]}'";
+						where += " and lower(names::text)::jsonb @> lower('{\"given\":[\""+ theValue + "\"]}')::jsonb";
 					}
 				} else if (USCorePatient.SP_PHONE.equals(patientChain)) {
 					if (where.isEmpty()) {
@@ -414,9 +414,9 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 				} else if (USCorePatient.SP_TELECOM.equals(patientChain)) {
 					TokenParam tokenPatient = thePatient.toTokenParam(getFhirContext());
 					if (where.isEmpty()) {
-						where = "telecoms @> '{\"system\":\"" + tokenPatient.getSystem() + "\", \"value\":\""+ tokenPatient.getValue() +"\"}'";
+						where = "lower(telecoms::text)::jsonb @> lower('{\"system\":\"" + tokenPatient.getSystem() + "\", \"value\":\""+ tokenPatient.getValue() +"\"}')::jsonb";
  					} else {
-						where += " and telecoms @> '{\"system\":\"" + tokenPatient.getSystem() + "\", \"value\":\""+ tokenPatient.getValue() +"\"}'";
+						where += " and lower(telecoms::text)::jsonb @> lower('{\"system\":\"" + tokenPatient.getSystem() + "\", \"value\":\""+ tokenPatient.getValue() +"\"}')::jsonb";
 					}
 				} else if (USCorePatient.SP_IDENTIFIER.equals(patientChain)) {
 					TokenParam identifierToken = thePatient.toTokenParam(getFhirContext());
