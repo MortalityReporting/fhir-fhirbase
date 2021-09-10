@@ -250,24 +250,30 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		String dateWhere = "";
 
 		DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'");
-		String lowerBound = formatter.format(theDateRange.getLowerBoundAsInstant());
 		if (theDateRange.getLowerBound() != null && !theDateRange.getLowerBound().isEmpty()
 			&& theDateRange.getUpperBound() != null && !theDateRange.getUpperBound().isEmpty()) {
 			// We have both lower and upper.
+			String lowerBound = formatter.format(theDateRange.getLowerBoundAsInstant());
 			String upperBound = formatter.format(theDateRange.getUpperBoundAsInstant());
 			dateWhere = tableAlias + ".resource->>'" + column + "' >= '" + lowerBound 
 				+ "' and " + tableAlias + ".resource->>'" + column + "' <= '" + upperBound + "'";
-		} else {
+		} else if (theDateRange.getLowerBound() != null && !theDateRange.getLowerBound().isEmpty()) {
+			String lowerBound = formatter.format(theDateRange.getLowerBoundAsInstant());
 			if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == theDateRange.getLowerBound().getPrefix()) {
 				dateWhere = tableAlias + ".resource->>'" + column + "' >= '" + lowerBound + "'";
 			} else if (ParamPrefixEnum.GREATERTHAN == theDateRange.getLowerBound().getPrefix()) {
 				dateWhere = tableAlias + ".resource->>'" + column + "' > '" + lowerBound + "'";
-			} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == theDateRange.getLowerBound().getPrefix()) {
-				dateWhere = tableAlias + ".resource->>'" + column + "' <= '" + lowerBound + "'";
-			} else if (ParamPrefixEnum.LESSTHAN == theDateRange.getLowerBound().getPrefix()) {
-				dateWhere = tableAlias + ".resource->>'" + column + "' < '" + lowerBound + "'";
 			} else {
 				dateWhere = tableAlias + ".resource->>'" + column + "' = '" + lowerBound + "'";
+			}
+		} else {
+			String upperBound = formatter.format(theDateRange.getUpperBoundAsInstant());
+			if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == theDateRange.getUpperBound().getPrefix()) {
+				dateWhere = tableAlias + ".resource->>'" + column + "' <= '" + upperBound + "'";
+			} else if (ParamPrefixEnum.LESSTHAN == theDateRange.getUpperBound().getPrefix()) {
+				dateWhere = tableAlias + ".resource->>'" + column + "' < '" + upperBound + "'";
+			} else {
+				dateWhere = tableAlias + ".resource->>'" + column + "' = '" + upperBound + "'";
 			}
 		}
 
