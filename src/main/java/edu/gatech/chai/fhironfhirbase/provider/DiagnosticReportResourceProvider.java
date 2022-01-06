@@ -23,6 +23,7 @@ import java.util.Set;
 import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.IdType;
 import org.springframework.context.annotation.Scope;
@@ -54,16 +55,16 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
-public class DocumentReferenceResourceProvider extends BaseResourceProvider {
+public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 
-	public DocumentReferenceResourceProvider(FhirContext ctx) {
+	public DiagnosticReportResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(DocumentReferenceResourceProvider.getType().toLowerCase());
-		setMyResourceType(DocumentReferenceResourceProvider.getType());
+		setTableName(DiagnosticReportResourceProvider.getType().toLowerCase());
+		setMyResourceType(DiagnosticReportResourceProvider.getType());
 
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
@@ -71,23 +72,23 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 	}
 
 	public static String getType() {
-		return "DocumentReference";
+		return "DiagnosticReport";
 	}
 
 	@Override
-	public Class<DocumentReference> getResourceType() {
-		return DocumentReference.class;
+	public Class<DiagnosticReport> getResourceType() {
+		return DiagnosticReport.class;
 	}
 
 	@Create()
-	public MethodOutcome createDocumentReference(@ResourceParam DocumentReference theDocumentReference) {
-		validateResource(theDocumentReference);
+	public MethodOutcome createDiagnosticReport(@ResourceParam DiagnosticReport theDiagnosticReport) {
+		validateResource(theDiagnosticReport);
 		MethodOutcome retVal = new MethodOutcome();
 		
 		try {
-			IBaseResource createdDocumentReference = getFhirbaseMapping().create(theDocumentReference, getResourceType());
-			retVal.setId(createdDocumentReference.getIdElement());
-			retVal.setResource(createdDocumentReference);
+			IBaseResource createdDiagnosticReport = getFhirbaseMapping().create(theDiagnosticReport, getResourceType());
+			retVal.setId(createdDiagnosticReport.getIdElement());
+			retVal.setResource(createdDiagnosticReport);
 			retVal.setCreated(true);
 		} catch (SQLException e) {
 			retVal.setCreated(false);
@@ -101,7 +102,7 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 	}
 
 	@Delete()
-	public void deleteDocumentReference(@IdParam IdType theId) {
+	public void deleteDiagnosticReport(@IdParam IdType theId) {
 		try {
 			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
 		} catch (SQLException e) {
@@ -113,7 +114,7 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 	}
 
 	@Read()
-	public IBaseResource readDocumentReference(@IdParam IdType theId) {
+	public IBaseResource readDiagnosticReport(@IdParam IdType theId) {
 		IBaseResource retVal = null;
 		
 		try {
@@ -126,16 +127,16 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 	}
 
 	@Update()
-	public MethodOutcome updateDocumentReference(@IdParam IdType theId,
-			@ResourceParam DocumentReference theDocumentReference) {
-		validateResource(theDocumentReference);
+	public MethodOutcome updateDiagnosticReport(@IdParam IdType theId,
+			@ResourceParam DiagnosticReport theDiagnosticReport) {
+		validateResource(theDiagnosticReport);
 
 		MethodOutcome retVal = new MethodOutcome();
 		
 		try {
-			IBaseResource updatedDocumentReference = getFhirbaseMapping().update(theDocumentReference, getResourceType());
-			retVal.setId(updatedDocumentReference.getIdElement());
-			retVal.setResource(updatedDocumentReference);
+			IBaseResource updatedDiagnosticReport = getFhirbaseMapping().update(theDiagnosticReport, getResourceType());
+			retVal.setId(updatedDiagnosticReport.getIdElement());
+			retVal.setResource(updatedDiagnosticReport);
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
@@ -144,27 +145,27 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 	}
 
 	@Search()
-	public IBundleProvider findDocumentReferenceByIds(
-			@RequiredParam(name = DocumentReference.SP_RES_ID) TokenOrListParam theDocumentReferenceIds,
+	public IBundleProvider findDiagnosticReportByIds(
+			@RequiredParam(name = DiagnosticReport.SP_RES_ID) TokenOrListParam theDiagnosticReportIds,
 
-			@IncludeParam(allow = { "DocumentReference:patient", "DocumentReference:subject",
-					"DocumentReference:encounter" }) final Set<Include> theIncludes,
+			@IncludeParam(allow = { "DiagnosticReport:patient", "DiagnosticReport:subject",
+					"DiagnosticReport:encounter" }) final Set<Include> theIncludes,
 
 			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
 
-		if (theDocumentReferenceIds == null) {
+		if (theDiagnosticReportIds == null) {
 			return null;
 		}
 
 		String whereStatement = "WHERE ";
-		for (TokenParam theDocumentReference : theDocumentReferenceIds.getValuesAsQueryTokens()) {
-			whereStatement += "r.id = '" + theDocumentReference.getValue() + "' OR ";
+		for (TokenParam theDiagnosticReport : theDiagnosticReportIds.getValuesAsQueryTokens()) {
+			whereStatement += "diag.id = '" + theDiagnosticReport.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
 
-		String queryCount = "SELECT count(*) FROM documentreference r " + whereStatement;
-		String query = "SELECT * FROM documentreference r " + whereStatement;
+		String queryCount = "SELECT count(*) FROM documentreference diag " + whereStatement;
+		String query = "SELECT * FROM documentreference diag " + whereStatement;
 
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, theReverseIncludes);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
@@ -173,27 +174,26 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 	}
 
 	@Search()
-	public IBundleProvider findDocumentReferenceByParams(
-			@OptionalParam(name = DocumentReference.SP_PATIENT, chainWhitelist = { "",
+	public IBundleProvider findDiagnosticReportsByParams(
+			@OptionalParam(name = DiagnosticReport.SP_PATIENT, chainWhitelist = { "",
 					USCorePatient.SP_NAME }) ReferenceAndListParam thePatients,
-			@OptionalParam(name = DocumentReference.SP_SUBJECT, chainWhitelist = { "",
+			@OptionalParam(name = DiagnosticReport.SP_SUBJECT, chainWhitelist = { "",
 					USCorePatient.SP_NAME }) ReferenceAndListParam theSubjects,
-			@OptionalParam(name = DocumentReference.SP_IDENTIFIER) TokenParam theDocumentReferenceIdentifier,
-			@OptionalParam(name = DocumentReference.SP_ENCOUNTER) ReferenceParam theEncounter,
-			@OptionalParam(name = DocumentReference.SP_TYPE) TokenOrListParam theOrTypes,
-			@OptionalParam(name = DocumentReference.SP_DATE) DateParam theDate, @Sort SortSpec theSort,
-			@IncludeParam(allow = { "DocumentReference:patient", "DocumentReference:subject",
-					"DocumentReference:encounter" }) final Set<Include> theIncludes,
+			@OptionalParam(name = DiagnosticReport.SP_IDENTIFIER) TokenParam theDocumentReferenceIdentifier,
+			@OptionalParam(name = DiagnosticReport.SP_ENCOUNTER) ReferenceParam theEncounter,
+			@Sort SortSpec theSort,
+			@IncludeParam(allow = { "DiagnosticReport:patient", "DiagnosticReport:subject",
+					"DiagnosticReport:encounter" }) final Set<Include> theIncludes,
 
 			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
 
 		List<String> whereParameters = new ArrayList<String>();
 		boolean returnAll = true;
 		
-		String fromStatement = "documentreference dr";
+		String fromStatement = getTableName() + " diag";
 
 		if (theSubjects != null || thePatients != null) {
-			fromStatement += " join patient p on dr.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+			fromStatement += " join patient p on diag.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 
 			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
 			if (updatedFromStatement.isEmpty()) {
@@ -214,25 +214,8 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 			returnAll = false;			
 		}
 
-		if (theOrTypes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "types", "dr.resource->'type'->'coding'");
-			String where = constructTypeWhereParameter(theOrTypes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
-		}
-
-		if (theDate != null) {
-			String where = constructDateWhereParameter(theDate, "dr", "date");
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
-		}
-
 		if (theEncounter != null) {
-			whereParameters.add("dr.resource->'context'->>'encounter' like '%" + theEncounter.getValue() + "%'");
+			whereParameters.add("diag.resource->'context'->>'encounter' like '%" + theEncounter.getValue() + "%'");
 			returnAll = false;
 		}
 
@@ -241,12 +224,12 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 			String value = theDocumentReferenceIdentifier.getValue();
 
 			if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
-				whereParameters.add("dr.resource->'identifier' @> '[{\"value\": \"" + value + "\",\"system\": \""
+				whereParameters.add("diag.resource->'identifier' @> '[{\"value\": \"" + value + "\",\"system\": \""
 						+ system + "\"}]'::jsonb");
 			} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
-				whereParameters.add("dr.resource->'identifier' @> '[{\"system\": \"" + system + "\"}]'::jsonb");
+				whereParameters.add("diag.resource->'identifier' @> '[{\"system\": \"" + system + "\"}]'::jsonb");
 			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
-				whereParameters.add("dr.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
+				whereParameters.add("diag.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
 			returnAll = false;
 		}
@@ -284,16 +267,16 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 			// _Include
 			List<String> includes = new ArrayList<String>();
 
-			if (theIncludes.contains(new Include("DocumentReference:encounter"))) {
-				includes.add("DocumentReference:encounter");
+			if (theIncludes.contains(new Include("DiagnosticReport:encounter"))) {
+				includes.add("DiagnosticReport:encounter");
 			}
 
-			if (theIncludes.contains(new Include("DocumentReference:patient"))) {
-				includes.add("DocumentReference:patient");
+			if (theIncludes.contains(new Include("DiagnosticReport:patient"))) {
+				includes.add("DiagnosticReport:patient");
 			}
 
-			if (theIncludes.contains(new Include("DocumentReference:subject"))) {
-				includes.add("DocumentReference:subject");
+			if (theIncludes.contains(new Include("DiagnosticReport:subject"))) {
+				includes.add("DiagnosticReport:subject");
 			}
 
 			String myQuery = query;			
@@ -314,7 +297,7 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 	/* TODO: 
 	 * Add more validation code here.
 	 */
-	private void validateResource(DocumentReference theDocumentReference) {
+	private void validateResource(DiagnosticReport theDiagnosticReport) {
 		
 	}
 
