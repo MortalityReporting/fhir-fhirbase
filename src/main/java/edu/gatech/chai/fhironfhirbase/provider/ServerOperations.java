@@ -169,14 +169,14 @@ public class ServerOperations {
 				if (patientId != null && !patientId.isEmpty()) {
 					// We do not update the patient info from the lab report. So we just get
 					// patient id and keep the information
-					referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+					referenceIds.put("Patient/" + patient.getIdElement().getIdPart(), "Patient/" + patientId);
 					patientIds.add("Patient/" + patientId);
 					patient.setId(patientId);
 				} else {
 					MethodOutcome outcome = client.create().resource(patient).prettyPrint().encodedJson().execute();
 					if (outcome.getCreated().booleanValue()) {
 						patientId = outcome.getId().getIdPart();
-						referenceIds.put(entry.getFullUrl(), "Patient/" + patientId);
+						referenceIds.put("Patient/" + patient.getId(), "Patient/" + patientId);
 						patientIds.add("Patient/" + patientId);
 
 						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
@@ -192,10 +192,10 @@ public class ServerOperations {
 			}
 		}
 
-		// Now, we re-loop the entries and take care of resources other than patient.
+		// Practitioner
 		for (BundleEntryComponent entry : entries) {
 			Resource resource = entry.getResource();
-			
+
 			if (resource instanceof Practitioner) {
 				Practitioner practitioner = (Practitioner) resource;
 				String practitionerId = null;
@@ -214,7 +214,7 @@ public class ServerOperations {
 
 				if (practitionerId != null && !practitionerId.isEmpty()) {
 					// Now we need to write this to fhirbase.
-					practitioner.setId(new IdType("Practitioner", practitionerId));
+					referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
 					MethodOutcome outcome = client.update().resource(practitioner).prettyPrint().encodedJson().execute();
 					if (outcome.getId() == null || outcome.getId().isEmpty()) {
 						return (OperationOutcome) outcome.getOperationOutcome();
@@ -223,15 +223,20 @@ public class ServerOperations {
 					MethodOutcome outcome = client.create().resource(practitioner).prettyPrint().encodedJson().execute();
 					if (outcome.getCreated().booleanValue()) {
 						practitionerId = outcome.getId().getIdPart();
+						referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
 					} else {
 						return (OperationOutcome) outcome.getOperationOutcome();
 					}
 				}
-				referenceIds.put(entry.getFullUrl(), "Practitioner/" + practitionerId);
 
 				practitioner.setId(practitionerId);
 				entry.setFullUrl("Practitioner/" + practitionerId);
 			}
+		}
+
+		// ServiceRequest - todo
+		for (BundleEntryComponent entry : entries) {
+			Resource resource = entry.getResource();
 
 			if (resource instanceof ServiceRequest) {
 				ServiceRequest serviceRequest = (ServiceRequest) resource;
@@ -241,6 +246,11 @@ public class ServerOperations {
 
 				// post this to the server if not exist.
 			}
+		}
+
+		// Specimen
+		for (BundleEntryComponent entry : entries) {
+			Resource resource = entry.getResource();			
 
 			if (resource instanceof Specimen) {
 				Specimen specimen = (Specimen) resource;
@@ -269,14 +279,13 @@ public class ServerOperations {
 						int total = responseBundle.getTotal();
 						if (total > 0) {
 							specimenId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-							specimen.setId(specimenId);
 							break;
 						}
 					}
 				}
 
 				if (specimenId != null && !specimenId.isEmpty()) {
-					specimen.setId(new IdType("Specimen", specimenId));
+					referenceIds.put("Specimen/" + specimen.getIdElement().getIdPart(), "Specimen/" + specimenId);
 					MethodOutcome outcome = client.update().resource(specimen).prettyPrint().encodedJson().execute();
 					if (outcome.getId() == null || outcome.getId().isEmpty()) {
 						return (OperationOutcome) outcome.getOperationOutcome();
@@ -285,15 +294,20 @@ public class ServerOperations {
 					MethodOutcome outcome = client.create().resource(specimen).prettyPrint().encodedJson().execute();
 					if (outcome.getCreated().booleanValue()) {
 						specimenId = outcome.getId().getIdPart();
+						referenceIds.put("Specimen/" + specimen.getIdElement().getIdPart(), "Specimen/" + specimenId);
 					} else {
 						return (OperationOutcome) outcome.getOperationOutcome();
 					}
 				}
-				referenceIds.put(entry.getFullUrl(), "Specimen/" + specimenId);
 
 				specimen.setId(specimenId);
 				entry.setFullUrl("Specimen/" + specimenId);
 			}
+		}
+
+		// Observation
+		for (BundleEntryComponent entry : entries) {
+			Resource resource = entry.getResource();			
 
 			if (resource instanceof Observation) {
 				Observation observation = (Observation) resource;
@@ -321,7 +335,6 @@ public class ServerOperations {
 						int total = responseBundle.getTotal();
 						if (total > 0) {
 							observationId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-							observation.setId(observationId);
 							break;
 						}
 					}
@@ -332,6 +345,7 @@ public class ServerOperations {
 				}
 
 				if (observationId != null && !observationId.isEmpty()) {
+					referenceIds.put("Observation/" + observation.getIdElement().getIdPart(), "Observation/" + observationId);
 					MethodOutcome outcome = client.update().resource(observation).prettyPrint().encodedJson().execute();
 					if (outcome.getId() == null || outcome.getId().isEmpty()) {
 						return (OperationOutcome) outcome.getOperationOutcome();
@@ -340,18 +354,22 @@ public class ServerOperations {
 					MethodOutcome outcome = client.create().resource(observation).prettyPrint().encodedJson().execute();
 					if (outcome.getCreated().booleanValue()) {
 						observationId = outcome.getId().getIdPart();
+						referenceIds.put("Observation/" + observation.getIdElement().getIdPart(), "Observation/" + observationId);
 					} else {
 						return (OperationOutcome) outcome.getOperationOutcome();
 					}
 
 				}
-				referenceIds.put(entry.getFullUrl(), "Observation/" + observationId);
 
 				observation.setId(observationId);
 				entry.setFullUrl("Observation/" + observationId);
 			}
+		}
 
-			// DocumentReference
+		// DocumentReference
+		for (BundleEntryComponent entry : entries) {
+			Resource resource = entry.getResource();			
+
 			if (resource instanceof DocumentReference) {
 				DocumentReference documentReference = (DocumentReference) resource;
 
@@ -373,7 +391,7 @@ public class ServerOperations {
 
 				if (documentReferenceId != null && !documentReferenceId.isEmpty()) {
 					// Now we need to write this to fhirbase.
-					documentReference.setId(new IdType("DocumentReference", documentReferenceId));
+					referenceIds.put("DocumentReference/" + documentReference.getIdElement().getIdPart(), "DocumentReference/" + documentReferenceId);
 					MethodOutcome outcome = client.update().resource(documentReference).prettyPrint().encodedJson().execute();
 					if (outcome.getId() == null || outcome.getId().isEmpty()) {
 						return (OperationOutcome) outcome.getOperationOutcome();
@@ -382,17 +400,21 @@ public class ServerOperations {
 					MethodOutcome outcome = client.create().resource(documentReference).prettyPrint().encodedJson().execute();
 					if (outcome.getCreated().booleanValue()) {
 						documentReferenceId = outcome.getId().getIdPart();
+						referenceIds.put("DocumentReference/" + documentReference.getIdElement().getIdPart(), "DocumentReference/" + documentReferenceId);
 					} else {
 						return (OperationOutcome) outcome.getOperationOutcome();
 					}
 				}
-				referenceIds.put(entry.getFullUrl(), "DocumentReference/" + documentReferenceId);
 
 				documentReference.setId(documentReferenceId);
 				entry.setFullUrl("DocumentReference/" + documentReferenceId);				
 			}
+		}
 
-			// DiagnosticReport
+		// DiagnosticReport
+		for (BundleEntryComponent entry : entries) {
+			Resource resource = entry.getResource();			
+
 			if (resource instanceof DiagnosticReport) {
 				DiagnosticReport diagnosticReport = (DiagnosticReport) resource;
 
@@ -445,7 +467,7 @@ public class ServerOperations {
 
 				if (diagnosticReportId != null && !diagnosticReportId.isEmpty()) {
 					// Now we need to write this to fhirbase.
-					diagnosticReport.setId(new IdType("DiagnosticReport", diagnosticReportId));
+					referenceIds.put("DiagnosticReport/" + diagnosticReport.getIdElement().getIdPart(), "DiagnosticReport/" + diagnosticReportId);
 					MethodOutcome outcome = client.update().resource(diagnosticReport).prettyPrint().encodedJson().execute();
 					if (outcome.getId() == null || outcome.getId().isEmpty()) {
 						return (OperationOutcome) outcome.getOperationOutcome();
@@ -454,11 +476,11 @@ public class ServerOperations {
 					MethodOutcome outcome = client.create().resource(diagnosticReport).prettyPrint().encodedJson().execute();
 					if (outcome.getCreated().booleanValue()) {
 						diagnosticReportId = outcome.getId().getIdPart();
+						referenceIds.put("DiagnosticReport/" + diagnosticReport.getIdElement().getIdPart(), "DiagnosticReport/" + diagnosticReportId);
 					} else {
 						return (OperationOutcome) outcome.getOperationOutcome();
 					}
 				}
-				referenceIds.put(entry.getFullUrl(), "DiagnosticReport/" + diagnosticReportId);
 
 				diagnosticReport.setId(diagnosticReportId);
 				entry.setFullUrl("DiagnosticReport/" + diagnosticReportId);
