@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.hl7.fhir.r4.model.Attachment;
+import org.hl7.fhir.r4.model.Binary;
 import org.hl7.fhir.r4.model.BooleanType;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.CodeableConcept;
@@ -29,6 +31,7 @@ import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Composition.SectionComponent;
+import org.hl7.fhir.r4.model.DocumentReference.DocumentReferenceContentComponent;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueType;
 import org.hl7.fhir.r4.model.OperationOutcome.OperationOutcomeIssueComponent;
@@ -50,12 +53,10 @@ import org.hl7.fhir.r4.model.ServiceRequest;
 import org.hl7.fhir.r4.model.Specimen;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.UriType;
-import org.hl7.fhir.r4.model.codesystems.ObservationCategory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.MethodOutcome;
@@ -143,6 +144,8 @@ public class ServerOperations {
 	}
 
 	private OperationOutcome processPostResources(IGenericClient client, List<BundleEntryComponent> entries) {
+
+		// Patient and Binary
 		for (BundleEntryComponent entry : entries) {
 			Resource resource = entry.getResource();
 
@@ -166,12 +169,26 @@ public class ServerOperations {
 					}
 				}
 
+				// Toxicology does not have the identifier that we are using for Raven. Add it here.
+				Identifier ravenIdentifier = new Identifier();
+				Coding ravenIdCoding = new Coding ("urn:mdi:temporary:code", "1000007", "Case Number");
+				CodeableConcept ravenIdCodeable = new CodeableConcept();
+				ravenIdCodeable.addCoding(ravenIdCoding);
+				ravenIdentifier.setType(ravenIdCodeable);
+				ravenIdentifier.setSystem("urn:mdi:tox:connectathon");
+				ravenIdentifier.setValue("000001");
+				patient.addIdentifier(ravenIdentifier);
+
 				if (patientId != null && !patientId.isEmpty()) {
 					// We do not update the patient info from the lab report. So we just get
 					// patient id and keep the information
 					referenceIds.put("Patient/" + patient.getIdElement().getIdPart(), "Patient/" + patientId);
 					patientIds.add("Patient/" + patientId);
 					patient.setId(patientId);
+					MethodOutcome outcome = client.update().resource(patient).prettyPrint().encodedJson().execute();
+					if (outcome.getId() == null || outcome.getId().isEmpty()) {
+						return (OperationOutcome) outcome.getOperationOutcome();
+					}
 				} else {
 					MethodOutcome outcome = client.create().resource(patient).prettyPrint().encodedJson().execute();
 					if (outcome.getCreated().booleanValue()) {
@@ -189,6 +206,66 @@ public class ServerOperations {
 					}
 				}
 				entry.setFullUrl("Patient/" + patientId);
+			}
+
+			// We do the Binary here as this does not depend on anything but others can reference this
+			// if (resource instanceof Binary) {
+			// 	Binary binary = (Binary) resource;
+
+			// 	MethodOutcome outcome = client.create().resource(binary).prettyPrint().encodedJson().execute();
+			// 	if (outcome.getCreated().booleanValue()) {
+			// 		String binaryId = outcome.getId().getIdPart();
+			// 		referenceIds.put("Binary/" + binary.getIdElement().getIdPart(), "Binary/" + binaryId);
+			// 	} else {
+			// 		return (OperationOutcome) outcome.getOperationOutcome();
+			// 	}			
+			// }
+		}
+
+		// We can't really do the search for existing ones to update. We just delete them all 
+		// and repopulate. We do not delete Practitioner though...
+
+		for (String pid : patientIds) {
+			IdType subjectIdType = new IdType("Patient", pid);
+
+			// Delete Specimens
+			Bundle currentBundles = client.search().forResource(Specimen.class).where(Specimen.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
+			if (currentBundles.getTotal() > 0) {
+				List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
+				for (BundleEntryComponent currentEntry : currentEntries) {
+					Specimen currentResource = (Specimen) currentEntry.getResource();
+					client.delete().resourceById(currentResource.getIdElement()).execute();
+				}
+			}
+	
+			// Delete Observations
+			currentBundles = client.search().forResource(Observation.class).where(Observation.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
+			if (currentBundles.getTotal() > 0) {
+				List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
+				for (BundleEntryComponent currentEntry : currentEntries) {
+					Observation currentResource = (Observation) currentEntry.getResource();
+					client.delete().resourceById(currentResource.getIdElement()).execute();
+				}
+			}
+
+			// Delete DocumentReference
+			currentBundles = client.search().forResource(DocumentReference.class).where(DocumentReference.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
+			if (currentBundles.getTotal() > 0) {
+				List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
+				for (BundleEntryComponent currentEntry : currentEntries) {
+					DocumentReference currentResource = (DocumentReference) currentEntry.getResource();
+					client.delete().resourceById(currentResource.getIdElement()).execute();
+				}
+			}
+
+			// Delete DiagnosticReport
+			currentBundles = client.search().forResource(DiagnosticReport.class).where(DiagnosticReport.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
+			if (currentBundles.getTotal() > 0) {
+				List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
+				for (BundleEntryComponent currentEntry : currentEntries) {
+					DiagnosticReport currentResource = (DiagnosticReport) currentEntry.getResource();
+					client.delete().resourceById(currentResource.getIdElement()).execute();
+				}
 			}
 		}
 
@@ -407,6 +484,30 @@ public class ServerOperations {
 				}
 
 				documentReference.setId(documentReferenceId);
+
+				// DocumentReference may have an attachment. Check and handle this here.
+				List<DocumentReferenceContentComponent> contents = documentReference.getContent();
+				for (DocumentReferenceContentComponent content : contents) {
+					Attachment attachment = content.getAttachment();
+					if (attachment != null && !attachment.isEmpty()) {
+						String attachmentUrl = attachment.getUrl();
+						// We are mapping the Binary/<id> portion only
+						if (attachmentUrl != null && !attachmentUrl.isEmpty()) {
+							int lastSlashIndex = attachmentUrl.lastIndexOf("/");
+							if (lastSlashIndex != -1) {
+								String attachmentId = attachmentUrl.substring(lastSlashIndex+1);
+								String updateId = referenceIds.get("Binary/" + attachmentId);
+								if (updateId != null && !updateId.isEmpty()) {
+									String myUrl = System.getenv("INTERNAL_FHIR_REQUEST_URL");
+									if (myUrl == null || myUrl.isEmpty()) {
+										myUrl = "http://localhost:8080/fhir";
+									}
+									attachment.setUrl(myUrl + "/" + updateId);
+								}
+							}
+						}
+					}
+				}
 				entry.setFullUrl("DocumentReference/" + documentReferenceId);				
 			}
 		}
