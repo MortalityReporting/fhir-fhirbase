@@ -918,7 +918,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			// This is a death certificate document. We need to add full resources in the
 			// section entries
 			// to the resources.
-			metaProfile = "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Death-Certificate-Document";
+			metaProfile = "http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-document-mdi-to-edrs";
 
 			// The composition section is empty. It means that VRDR has never been
 			// generated. We generate it here and persist it.
