@@ -1,8 +1,6 @@
 package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.sql.SQLException;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -32,10 +30,12 @@ import org.hl7.fhir.r4.model.Parameters;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.RelatedPerson;
 import org.hl7.fhir.r4.model.Resource;
+import org.hl7.fhir.r4.model.ResourceType;
 import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.UriType;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
+import org.hl7.fhir.r4.model.Parameters.ParametersParameterComponent;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.PractitionerRole;
@@ -914,7 +914,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		setupClientForAuth(client);
 
 		String metaProfile = "";
-		if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "64297-5".equalsIgnoreCase(typeCode)) {
+		if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "86807-5".equalsIgnoreCase(typeCode)) {
 			// This is a death certificate document. We need to add full resources in the
 			// section entries
 			// to the resources.
@@ -1172,6 +1172,31 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		return retBundle;
 	}
+
+	@Operation(name = "$update-mdi")
+	public Parameters updateMdiDocumentOperation(RequestDetails theRequestDetails, 
+			@OperationParam(name = "mdi-document") Bundle theBundle) {
+
+		if (theBundle != null) {
+			String myFhirServerBase = theRequestDetails.getFhirServerBase();
+			IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
+			setupClientForAuth(client);
+	
+			Parameters responseParameter = new Parameters();
+			Bundle out = client.transaction().withBundle(theBundle).execute();
+			if (out != null && !out.isEmpty()) {
+				ParametersParameterComponent parameter = new ParametersParameterComponent();
+				parameter.setName("mdi-document");
+				parameter.setResource(out);
+				responseParameter.addParameter(parameter);
+			} 
+
+			return responseParameter;
+		}
+
+		return null;
+	}
+
 
 	class MyBundleProvider extends FhirbaseBundleProvider {
 		Set<Include> theIncludes;

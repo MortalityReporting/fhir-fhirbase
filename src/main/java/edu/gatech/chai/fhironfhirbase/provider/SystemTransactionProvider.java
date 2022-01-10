@@ -110,6 +110,10 @@ public class SystemTransactionProvider {
 			BundleEntryRequestComponent request = entry.getRequest();
 			HTTPVerb requestMethod = request.getMethod();
 
+			if (requestMethod == null) {
+				continue;
+			}
+			
 			// We only handles DELETE from the entries.
 			if (requestMethod.equals(HTTPVerb.DELETE)) {
 				response = entry.getResponse();
@@ -703,7 +707,14 @@ public class SystemTransactionProvider {
 				
 				List<SectionComponent> sectionComponents = composition.getSection();
 				for (SectionComponent sectionComponent : sectionComponents) {
+					updateReference(sectionComponent.getFocus());
+
 					List<Reference> references = sectionComponent.getEntry();
+					for (Reference reference : references) {
+						updateReference(reference);
+					}
+
+					references = sectionComponent.getAuthor();
 					for (Reference reference : references) {
 						updateReference(reference);
 					}
@@ -766,85 +777,6 @@ public class SystemTransactionProvider {
 		}
 	}
 
-//	private void createComposition(IGenericClient client, List<BundleEntryComponent> entries) {
-//		// Check if we already have a composition for the same patient
-//		Bundle responseBundle = client.search().forResource(Composition.class)
-//				.where(Composition.SUBJECT.hasAnyOfIds(patientId))
-//				.and(Composition.TYPE.exactly().systemAndCode("http://loinc.org", "64297-5")).returnBundle(Bundle.class)
-//				.execute();
-//
-//		Composition composition;
-//		boolean create = true;
-//		if (responseBundle.getTotal() > 0) {
-//			composition = (Composition) responseBundle.getEntryFirstRep().getResource();
-//			create = false; // we should update
-//		} else {
-//			// Create a composition for this batch write.
-//			composition = new Composition();
-//			composition.setType(new CodeableConcept(new Coding("http://loinc.org", "64297-5", "Death certificate")));
-//		}
-//
-//		// Walk through the entries again and add the entries to composition	
-//		SectionComponent sectionComponent = new SectionComponent();
-//		for (BundleEntryComponent entry : entries) {
-//			Resource resource = entry.getResource();
-//			if (resource instanceof Patient) {
-//				composition.setSubject(new Reference(resource.getIdElement()));
-//			} 
-//			sectionComponent.addEntry(new Reference(resource));
-//		}
-//		
-//		composition.getSection().add(sectionComponent);
-//		MethodOutcome mo;
-//		if (create) {
-//			mo = client.create().resource(composition).encodedJson().prettyPrint().execute();
-//		} else {
-//			mo = client.update().resource(composition).encodedJson().prettyPrint().execute();
-//		}
-//		
-//		if (mo.getId() == null) {
-//			logger.debug("Failed to create a composition for the batch upload.");
-//		}
-//		
-//	}
-
-//	private void processGet(String requestUrl, List<BundleEntryComponent> entries) {
-//		// TODO: finish this up
-//		IGenericClient client = ctx.newRestfulGenericClient(requestUrl);
-//
-//		for (BundleEntryComponent entry : entries) {
-//			BundleEntryResponseComponent response = entry.getResponse();
-//			if (response != null && !response.isEmpty()) {
-//				// We have already processed this.
-//				continue;
-//			}
-//
-//			BundleEntryRequestComponent request = entry.getRequest();
-//			HTTPVerb requestMethod = request.getMethod();
-//			if (requestMethod.equals(HTTPVerb.GET) || requestMethod.equals(HTTPVerb.HEAD)) {
-//				response = entry.getResponse();
-//				Resource resource = entry.getResource();
-//				if (resource != null && !resource.isEmpty()) {
-//
-//					String newId = null; // fhirbaseMapping.create(resource);
-//					if (newId != null && !newId.isEmpty()) {
-//						response.setStatus(
-//								String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
-//						response.setLocation(resource.getResourceType().toString() + "/" + newId);
-//					} else {
-//						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value())
-//								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-//					}
-//				} else {
-//					response.setStatus(
-//							String.valueOf(HttpStatus.BAD_REQUEST.value()) + HttpStatus.BAD_REQUEST.getReasonPhrase());
-//				}
-//
-//				entry.setRequest(null);
-//			}
-//		}
-//	}
-
 	/**
 	 * 
 	 * @param theBundle
@@ -904,10 +836,6 @@ public class SystemTransactionProvider {
 			// Now, we should have composition left. 
 			processPostComposition(client, entries);
 			
-//			processGet(theRequest.getRequestURL().toString(), entries);
-
-//			createComposition(client, entries);
-
 			theBundle.setType(BundleType.BATCHRESPONSE);
 
 			break;
@@ -915,6 +843,7 @@ public class SystemTransactionProvider {
 			// We support two kinds of document here. 
 			// One is VRDR, the other is Toxicology document
 			// We post all in the entries (based on VRDR resources) to server.
+			processDelete(client, entries);
 			processPostPatient(client, entries);
 			processPostPractitioner(client, entries);
 			processPostLocation(client, entries);
@@ -944,6 +873,82 @@ public class SystemTransactionProvider {
 //				throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 //			}
 //		}
+	}
+
+	public Bundle mdiUpdateProcess(MyBundle theBundle) {
+		
+		List<BundleEntryComponent> entries = theBundle.getEntry();
+
+		if (entries.size() == 0)
+			return null;
+
+//		String requestUrl = theRequest.getRequestURL().toString();
+		// It's better to use the requestUrl. But, redirection seems to be causing hiccups.
+		String requestUrl = System.getenv("INTERNAL_FHIR_REQUEST_URL");
+		if (requestUrl == null || requestUrl.isEmpty()) {
+			requestUrl = "http://localhost:8080/fhir";
+		}
+		IGenericClient client = ctx.newRestfulGenericClient(requestUrl);
+
+		String authBasic = System.getenv("AUTH_BASIC");
+		String authBearer = System.getenv("AUTH_BEARER");
+		if (authBasic != null && !authBasic.isEmpty()) {
+			String[] auth = authBasic.split(":");
+			if (auth.length == 2) {
+				client.registerInterceptor(new BasicAuthInterceptor(auth[0], auth[1]));
+			}
+		} else if (authBearer != null && !authBearer.isEmpty()) {
+			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
+		}
+
+		// First save this bundle to fhirbase if POST/PUT
+//		client.create().resource(theBundle).prettyPrint().encodedJson().execute();
+
+		referenceIds = new HashMap<String, String>();
+
+		switch (theBundle.getType()) {
+		case BATCH:
+			// We process for the following order as suggested by FHIR spec
+			// https://hl7.org/FHIR/http.html#transaction
+			// 1. Delete
+			// 2. Post
+			// 3. Put or Patch
+			// 4. Get or Head
+			// 5. Conditional Reference
+
+			processDelete(client, entries);
+			processPostPatient(client, entries);
+			processPostPractitioner(client, entries);
+			processPostLocation(client, entries);
+			processPostCondition(client, entries);
+			processPost(client, entries);
+
+			// Now, we should have composition left. 
+			processPostComposition(client, entries);
+			
+			theBundle.setType(BundleType.BATCHRESPONSE);
+
+			break;
+		case DOCUMENT:
+			// We support two kinds of document here. 
+			// One is VRDR, the other is Toxicology document
+			// We post all in the entries (based on VRDR resources) to server.
+			processDelete(client, entries);
+			processPostPatient(client, entries);
+			processPostPractitioner(client, entries);
+			processPostLocation(client, entries);
+			processPostCondition(client, entries);
+			processPost(client, entries);
+
+			// Now, we should have composition left. 
+			processPostComposition(client, entries);
+			
+			break;
+
+		default:
+		}
+
+		return theBundle;
 	}
 
 }
