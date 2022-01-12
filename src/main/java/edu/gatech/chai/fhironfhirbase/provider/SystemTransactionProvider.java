@@ -131,16 +131,6 @@ public class SystemTransactionProvider {
 						} else {
 							response.setStatus(String.valueOf(HttpStatus.OK.value()));
 						}
-//						String resourceName = url[0];
-//						String id = url[1];
-//						Class<? extends Resource> resourceClass = getResourceClass(resourceName);
-//						if (resourceClass == null || id == null || id.isEmpty()) {
-//							response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value())
-//									+ HttpStatus.BAD_REQUEST.getReasonPhrase());
-//						} else {
-//							fhirbaseMapping.delete(resourceName.toLowerCase(), id, resourceClass);
-//							response.setStatus(String.valueOf(HttpStatus.OK.value()));
-//						}
 					}
 				} else {
 					response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()));
@@ -213,7 +203,8 @@ public class SystemTransactionProvider {
 				
 				if (patientId != null && !patientId.isEmpty()) {
 					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						referenceIds.put("Patient/" + patient.getIdElement().getIdPart(), "Patient/" + patientId);
+						addReference(entry.getFullUrl(), "Patient", patient.getIdElement().getIdPart(), patientId);
+						// referenceIds.put("Patient/" + patient.getIdElement().getIdPart(), "Patient/" + patientId);
 					}
 					
 					// Now we need to write this to fhirbase.
@@ -239,7 +230,8 @@ public class SystemTransactionProvider {
 					if (outcome.getCreated()) {
 						patientId = outcome.getId().getIdPart();
 						if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-							referenceIds.put("Patient/" + patient.getIdElement().getIdPart(), "Patient/" + patientId);
+							addReference(entry.getFullUrl(), "Patient", patient.getIdElement().getIdPart(), patientId);
+							// referenceIds.put("Patient/" + patient.getIdElement().getIdPart(), "Patient/" + patientId);
 						}
 						response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
 								+ HttpStatus.CREATED.getReasonPhrase());
@@ -290,7 +282,8 @@ public class SystemTransactionProvider {
 
 				if (practitionerId != null && !practitionerId.isEmpty()) {
 					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
+						addReference(entry.getFullUrl(), "Practitioner", practitioner.getIdElement().getIdPart(), practitionerId);
+						// referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
 					}
 
 					// Now we need to write this to fhirbase.
@@ -317,7 +310,8 @@ public class SystemTransactionProvider {
 					if (outcome.getCreated()) {
 						practitionerId = outcome.getId().getIdPart();
 						if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-							referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
+							addReference(entry.getFullUrl(), "Practitioner", practitioner.getIdElement().getIdPart(), practitionerId);
+							// referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
 						}
 
 						response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
@@ -358,7 +352,8 @@ public class SystemTransactionProvider {
 				if (outcome.getCreated()) {
 					locationId = outcome.getId().getIdPart();
 					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						referenceIds.put("Location/" + location.getIdElement().getIdPart(), "Location/" + locationId);
+						addReference(entry.getFullUrl(), "Location", location.getIdElement().getIdPart(), locationId);
+						// referenceIds.put("Location/" + location.getIdElement().getIdPart(), "Location/" + locationId);
 					}
 
 					response.setStatus(
@@ -407,7 +402,8 @@ public class SystemTransactionProvider {
 				if (outcome.getCreated()) {
 					String conditionId = outcome.getId().getIdPart();
 					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						referenceIds.put("Condition/" + condition.getIdElement().getIdPart(), "Condition/" + conditionId);
+						addReference(entry.getFullUrl(), "Condition", condition.getIdElement().getIdPart(), conditionId);
+						// referenceIds.put("Condition/" + condition.getIdElement().getIdPart(), "Condition/" + conditionId);
 					}
 
 					response.setStatus(
@@ -428,6 +424,11 @@ public class SystemTransactionProvider {
 		}
 	}
 
+	private void addReference(String fullUrl, String resourceName, String oldId, String newId) {
+		referenceIds.put(fullUrl, resourceName + "/" + newId);
+		referenceIds.put(resourceName + "/" + oldId, resourceName + "/" + newId);
+	}
+
 	private void updateReference(Reference reference) {
 		if (reference == null || reference.isEmpty())
 			return;
@@ -435,7 +436,7 @@ public class SystemTransactionProvider {
 		String originalId = reference.getReferenceElement().getValueAsString();
 		String newId = referenceIds.get(originalId);
 
-		logger.debug("orginal id: " + originalId + " new id:" + newId);
+		logger.debug("original id: " + originalId + " new id:" + newId);
 		if (newId != null && !newId.isEmpty()) {
 			String[] resourceId = newId.split("/");
 			if (resourceId.length == 2) {
@@ -630,7 +631,8 @@ public class SystemTransactionProvider {
 						}
 					}
 					if (originalFullUrl != null && !originalFullUrl.isEmpty()) {
-						referenceIds.put(resource.getResourceType().toString() + "/" + originalFullUrlId, resource.getResourceType().toString() + "/" + resourceId);
+						addReference(originalFullUrl, resource.getResourceType().toString(), originalFullUrlId, resourceId);
+						// referenceIds.put(resource.getResourceType().toString() + "/" + originalFullUrlId, resource.getResourceType().toString() + "/" + resourceId);
 					}
 				} else {
 					response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()) + " "
@@ -712,7 +714,8 @@ public class SystemTransactionProvider {
 				if (outcome.getCreated() != null && outcome.getCreated()) {
 					String compositionId = outcome.getId().getIdPart();
 					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						referenceIds.put("Composition/" + composition.getIdElement().getIdPart(), "Composition/" + compositionId);
+						addReference(entry.getFullUrl(), "Composition", composition.getIdElement().getIdPart(), compositionId);
+						// referenceIds.put("Composition/" + composition.getIdElement().getIdPart(), "Composition/" + compositionId);
 					}
 
 					response.setStatus(
@@ -726,7 +729,8 @@ public class SystemTransactionProvider {
 				} else if (outcome.getId() != null && !outcome.getId().isEmpty()) {
 					String compositionId = outcome.getId().getIdPart();
 					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						referenceIds.put("Composition/" + composition.getIdElement().getIdPart(), "Composition/" + compositionId);
+						addReference(entry.getFullUrl(), "Composition", composition.getIdElement().getIdPart(), compositionId);
+						// referenceIds.put("Composition/" + composition.getIdElement().getIdPart(), "Composition/" + compositionId);
 					}
 
 					response.setStatus(
@@ -823,7 +827,6 @@ public class SystemTransactionProvider {
 			processPostComposition(client, entries);
 			
 			break;
-
 		default:
 		}
 

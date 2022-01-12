@@ -22,6 +22,7 @@ import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.Identifier;
 import org.hl7.fhir.r4.model.ListResource;
 import org.hl7.fhir.r4.model.Meta;
 import org.hl7.fhir.r4.model.Observation;
@@ -93,6 +94,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	public static final String NQ_EVENT_DETAIL = "event-detail";
 	public static final String SP_DEATH_LOCATION = "vrdr-death-location.district";
 	public static final String SP_DEATH_DATE = "vrdr-death-date.value-date";
+	public static final String SP_TRACKING_NUMBER = "tracking-number";
 
 	public CompositionResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -178,6 +180,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE) DateRangeParam theDeathDate,
+			@OptionalParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) StringParam theTrackingNumber,
 			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", 
 					USCorePatient.SP_ADDRESS_CITY,
 					USCorePatient.SP_ADDRESS_COUNTRY,
@@ -293,6 +296,12 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			}
 
 			returnAll = false;
+		}
+
+		if (theTrackingNumber != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension");
+			String where = "extensions @> '{\"url\":\"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\",\"valueIdentifier\":{\"type\":{\"coding\":[{\"system\":\"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\",\"code\":\"edrs-file-number\"}]},\"value\":\"" + theTrackingNumber.getValue() + "\"}}'::jsonb";
+			whereParameters.add(where);
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
@@ -890,16 +899,30 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
-		Coding typeCoding = myType.getCodingFirstRep();
-		if (typeCoding.isEmpty()) {
+		Coding typeCoding = null;
+		String typeSystem = null;
+		String typeCode = null;
+
+		String documentType = null;
+		for (Coding coding : myType.getCoding()) {
+			if (!coding.isEmpty()) {
+				typeCoding = coding;
+				typeSystem = coding.getSystem();
+				typeCode = coding.getCode(); 
+				if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "86807-5".equalsIgnoreCase(typeCode)) {
+					documentType = "MDI-DOCUMENT";
+				} else if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "11502-2".equalsIgnoreCase(typeCode)) {
+					documentType = "LAB-DOCUMENT";
+				}
+			}
+		}
+
+		if (typeCoding == null || typeCoding.isEmpty()) {
 			// We must have coding.
 			outcome.addIssue().setSeverity(IssueSeverity.ERROR)
 					.setDetails((new CodeableConcept()).setText("This composition type has no coding specified"));
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
-
-		String typeSystem = typeCoding.getSystem();
-		String typeCode = typeCoding.getCode();
 
 		List<BundleEntryComponent> bundleEntries = new ArrayList<BundleEntryComponent>();
 
@@ -914,7 +937,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		setupClientForAuth(client);
 
 		String metaProfile = "";
-		if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "86807-5".equalsIgnoreCase(typeCode)) {
+		if ("MDI-DOCUMENT".equalsIgnoreCase(documentType)) {
 			// This is a death certificate document. We need to add full resources in the
 			// section entries
 			// to the resources.
@@ -1129,7 +1152,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					}
 				}
 			}
-		} else if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "11502-2".equalsIgnoreCase(typeCode)) {
+		} else if ("LAB-DOCUMENT".equalsIgnoreCase(documentType)) {
 			for (SectionComponent section : composition.getSection()) {
 				for (Reference reference : section.getEntry()) {
 					// get the reference.
@@ -1174,14 +1197,109 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	}
 
 	@Operation(name = "$update-mdi")
-	public Parameters updateMdiDocumentOperation(RequestDetails theRequestDetails, 
-			@OperationParam(name = "mdi-document") Bundle theBundle) {
+	public Parameters updateMdiDocumentOperation(RequestDetails theRequestDetails,
+		@OperationParam(name = "tracking-number") StringParam theTrackingNumber,
+		@OperationParam(name = "mdi-document") Bundle theBundle) {
+
+		String trackingId = null;
+		if (theTrackingNumber != null) {
+			trackingId = theTrackingNumber.getValue();
+		}
 
 		if (theBundle != null) {
+			OperationOutcome outcome = new OperationOutcome();
 			String myFhirServerBase = theRequestDetails.getFhirServerBase();
 			IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
 			setupClientForAuth(client);
+
+			// if tracking number is not in the parameter, get it from the bundle.
+			if (trackingId == null) {
+				BundleEntryComponent firstEntry = theBundle.getEntryFirstRep();
+				Resource resource = firstEntry.getResource();
+				if (resource instanceof Composition) {
+					Composition composition = (Composition) resource;
+					CodeableConcept myType = composition.getType();
+
+					if (myType.isEmpty()) {
+						// We can't generate a document without type.
+						outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+								.setDetails((new CodeableConcept()).setText("This composition has no type"));
+						throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+					}
+			
+					Coding typeCoding = null;
+					String typeSystem = null;
+					String typeCode = null;
+			
+					String documentType = null;
+					for (Coding coding : myType.getCoding()) {
+						if (!coding.isEmpty()) {
+							typeCoding = coding;
+							typeSystem = coding.getSystem();
+							typeCode = coding.getCode(); 
+							if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "86807-5".equalsIgnoreCase(typeCode)) {
+								documentType = "MDI-DOCUMENT";
+							} else if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "11502-2".equalsIgnoreCase(typeCode)) {
+								documentType = "LAB-DOCUMENT";
+							}
+						}
+					}
+			
+					if (typeCoding == null || typeCoding.isEmpty()) {
+						// We must have coding.
+						outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+								.setDetails((new CodeableConcept()).setText("This composition type has no coding specified"));
+						throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+					}
+
+					if ("MDI-DOCUMENT".equals(documentType)) {
+						// get case number.
+						for (Extension ext : composition.getExtension()) {
+							if ("http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number".equals(ext.getUrl())) {
+								Identifier trackingIdentifier = (Identifier) ext.getValue();
+								CodeableConcept tType = trackingIdentifier.getType();
+								if (tType != null && !tType.isEmpty()) {
+									for (Coding code : tType.getCoding()) {
+										if ("http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes".equals(code.getSystem())
+											&& "edrs-file-number".equals(code.getCode())) {
+											trackingId = trackingIdentifier.getValue();
+										}
+									}
+								}
+							}
+						}
+
+						if (trackingId == null) {
+							outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+								.setDetails((new CodeableConcept()).setText("Tracking number for EDRS not found in the bundle"));
+							throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+						}
+
+						// Search the composition that has this tracking number.
+						Bundle compositionBundle = client.search().forResource(Composition.class).and(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_TRACKING_NUMBER)
+								.matches()
+								.values(trackingId)
+							).returnBundle(Bundle.class).execute();
+						BundleEntryComponent entry = compositionBundle.getEntryFirstRep();
+						if (entry.isEmpty()) {
+							outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+									.setDetails((new CodeableConcept()).setText("Composition.id = " + trackingId + " is not found"));
+							throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+						}
+						
+					} else {
+						outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+								.setDetails((new CodeableConcept()).setText("This is not a MDI document"));
+						throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+					}
+				} else {
+					outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+							.setDetails((new CodeableConcept()).setText("The first entry MUST be composition"));
+					throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+				}
+			}
 	
+			// Now we are good to go. Make the transaction.
 			Parameters responseParameter = new Parameters();
 			Bundle out = client.transaction().withBundle(theBundle).execute();
 			if (out != null && !out.isEmpty()) {
