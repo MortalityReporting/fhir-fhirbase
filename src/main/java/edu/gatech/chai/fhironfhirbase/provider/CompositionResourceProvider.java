@@ -94,7 +94,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	public static final String NQ_EVENT_DETAIL = "event-detail";
 	public static final String SP_DEATH_LOCATION = "vrdr-death-location.district";
 	public static final String SP_DEATH_DATE = "vrdr-death-date.value-date";
-	public static final String SP_TRACKING_NUMBER = "tracking-number";
+	public static final String SP_EDRS_TRACKING_NUMBER = "edrs-tracking-number";
+	public static final String SP_MDI_TRACKING_NUMBER = "mdi-tracking-number";
 
 	public CompositionResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -180,7 +181,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE) DateRangeParam theDeathDate,
-			@OptionalParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) StringParam theTrackingNumber,
+			@OptionalParam(name = CompositionResourceProvider.SP_EDRS_TRACKING_NUMBER) StringParam theEdrsTrackingNumber,
+			@OptionalParam(name = CompositionResourceProvider.SP_MDI_TRACKING_NUMBER) StringParam theMdiTrackingNumber,
 			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", 
 					USCorePatient.SP_ADDRESS_CITY,
 					USCorePatient.SP_ADDRESS_COUNTRY,
@@ -298,9 +300,15 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
-		if (theTrackingNumber != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension");
-			String where = "extensions @> '{\"url\":\"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\",\"valueIdentifier\":{\"type\":{\"coding\":[{\"system\":\"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\",\"code\":\"edrs-file-number\"}]},\"value\":\"" + theTrackingNumber.getValue() + "\"}}'::jsonb";
+		if (theEdrsTrackingNumber != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
+			String where = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"edrs-file-number\"}]}, \"value\": \"" + theEdrsTrackingNumber.getValue() + "\"}}'::jsonb";
+			whereParameters.add(where);
+		}
+
+		if (theMdiTrackingNumber != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
+			String where = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"mdi-case-number\"}]}, \"value\": \"" + theMdiTrackingNumber.getValue() + "\"}}'::jsonb";
 			whereParameters.add(where);
 		}
 
@@ -1276,7 +1284,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						}
 
 						// Search the composition that has this tracking number.
-						Bundle compositionBundle = client.search().forResource(Composition.class).and(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_TRACKING_NUMBER)
+						Bundle compositionBundle = client.search().forResource(Composition.class).and(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_EDRS_TRACKING_NUMBER)
 								.matches()
 								.values(trackingId)
 							).returnBundle(Bundle.class).execute();

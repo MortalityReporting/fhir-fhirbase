@@ -20,6 +20,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.hl7.fhir.r4.model.Attachment;
 import org.hl7.fhir.r4.model.Binary;
@@ -32,6 +33,8 @@ import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.DocumentReference.DocumentReferenceContentComponent;
+import org.hl7.fhir.r4.model.MessageHeader.MessageHeaderResponseComponent;
+import org.hl7.fhir.r4.model.MessageHeader.ResponseType;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueType;
 import org.hl7.fhir.r4.model.OperationOutcome.OperationOutcomeIssueComponent;
@@ -92,7 +95,7 @@ public class ServerOperations {
 		String originalId = reference.getReferenceElement().getValueAsString();
 		String newId = referenceIds.get(originalId);
 
-		logger.debug("orginal id: " + originalId + " new id:" + newId);
+		logger.debug("original id: " + originalId + " new id:" + newId);
 		if (newId != null && !newId.isEmpty()) {
 			String[] resourceId = newId.split("/");
 			if (resourceId.length == 2) {
@@ -622,8 +625,13 @@ public class ServerOperations {
 			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
 		}
 
+		Bundle responseBundle = new Bundle();
+		responseBundle.setType(BundleType.MESSAGE);
+		responseBundle.getMeta().addProfile("http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-message-tox-to-mdi");
+
 		referenceIds = new HashMap<String, String>();
 		MessageHeader messageHeader = null;
+		String originalMessageHeaderId = null;
 
 		if (theContent.getType() == BundleType.MESSAGE) {
 			List<BundleEntryComponent> entries = theContent.getEntry();
@@ -632,6 +640,7 @@ public class ServerOperations {
 			if (entries != null && !entries.isEmpty() && entries.get(0).getResource() != null
 					&& entries.get(0).getResource().getResourceType() == ResourceType.MessageHeader) {
 				messageHeader = (MessageHeader) entries.get(0).getResource();
+				originalMessageHeaderId = messageHeader.getIdElement().getIdPart();
 
 				// We handle only MDI Toxicology Lab type.
 				Type eventType = messageHeader.getEvent();
@@ -639,6 +648,8 @@ public class ServerOperations {
 					Coding event = eventType.castToCoding(eventType);
 					if ("http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes".equals(event.getSystem())
 						&& "tox-result-report".equals(event.getCode())) {
+						
+						
 						// This is tox lab report. Resources are all to be added to the server.
 						OperationOutcome oo = processPostResources(client, entries);
 						if (oo != null) {
@@ -671,6 +682,15 @@ public class ServerOperations {
 			ThrowFHIRExceptions.unprocessableEntityException(ctx, "The bundle must be a MESSAGE type");
 		}
 
-		return theContent;
+		MessageHeader responseMessageHeader = new MessageHeader();
+		responseMessageHeader.getMeta().addProfile("https://fhir.org/fhir/us/mdi/StructureDefinition/MessageHeader-toxicology-to-mdi");
+		responseMessageHeader.setEvent(new Coding("http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes", "tox-result-report", ""));
+		responseMessageHeader.getResponse().setId(originalMessageHeaderId);
+		responseMessageHeader.getResponse().setCode(ResponseType.OK);
+
+		responseBundle.getEntryFirstRep().setFullUrl("MessageHeader/" + UUID.randomUUID());
+		responseBundle.getEntryFirstRep().setResource(responseMessageHeader);
+		
+		return responseBundle;
 	}
 }
