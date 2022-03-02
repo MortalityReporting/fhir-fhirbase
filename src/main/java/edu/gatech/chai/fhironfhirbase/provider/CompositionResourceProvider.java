@@ -921,6 +921,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					documentType = "MDI-DOCUMENT";
 				} else if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "11502-2".equalsIgnoreCase(typeCode)) {
 					documentType = "LAB-DOCUMENT";
+				} else {
+					documentType = typeSystem + "^" + typeCode;
 				}
 			}
 		}
@@ -1183,7 +1185,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			}
 		} else {
 			outcome.addIssue().setSeverity(IssueSeverity.ERROR)
-					.setDetails((new CodeableConcept()).setText("This composition type document is not supported."));
+					.setDetails((new CodeableConcept()).setText("This composition type, " + documentType + ", is not supported."));
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
