@@ -24,13 +24,13 @@ import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.DiagnosticReport;
-import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.IdType;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.Include;
+import ca.uhn.fhir.model.api.annotation.SearchParamDefinition;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
 import ca.uhn.fhir.rest.annotation.IdParam;
@@ -56,6 +56,26 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 @Service
 @Scope("prototype")
 public class DiagnosticReportResourceProvider extends BaseResourceProvider {
+
+	/**
+	 * Search parameter: <b>tox-lab-case-number</b>
+	 * <p>
+	 * Description: <b>A composition extension identfier for tox-lab-case-number</b><br>
+   	 * Type: <b>token</b><br>
+	 * Path: <b>DiagnosticReport.tox-lab-case-number</b><br>
+	 * </p>
+	 */
+	@SearchParamDefinition(name="tox-lab-case-number", path="Composition.extension-tracking-numbers", description="Extension Trakcing Number for toxicology lab case", type="token" )
+	public static final String SP_TOX_LAB_CASE_NUMBER = "tox-lab-case-number";
+	/**
+   	 * <b>Fluent Client</b> search parameter constant for <b>tox-lab-case-number</b>
+	 * <p>
+	 * Description: <b>A composition extension identfier for tox-lab-case-number</b><br>
+   	 * Type: <b>token</b><br>
+	 * Path: <b>DiagnosticReport.tox-lab-case-number</b><br>
+	 * </p>
+   	 */
+	public static final ca.uhn.fhir.rest.gclient.TokenClientParam TOX_LAB_CASE_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_TOX_LAB_CASE_NUMBER);
 
 	public DiagnosticReportResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -179,6 +199,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 					USCorePatient.SP_NAME }) ReferenceAndListParam thePatients,
 			@OptionalParam(name = DiagnosticReport.SP_SUBJECT, chainWhitelist = { "",
 					USCorePatient.SP_NAME }) ReferenceAndListParam theSubjects,
+			@OptionalParam(name = DiagnosticReportResourceProvider.SP_TOX_LAB_CASE_NUMBER) TokenOrListParam theToxLabCaseNumber,
 			@OptionalParam(name = DiagnosticReport.SP_IDENTIFIER) TokenParam theDocumentReferenceIdentifier,
 			@OptionalParam(name = DiagnosticReport.SP_ENCOUNTER) ReferenceParam theEncounter,
 			@Sort SortSpec theSort,
@@ -231,6 +252,28 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
 				whereParameters.add("diag.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
+			returnAll = false;
+		}
+
+		if (theToxLabCaseNumber != null) {
+			String where = "";
+			for (TokenParam toxLabCaseNumberToken : theToxLabCaseNumber.getValuesAsQueryTokens()) {
+				String system = toxLabCaseNumberToken.getSystem();
+				String value = toxLabCaseNumberToken.getValue();
+				String whereItem;
+				if (system == null || system.isEmpty()) {
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_TOX_LAB_CASE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+				} else {
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_TOX_LAB_CASE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+				}
+				if (where.isEmpty()) {
+					where = whereItem;
+				} else {
+					where += " or " + whereItem;
+				}
+			}
+
+			whereParameters.add(where);
 			returnAll = false;
 		}
 

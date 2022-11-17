@@ -15,6 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,9 @@ import java.util.UUID;
 
 import javax.servlet.http.HttpServletRequest;
 
+import org.apache.commons.lang3.StringUtils;
+import org.hl7.fhir.exceptions.FHIRException;
+import org.hl7.fhir.instance.model.api.IIdType;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.DocumentReference;
@@ -63,14 +67,13 @@ import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
+import ca.uhn.fhir.rest.gclient.TokenClientParam;
 import edu.gatech.chai.fhironfhirbase.model.MyBundle;
 
 public class SystemTransactionProvider {
 	private static final Logger logger = LoggerFactory.getLogger(SystemTransactionProvider.class);
 
 	private FhirContext ctx;
-	private String caseNumber;
-	private String patientId;
 	private Map<String, String> referenceIds;
 
 	public SystemTransactionProvider() {
@@ -141,291 +144,239 @@ public class SystemTransactionProvider {
 		}
 	}
 
-	private void processPostPatient(IGenericClient client, List<BundleEntryComponent> entries) {
-		for (BundleEntryComponent entry : entries) {
-			BundleEntryResponseComponent response = entry.getResponse();
-			if (response != null && !response.isEmpty()) {
-				// We have already processed this.
-				continue;
-			}
+	private Patient processPostPatient(IGenericClient client, BundleEntryComponent entry) {
+		Patient patient = null;
 
-			Resource resource = entry.getResource();
-			if (resource instanceof Patient) {
-				Patient patient = (Patient) resource;
-				patientId = null;
-				
-				// We need to check if this patient resource has an identifier for case number.
-				boolean caseNumberExists = false;
-				for (Identifier identifier : patient.getIdentifier()) {
-					// do search only on the case number.
-					CodeableConcept identifierType = identifier.getType();
-					if (identifierType.isEmpty()) {
-						continue;
-					}
-
-					Coding identifierTypeCoding = identifierType.getCodingFirstRep();
-					if (identifierTypeCoding.isEmpty()) {
-						continue;
-					}
-
-					if (!"urn:mdi:temporary:code".equalsIgnoreCase(identifierTypeCoding.getSystem())
-							|| !"1000007".equalsIgnoreCase(identifierTypeCoding.getCode())) {
-						continue;
-					}
-
-					caseNumberExists = true;
-					Bundle responseBundle = client
-							.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly()
-									.systemAndCode(identifier.getSystem(), identifier.getValue()))
-							.returnBundle(Bundle.class).execute();
-
-					int total = responseBundle.getTotal();
-					if (total > 0) {
-						patientId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-						caseNumber = identifier.getValue();
-
-						logger.debug(">>>>>>>>>>>>>>>>" + caseNumber + ", patientId:" + patientId);
-						break;
-					}
-				}
-
-				if (caseNumberExists == false) {
-					Coding caseNumberTypeCoding = new Coding("urn:mdi:temporary:code", "1000007", "Case Number");
-					Identifier newIdentifier = new Identifier(); 
-					CodeableConcept caseType = new CodeableConcept();
-					caseType.addCoding(caseNumberTypeCoding);
-					newIdentifier.setType(caseType);
-					newIdentifier.setSystem("urn:mdi:cms:unknown");
-					newIdentifier.setValue(UUID.randomUUID().toString());
-					
-					patient.addIdentifier(newIdentifier);
-				}
-				
-				if (patientId != null && !patientId.isEmpty()) {
-					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						addReference(entry.getFullUrl(), "Patient", patient.getIdElement().getIdPart(), patientId);
-						// referenceIds.put("Patient/" + patient.getIdElement().getIdPart(), "Patient/" + patientId);
-					}
-					
-					// Now we need to write this to fhirbase.
-					patient.setIdElement(new IdType("Patient", patientId));
-//					patient.setId("Patient/"+patientId);
-					MethodOutcome outcome = client.update().resource(patient).execute();
-					if (outcome.getId() != null && !outcome.getId().isEmpty()) {
-						response.setStatus(
-								String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
-						response.setLocation(PatientResourceProvider.getType() + "/" + patientId);
-
-						entry.setFullUrl("Patient/" + patientId);
-						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-							entry.setResource((Resource) outcome.getResource());
-						}
-					} else {
-						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
-								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-						entry.setResource(null);
-					}
-				} else {
-					MethodOutcome outcome = client.create().resource(patient).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated()) {
-						patientId = outcome.getId().getIdPart();
-						if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-							addReference(entry.getFullUrl(), "Patient", patient.getIdElement().getIdPart(), patientId);
-							// referenceIds.put("Patient/" + patient.getIdElement().getIdPart(), "Patient/" + patientId);
-						}
-						response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
-								+ HttpStatus.CREATED.getReasonPhrase());
-						response.setLocation(PatientResourceProvider.getType() + "/" + patientId);
-
-						entry.setFullUrl("Patient/" + patientId);
-						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-							entry.setResource((Resource) outcome.getResource());
-						} else {
-							patient.setId(patientId);
-						}
-					} else {
-						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
-								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-						entry.setResource(null);
-					}
-				}
-
-				entry.setRequest(null);
-			}
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
 		}
+
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Patient)) {
+			return patient;
+		}
+
+		patient = (Patient) resource;
+		Patient retPatient = (Patient) checkForExisting(client, entry, patient.getIdentifier(), PatientResourceProvider.getType(), response);
+		if (retPatient != null) {
+			return retPatient;
+		}
+
+		patient = (Patient) createResource(client, entry, PatientResourceProvider.getType(), response);
+
+		entry.setRequest(null);
+
+		return patient;
 	}
 
-	private void processPostPractitioner(IGenericClient client, List<BundleEntryComponent> entries) {
-		for (BundleEntryComponent entry : entries) {
-			BundleEntryResponseComponent response = entry.getResponse();
-			if (response != null && !response.isEmpty()) {
-				// We have already processed this.
-				continue;
-			}
+	private Practitioner processPostPractitioner(IGenericClient client, BundleEntryComponent entry) {
+		Practitioner practitioner = null;
 
-			Resource resource = entry.getResource();
-			if (resource instanceof Practitioner) {
-				Practitioner practitioner = (Practitioner) resource;
-				String practitionerId = null;
-				for (Identifier identifier : practitioner.getIdentifier()) {
-					Bundle responseBundle = client
-							.search().forResource(Practitioner.class).where(Practitioner.IDENTIFIER.exactly()
-									.systemAndCode(identifier.getSystem(), identifier.getValue()))
-							.returnBundle(Bundle.class).execute();
-
-					int total = responseBundle.getTotal();
-					if (total > 0) {
-						practitionerId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-						break;
-					}
-				}
-
-				if (practitionerId != null && !practitionerId.isEmpty()) {
-					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						addReference(entry.getFullUrl(), "Practitioner", practitioner.getIdElement().getIdPart(), practitionerId);
-						// referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
-					}
-
-					// Now we need to write this to fhirbase.
-					practitioner.setId(new IdType("Practitioner", practitionerId));
-					MethodOutcome outcome = client.update().resource(practitioner).prettyPrint().encodedJson()
-							.execute();
-					if (outcome.getId() != null && !outcome.getId().isEmpty()) {
-						response.setStatus(
-								String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
-						response.setLocation(PractitionerResourceProvider.getType() + "/" + practitionerId);
-
-						entry.setFullUrl("Practitioner/" + practitionerId);
-						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-							entry.setResource((Resource) outcome.getResource());
-						}
-					} else {
-						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
-								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-						entry.setResource(null);
-					}
-				} else {
-					MethodOutcome outcome = client.create().resource(practitioner).prettyPrint().encodedJson()
-							.execute();
-					if (outcome.getCreated()) {
-						practitionerId = outcome.getId().getIdPart();
-						if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-							addReference(entry.getFullUrl(), "Practitioner", practitioner.getIdElement().getIdPart(), practitionerId);
-							// referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
-						}
-
-						response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
-								+ HttpStatus.CREATED.getReasonPhrase());
-						response.setLocation(PractitionerResourceProvider.getType() + "/" + practitionerId);
-
-						entry.setFullUrl("Practitioner/" + practitionerId);
-						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-							entry.setResource((Resource) outcome.getResource());
-						}
-						entry.setRequest(null);
-					} else {
-						response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
-								+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-						entry.setResource(null);
-					}
-				}
-
-				entry.setRequest(null);
-			}
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
 		}
+
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Practitioner)) {
+			return null;
+		}
+		practitioner = (Practitioner) resource;
+		Practitioner retPractitioner = (Practitioner) checkForExisting(client, entry, practitioner.getIdentifier(), PractitionerResourceProvider.getType(), response);
+		if (retPractitioner != null) {
+			return retPractitioner;
+		}
+
+		practitioner = (Practitioner) createResource(client, entry, PractitionerResourceProvider.getType(), response);
+
+		entry.setRequest(null);
+
+		return practitioner;
 	}
 
-	private void processPostLocation(IGenericClient client, List<BundleEntryComponent> entries) {
-		for (BundleEntryComponent entry : entries) {
-			BundleEntryResponseComponent response = entry.getResponse();
-			if (response != null && !response.isEmpty()) {
-				// We have already processed this.
-				continue;
-			}
-
-			Resource resource = entry.getResource();
-			if (resource instanceof Location) {
-				Location location = (Location) resource;
-				String locationId = null;
-
-				MethodOutcome outcome = client.create().resource(location).prettyPrint().encodedJson().execute();
-				if (outcome.getCreated()) {
-					locationId = outcome.getId().getIdPart();
-					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						addReference(entry.getFullUrl(), "Location", location.getIdElement().getIdPart(), locationId);
-						// referenceIds.put("Location/" + location.getIdElement().getIdPart(), "Location/" + locationId);
-					}
-
-					response.setStatus(
-							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
-					response.setLocation(LocationResourceProvider.getType() + "/" + locationId);
-
-					entry.setFullUrl("Location/" + locationId);
-					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-						entry.setResource((Resource) outcome.getResource());
-					}
-				} else {
-					response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
-							+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-				}
-
-				entry.setRequest(null);
-			}
+	private Location processPostLocation(IGenericClient client, BundleEntryComponent entry) {
+		Location location = null;
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
 		}
+
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Location)) {
+			return  null;
+		}
+
+		location = (Location) resource;
+		location = (Location) createResource(client, entry, LocationResourceProvider.getType(), response);
+
+		entry.setRequest(null);
+
+		return location;
 	}
 	
-	private void processPostCondition(IGenericClient client, List<BundleEntryComponent> entries) {
-		// It's hard to match the condition. So, we will clear all conditions.
-		Bundle rConditionB = client.search().forResource(Condition.class).where(Condition.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
-		if (rConditionB.getTotal() > 0) {
-			List<BundleEntryComponent> rConditions = rConditionB.getEntry();
-			for (BundleEntryComponent rConditionComp : rConditions) {
-				Condition rCond = (Condition) rConditionComp.getResource();
-				client.delete().resourceById(rCond.getIdElement()).execute();
-			}
+	private Condition processPostCondition(IGenericClient client, BundleEntryComponent entry) {
+		Condition condition = null;
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
 		}
+
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Condition)) {
+			return null;
+		}
+
+		condition = (Condition) resource;
+		Condition retCondition = (Condition) checkForExisting(client, entry, condition.getIdentifier(), ConditionResourceProvider.getType(), response);
+		if (retCondition != null) {
+			return retCondition;
+		}
+
+		updateReference(condition.getSubject());
+		updateReference(condition.getAsserter());	
+		condition = (Condition) createResource(client, entry, ConditionResourceProvider.getType(), response);
+
+		entry.setRequest(null);
 		
-		for (BundleEntryComponent entry : entries) {
-			BundleEntryResponseComponent response = entry.getResponse();
-			if (response != null && !response.isEmpty()) {
-				// We have already processed this.
-				continue;
-			}
+		return condition;
+	}
 
-			Resource resource = entry.getResource();
-			if (resource instanceof Condition) {
-				Condition condition = (Condition) resource;
-				updateReference(condition.getSubject());
-				updateReference(condition.getAsserter());
-				
-				MethodOutcome outcome = client.create().resource(condition).prettyPrint().encodedJson().execute();
-				if (outcome.getCreated()) {
-					String conditionId = outcome.getId().getIdPart();
-					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						addReference(entry.getFullUrl(), "Condition", condition.getIdElement().getIdPart(), conditionId);
-						// referenceIds.put("Condition/" + condition.getIdElement().getIdPart(), "Condition/" + conditionId);
-					}
+	private Observation processPostObservation(IGenericClient client, BundleEntryComponent entry) {
+		Observation observation = null;
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
+		}
 
-					response.setStatus(
-							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
-					response.setLocation(ConditionResourceProvider.getType() + "/" + conditionId);
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Observation)) {
+			return null;
+		}
 
-					entry.setFullUrl("Condition/" + conditionId);
-					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-						entry.setResource((Resource) outcome.getResource());
-					}
-				} else {
-					response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
-							+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-				}
+		observation = (Observation) resource;
+		Observation retObservation = (Observation) checkForExisting(client, entry, observation.getIdentifier(), ObservationResourceProvider.getType(), response);
+		if (retObservation != null) {
+			return retObservation;
+		}
 
+		updateReference(observation.getSubject());
+		updateReference(observation.getPerformerFirstRep());	
+		observation = (Observation) createResource(client, entry, ObservationResourceProvider.getType(), response);
+
+		entry.setRequest(null);
+		
+		return observation;
+	}
+
+	private Procedure processPostProcedure(IGenericClient client, BundleEntryComponent entry) {
+		Procedure procedure = null;
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
+		}
+
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Procedure)) {
+			return null;
+		}
+
+		procedure = (Procedure) resource;
+		Procedure retProcedure = (Procedure) checkForExisting(client, entry, procedure.getIdentifier(), ProcedureResourceProvider.getType(), response);
+		if (retProcedure != null) {
+			return retProcedure;
+		}
+
+		updateReference(procedure.getSubject());
+		ProcedurePerformerComponent performer = procedure.getPerformerFirstRep();
+		if (performer != null && !performer.isEmpty()) {
+			updateReference(performer.getActor());
+		}
+		updateReference(procedure.getAsserter());
+
+		procedure = (Procedure) createResource(client, entry, ProcedureResourceProvider.getType(), response);
+
+		entry.setRequest(null);
+		
+		return procedure;
+	}
+
+	private Resource checkForExisting(IGenericClient client, BundleEntryComponent entry, List<Identifier> identifiers, String resourceType, BundleEntryResponseComponent response) {
+		Resource resource = entry.getResource();
+		for (Identifier identifier : identifiers) {
+			Bundle responseBundle = client
+					.search().forResource(resourceType).where(Observation.IDENTIFIER.exactly()
+							.systemAndCode(identifier.getSystem(), identifier.getValue()))
+					.returnBundle(Bundle.class).execute();
+
+			int total = responseBundle.getTotal();
+			if (total > 0) {
+				Resource existingResource = responseBundle.getEntryFirstRep().getResource();
+				IdType resourceId = existingResource.getIdElement();
+
+				logger.debug("Existing Observation > Identifier - System: " + identifier.getSystem() + ", Value:" + identifier.getValue());
+
+				addReference(entry.getFullUrl(), resourceType, resource.getIdElement().getIdPart(), resourceId.getIdPart());
+				response.setStatus(HttpStatus.CONFLICT.name() + "- Practitioner Exists");
+				response.setLocation(existingResource.getIdElement().asStringValue());
 				entry.setRequest(null);
+				entry.setFullUrl(resourceType + "/" + resourceId.getIdPart());
+
+				return existingResource;
 			}
 		}
+
+		return null;
+	}
+
+	private Resource createResource(IGenericClient client, BundleEntryComponent entry, String resourceType, BundleEntryResponseComponent response) {
+		Resource resource = entry.getResource();
+		MethodOutcome outcome = client.create().resource(resource).prettyPrint().encodedJson().execute();
+		if (outcome.getCreated()) {
+			IIdType resourceId = outcome.getId();
+			if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
+				addReference(entry.getFullUrl(), resourceType, resource.getIdElement().getIdPart(), resourceId.getIdPart());
+			}
+
+			response.setStatus(
+					String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
+			response.setLocation(resourceType + "/" + resourceId);
+
+			entry.setFullUrl(resourceType + "/" + resourceId);
+			if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+				entry.setResource((Resource) outcome.getResource());
+			}
+
+			resource.setId(resourceId);
+		} else {
+			response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
+					+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
+
+			OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+			if (oo != null && !oo.isEmpty()) {
+				response.setOutcome(oo);
+			} 
+
+			resource = null;
+		}
+
+		entry.setRequest(null);
+
+		return resource;
 	}
 
 	private void addReference(String fullUrl, String resourceName, String oldId, String newId) {
-		referenceIds.put(fullUrl, resourceName + "/" + newId);
+
+		if (fullUrl != null && !fullUrl.isEmpty()) {
+			referenceIds.put(fullUrl, resourceName + "/" + newId);
+		}
+
 		referenceIds.put(resourceName + "/" + oldId, resourceName + "/" + newId);
 	}
 
@@ -447,62 +398,144 @@ public class SystemTransactionProvider {
 		}
 	}
 
-	private void processPost(IGenericClient client, List<BundleEntryComponent> entries) {
-		IdType subjectIdType = new IdType("Patient", patientId);
-
-		// Delete current observations. 
-		Bundle currentBundles = client.search().forResource(Observation.class).where(Observation.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
-		if (currentBundles.getTotal() > 0) {
-			List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
-			for (BundleEntryComponent currentEntry : currentEntries) {
-				Observation currentResource = (Observation) currentEntry.getResource();
-				client.delete().resourceById(currentResource.getIdElement()).execute();
+	Composition searchComposition (IGenericClient client, TokenClientParam tokenClientParam, String system, String value) {
+		Bundle resultBundle = client.search().forResource(Composition.class).where(tokenClientParam.exactly().systemAndCode(system, value)).returnBundle(Bundle.class).execute();
+		if (resultBundle != null && !resultBundle.isEmpty()) {
+			BundleEntryComponent compositionEntry = resultBundle.getEntryFirstRep();
+			if (compositionEntry != null && !compositionEntry.isEmpty()) {
+				return (Composition) compositionEntry.getResource();
 			}
 		}
 		
-		// Delete current Procedure in the server.
-		currentBundles = client.search().forResource(Procedure.class).where(Procedure.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
-		if (currentBundles.getTotal() > 0) {
-			List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
-			for (BundleEntryComponent currentEntry : currentEntries) {
-				Procedure currentResource = (Procedure) currentEntry.getResource();
-				client.delete().resourceById(currentResource.getIdElement()).execute();
+		return null;
+	}
+
+	Composition searchComposition (IGenericClient client, Composition composition) {
+		// If patientId does not exist, we use tracking number
+		List<Extension> trackingNumExts = composition.getExtensionsByUrl("http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number");
+		for (Extension trackingNumExt : trackingNumExts) {
+			Identifier trackingNumIdentifier = (Identifier) trackingNumExt.getValue();
+			String code = trackingNumIdentifier.getType().getCodingFirstRep().getCode();
+			String system = StringUtils.defaultString(trackingNumIdentifier.getSystem());
+			String value = StringUtils.defaultString(trackingNumIdentifier.getValue());
+			if ("mdi-case-number".equals(code)) {	
+				return searchComposition(client, CompositionResourceProvider.MDI_CASE_NUMBER, system, value);
+			} else if ("edrs-file-number".equals(code)) {
+				return searchComposition(client, CompositionResourceProvider.EDRS_FILE_NUMBER, system, value);
+			} else if ("tox-lab-case-number".equals(code)) {
+				return searchComposition(client, DiagnosticReportResourceProvider.TOX_LAB_CASE_NUMBER, system, value);
 			}
 		}
 
-		// Delete current ListResources in the server.
-		currentBundles = client.search().forResource(ListResource.class).where(ListResource.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
-		if (currentBundles.getTotal() > 0) {
-			List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
-			for (BundleEntryComponent currentEntry : currentEntries) {
-				ListResource currentResource = (ListResource) currentEntry.getResource();
-				client.delete().resourceById(currentResource.getIdElement()).execute();
-			}
+		return null;
+	}
+	
+	private Composition processPostComposition(IGenericClient client, BundleEntryComponent entry) {
+		Composition composition = null;
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
 		}
 
-		// Delete current RelatedPerson
-		currentBundles = client.search().forResource(RelatedPerson.class).where(RelatedPerson.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-		if (currentBundles.getTotal() > 0) {
-			List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
-			for (BundleEntryComponent currentEntry : currentEntries) {
-				RelatedPerson currentResource = (RelatedPerson) currentEntry.getResource();
-				client.delete().resourceById(currentResource.getIdElement()).execute();
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Composition)) {
+			return null;
+		}
+
+		System.out.println("++++++++++++++++++++++++");
+		
+		composition = (Composition) resource;
+
+		// Search if this composition exists
+		Composition existComposition = searchComposition(client, composition);
+		if (existComposition != null) {
+			// Composition exists
+			IdType resourceId = existComposition.getIdElement();
+			addReference(entry.getFullUrl(), CompositionResourceProvider.getType(), resource.getIdElement().getIdPart(), resourceId.getIdPart());
+			response.setStatus(HttpStatus.CONFLICT.name() + "- Composition Exists");
+			response.setLocation(existComposition.getIdElement().asStringValue());
+			entry.setRequest(null);
+			entry.setFullUrl(CompositionResourceProvider.getType() + "/" + resourceId.getIdPart());
+
+			return existComposition;
+		}
+
+		updateReference(composition.getSubject());
+		for (Reference author: composition.getAuthor()) {
+			updateReference(author);
+		}
+
+		CompositionAttesterComponent attester = composition.getAttesterFirstRep();
+		if (attester != null && !attester.isEmpty()) {
+			updateReference(attester.getParty());						
+		}
+		
+		CompositionEventComponent event = composition.getEventFirstRep();
+		if (event != null && !event.isEmpty()) {
+			updateReference(event.getDetailFirstRep());
+		}
+		
+		List<SectionComponent> sectionComponents = composition.getSection();
+		for (SectionComponent sectionComponent : sectionComponents) {
+			updateReference(sectionComponent.getFocus());
+
+			List<Reference> references = sectionComponent.getEntry();
+			for (Reference reference : references) {
+				updateReference(reference);
+			}
+
+			references = sectionComponent.getAuthor();
+			for (Reference reference : references) {
+				updateReference(reference);
 			}
 		}
+		
+		composition = (Composition) createResource(client, entry, CompositionResourceProvider.getType(), response);
+
+		entry.setRequest(null);
+	
+		return composition;
+	}
+
+	private boolean checkIfDocumentExist(IGenericClient client, List<BundleEntryComponent> entries) {
+		boolean retVal = false;
 
 		for (BundleEntryComponent entry : entries) {
 			BundleEntryResponseComponent response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource instanceof Composition) {
+				Composition composition = (Composition) resource;
+
+
+			}
+		}
+
+		return retVal;
+	}
+
+	/***
+	 * processPost: process MDI-IG bundle document data
+	 * @param client
+	 * @param entries
+	 */
+	private void processBatch(IGenericClient client, List<BundleEntryComponent> entries) {
+		List<BundleEntryComponent> postEntries = new ArrayList<BundleEntryComponent>();
+		BundleEntryResponseComponent response;
+
+		for (BundleEntryComponent entry : entries) {
+			response = entry.getResponse();
 			if (response != null && !response.isEmpty()) {
 				// We have already processed this.
 				continue;
 			}
 			
 			String originalFullUrl = entry.getFullUrl();
+			
 			int idPartIndex = originalFullUrl.lastIndexOf("/");
-			String originalFullUrlId = originalFullUrl.substring(idPartIndex+1);
+			String originalFullUrlIdPart = originalFullUrl.substring(idPartIndex+1);
 
 			BundleEntryRequestComponent request = entry.getRequest();
-
 			HTTPVerb requestMethod;
 			if (request == null || request.isEmpty()) {
 				requestMethod = HTTPVerb.POST;
@@ -510,244 +543,91 @@ public class SystemTransactionProvider {
 				requestMethod = request.getMethod();
 			}
 
-			if (requestMethod.equals(HTTPVerb.POST) || requestMethod.equals(HTTPVerb.PUT)) {
-				response = entry.getResponse();
-				Resource resource = entry.getResource();
-				if (resource != null && !resource.isEmpty()) {
-					String resourceId = null;
-					
-					if (resource instanceof Composition) {
-						// Composition must be handled separately. 
-						continue;
-					}
-					
-					if (resource instanceof Observation) {
-						Observation res = (Observation) resource;
-						updateReference(res.getSubject());
-						updateReference(res.getPerformerFirstRep());
-						// Some of observations have an extension to
-						// include location. We need to update this.
-						List<Extension> extensions = res.getExtension();
-						for (Extension extension : extensions) {
-							String extUrl = extension.getUrl();
-							if ("http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-InjuryLocation"
-									.equalsIgnoreCase(extUrl)
-									|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Disposition-Location"
-											.equalsIgnoreCase(extUrl)
-									|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/VRDR-Death-Location"
-											.equalsIgnoreCase(extUrl)
-									|| "http://hl7.org/fhir/us/vrdr/StructureDefinition/Observation-Location"
-											.equalsIgnoreCase(extUrl)) {
-								// get valueReference and update it.
-								updateReference((Reference) extension.getValue());
-							}
-						}
-					} else if (resource instanceof Procedure) {
-						Procedure res = (Procedure) resource;
-						updateReference(res.getSubject());
-						ProcedurePerformerComponent performer = res.getPerformerFirstRep();
-						if (performer != null && !performer.isEmpty()) {
-							updateReference(performer.getActor());
-						}
-						updateReference(res.getAsserter());
-						
-					} else if (resource instanceof ListResource) {
-						ListResource res = (ListResource) resource;
-						updateReference(res.getSubject());
-						updateReference(res.getSource());
-						for (ListEntryComponent listEntry : res.getEntry()) {
-							logger.debug("list item before:"+listEntry.getItem().getReferenceElement().getValue());
-							updateReference(listEntry.getItem());
-							logger.debug("list item after:"+listEntry.getItem().getReferenceElement().getValue());
-						}
-					} else if (resource instanceof DocumentReference) {
-						DocumentReference res = (DocumentReference) resource;
-						updateReference(res.getSubject());
-					} else if (resource instanceof RelatedPerson) {
-						RelatedPerson res = (RelatedPerson) resource;
-						updateReference(res.getPatient());
-					} else if (resource instanceof Organization) {
-						// For organization, we need to see if we have an existing one before
-						// we create.
-						Organization res = (Organization) resource;
-						for (Identifier identifier : res.getIdentifier()) {
-							Bundle responseBundle = client
-									.search().forResource(Organization.class).where(Organization.IDENTIFIER.exactly()
-											.systemAndCode(identifier.getSystem(), identifier.getValue()))
-									.returnBundle(Bundle.class).execute();
-
-							int total = responseBundle.getTotal();
-							if (total > 0) {
-								resourceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-								break;
-							}
-						}
-
-					}
-
-					MethodOutcome outcome;
-					if (resourceId != null) {
-						logger.debug("Existing Resource found with "+resource.getResourceType().toString()+"/"+resourceId);
-						resource.setId(new IdType(resource.getResourceType().toString(), resourceId));
-						outcome = client.update().resource(resource).prettyPrint().encodedJson().execute();
-						if (outcome.getId() != null && !outcome.getId().isEmpty()) {
-							response.setStatus(
-									String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
-							response.setLocation(resource.getResourceType().toString() + "/" + resourceId);
-
-							entry.setFullUrl(resource.getResourceType().toString() + "/" + resourceId);
-							if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-								entry.setResource((Resource) outcome.getResource());
-							}
-						} else {
-							response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value())
-									+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-						}
-					} else {
-						if (resource instanceof ListResource) {
-							logger.debug("before create:"+((ListResource)resource).getEntryFirstRep().getItem().getReferenceElement().getResourceType());
-						}
-						outcome = client.create().resource(resource).prettyPrint().encodedJson().execute();
-						if (outcome.getCreated() != null && outcome.getCreated()) {
-							resourceId = outcome.getId().getIdPart();
-							if (resourceId != null && !resourceId.isEmpty()) {
-								response.setStatus(String.valueOf(HttpStatus.CREATED.value()) + " "
-										+ HttpStatus.CREATED.getReasonPhrase());
-								response.setLocation(resource.getResourceType().toString() + "/" + resourceId);
-
-								entry.setFullUrl(resource.getResourceType().toString() + "/" + resourceId);
-								if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-									entry.setResource((Resource) outcome.getResource());
-								} else {
-									resource.setId(resourceId);
-								}
-							} else {
-								response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value())
-										+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-							}
-						} else {
-							response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()) + " "
-									+ HttpStatus.BAD_REQUEST.getReasonPhrase());
-						}
-					}
-					if (originalFullUrl != null && !originalFullUrl.isEmpty()) {
-						addReference(originalFullUrl, resource.getResourceType().toString(), originalFullUrlId, resourceId);
-						// referenceIds.put(resource.getResourceType().toString() + "/" + originalFullUrlId, resource.getResourceType().toString() + "/" + resourceId);
-					}
-				} else {
-					response.setStatus(String.valueOf(HttpStatus.BAD_REQUEST.value()) + " "
-							+ HttpStatus.BAD_REQUEST.getReasonPhrase());
-				}
-
-				entry.setRequest(null);
+			// Create POST entries
+			if (requestMethod.equals(HTTPVerb.POST)) {
+				postEntries.add(entry);
 			}
 		}
-	}
-	
-	private void processPostComposition(IGenericClient client, List<BundleEntryComponent> entries) {
-		for (BundleEntryComponent entry : entries) {
-			BundleEntryResponseComponent response = entry.getResponse();
-			if (response != null && !response.isEmpty()) {
-				// We have already processed this.
-				continue;
-			}
 
+		// Process Patient first from POST entries.
+		String patientId = null;
+		Patient patient = null;
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
 			Resource resource = entry.getResource();
-			if (resource instanceof Composition) {
-				System.out.println("++++++++++++++++++++++++");
-				for (Map.Entry<String, String> rid : referenceIds.entrySet()) {
-			        System.out.println(rid.getKey() + ":" + rid.getValue());
-			    }
-				
-				Composition composition = (Composition) resource;
-				updateReference(composition.getSubject());
-				
-				for (Reference author: composition.getAuthor()) {
-					updateReference(author);
+			if (resource != null && !resource.isEmpty()) {
+				String resourceId = null;
+				if (resource instanceof Patient) {
+					patient = processPostPatient(client, entry);
+					patientId = patient.getIdElement().getIdPart();
 				}
-
-				CompositionAttesterComponent attester = composition.getAttesterFirstRep();
-				if (attester != null && !attester.isEmpty()) {
-					updateReference(attester.getParty());						
-				}
-				
-				CompositionEventComponent event = composition.getEventFirstRep();
-				if (event != null && !event.isEmpty()) {
-					updateReference(event.getDetailFirstRep());
-				}
-				
-				List<SectionComponent> sectionComponents = composition.getSection();
-				for (SectionComponent sectionComponent : sectionComponents) {
-					updateReference(sectionComponent.getFocus());
-
-					List<Reference> references = sectionComponent.getEntry();
-					for (Reference reference : references) {
-						updateReference(reference);
-					}
-
-					references = sectionComponent.getAuthor();
-					for (Reference reference : references) {
-						updateReference(reference);
-					}
-				}
-				
-				// check if we already have a composition for this patient.
-				IdType compositionIdType = null;
-				IdType subjectIdType = new IdType("Patient", patientId);
-				Bundle resultBundle = client.search().forResource(Composition.class).where(Composition.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
-				if (resultBundle != null && !resultBundle.isEmpty()) {
-					BundleEntryComponent compositionEntry = resultBundle.getEntryFirstRep();
-					if (compositionEntry != null && !compositionEntry.isEmpty()) {
-						Composition existingComposition = (Composition) compositionEntry.getResource();
-						compositionIdType = existingComposition.getIdElement();
-					}
-				}
-				
-				MethodOutcome outcome;
-				if (compositionIdType == null) {
-					outcome = client.create().resource(composition).prettyPrint().encodedJson().execute();
-				} else {
-					composition.setId(compositionIdType);
-					outcome = client.update().resource(composition).prettyPrint().encodedJson().execute();
-				}
-				
-				if (outcome.getCreated() != null && outcome.getCreated()) {
-					String compositionId = outcome.getId().getIdPart();
-					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						addReference(entry.getFullUrl(), "Composition", composition.getIdElement().getIdPart(), compositionId);
-						// referenceIds.put("Composition/" + composition.getIdElement().getIdPart(), "Composition/" + compositionId);
-					}
-
-					response.setStatus(
-							String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
-					response.setLocation(CompositionResourceProvider.getType() + "/" + compositionId);
-
-					entry.setFullUrl("Composition/" + compositionId);
-					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-						entry.setResource((Resource) outcome.getResource());
-					}
-				} else if (outcome.getId() != null && !outcome.getId().isEmpty()) {
-					String compositionId = outcome.getId().getIdPart();
-					if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-						addReference(entry.getFullUrl(), "Composition", composition.getIdElement().getIdPart(), compositionId);
-						// referenceIds.put("Composition/" + composition.getIdElement().getIdPart(), "Composition/" + compositionId);
-					}
-
-					response.setStatus(
-							String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());
-					entry.setFullUrl("Composition/" + compositionId);
-					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-						entry.setResource((Resource) outcome.getResource());
-					}					
-				} else {
-					response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
-							+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-				}
-				 
-
-				entry.setRequest(null);
 			}
 		}
+
+		// It's important the order of POST processing because of references.
+
+		// Practitioner
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Practitioner) {
+					processPostPractitioner(client, entry);
+				}
+			}
+		}
+				
+		// Location
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Location) {
+					processPostLocation(client, entry);
+				}
+			}
+		}
+
+		// Condition
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Condition) {
+					processPostCondition(client, entry);				}
+			}
+		}
+
+		// Observation
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Observation) {
+					processPostObservation(client, entry);				}
+			}
+		}
+
+		// Procedure
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Procedure) {
+					processPostProcedure(client, entry);				}
+			}
+		}
+
+		// Composition
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Composition) {
+					processPostComposition(client, entry);				}
+			}
+		}		
+		
 	}
 
 	/**
@@ -800,15 +680,7 @@ public class SystemTransactionProvider {
 			// 5. Conditional Reference
 
 			processDelete(client, entries);
-			processPostPatient(client, entries);
-			processPostPractitioner(client, entries);
-			processPostLocation(client, entries);
-			processPostCondition(client, entries);
-			processPost(client, entries);
-
-			// Now, we should have composition left. 
-			processPostComposition(client, entries);
-			
+			processBatch(client, entries);
 			theBundle.setType(BundleType.BATCHRESPONSE);
 
 			break;
@@ -817,15 +689,8 @@ public class SystemTransactionProvider {
 			// One is VRDR, the other is Toxicology document
 			// We post all in the entries (based on VRDR resources) to server.
 			processDelete(client, entries);
-			processPostPatient(client, entries);
-			processPostPractitioner(client, entries);
-			processPostLocation(client, entries);
-			processPostCondition(client, entries);
-			processPost(client, entries);
+			processBatch(client, entries);
 
-			// Now, we should have composition left. 
-			processPostComposition(client, entries);
-			
 			break;
 		default:
 		}
@@ -889,14 +754,7 @@ public class SystemTransactionProvider {
 			// 5. Conditional Reference
 
 			processDelete(client, entries);
-			processPostPatient(client, entries);
-			processPostPractitioner(client, entries);
-			processPostLocation(client, entries);
-			processPostCondition(client, entries);
-			processPost(client, entries);
-
-			// Now, we should have composition left. 
-			processPostComposition(client, entries);
+			processBatch(client, entries);
 			
 			theBundle.setType(BundleType.BATCHRESPONSE);
 
@@ -906,15 +764,8 @@ public class SystemTransactionProvider {
 			// One is VRDR, the other is Toxicology document
 			// We post all in the entries (based on VRDR resources) to server.
 			processDelete(client, entries);
-			processPostPatient(client, entries);
-			processPostPractitioner(client, entries);
-			processPostLocation(client, entries);
-			processPostCondition(client, entries);
-			processPost(client, entries);
+			processBatch(client, entries);
 
-			// Now, we should have composition left. 
-			processPostComposition(client, entries);
-			
 			break;
 
 		default:

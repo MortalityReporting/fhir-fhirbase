@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import javax.annotation.PostConstruct;
 
+import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.BooleanType;
@@ -20,6 +21,7 @@ import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.Condition;
+import org.hl7.fhir.r4.model.DateType;
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Identifier;
@@ -31,7 +33,6 @@ import org.hl7.fhir.r4.model.Parameters;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.RelatedPerson;
 import org.hl7.fhir.r4.model.Resource;
-import org.hl7.fhir.r4.model.ResourceType;
 import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.UriType;
@@ -41,14 +42,22 @@ import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.PractitionerRole;
 import org.hl7.fhir.r4.model.Procedure;
+import org.hl7.fhir.r4.model.Property;
 import org.hl7.fhir.r4.model.Procedure.ProcedurePerformerComponent;
+import org.hl7.fhir.utilities.json.JsonTrackingParser.TokenType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.propertyeditors.PathEditor;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.model.api.IElement;
 import ca.uhn.fhir.model.api.Include;
+import ca.uhn.fhir.model.api.annotation.SearchParamDefinition;
+import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
+import ca.uhn.fhir.model.primitive.StringDt;
+import ca.uhn.fhir.model.primitive.UriDt;
 import ca.uhn.fhir.model.valueset.BundleTypeEnum;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
@@ -69,11 +78,14 @@ import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
+import ca.uhn.fhir.rest.gclient.ICriterion;
 import ca.uhn.fhir.rest.gclient.IQuery;
+import ca.uhn.fhir.rest.gclient.TokenClientParam;
 import ca.uhn.fhir.rest.param.DateOrListParam;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.param.ParamPrefixEnum;
+import ca.uhn.fhir.rest.param.ParameterUtil;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.StringAndListParam;
 import ca.uhn.fhir.rest.param.StringOrListParam;
@@ -84,6 +96,7 @@ import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.param.UriOrListParam;
 import ca.uhn.fhir.rest.param.UriParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import ca.uhn.fhir.util.StringUtil;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
@@ -92,10 +105,127 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 public class CompositionResourceProvider extends BaseResourceProvider {
 	private static final Logger logger = LoggerFactory.getLogger(CompositionResourceProvider.class);
 	public static final String NQ_EVENT_DETAIL = "event-detail";
-	public static final String SP_DEATH_LOCATION = "vrdr-death-location.district";
-	public static final String SP_DEATH_DATE = "vrdr-death-date.value-date";
-	public static final String SP_EDRS_TRACKING_NUMBER = "edrs-tracking-number";
-	public static final String SP_MDI_TRACKING_NUMBER = "mdi-tracking-number";
+
+	/**
+	 * Search parameter: <b>death-date-actual</b>
+	 * <p>
+	 * Description: <b>Actual Date of Death</b><br>
+   	 * Type: <b>date</b><br>
+	 * Path: <b>Observation.valueDateTime</b><br>
+	 * </p>
+	 */
+	@SearchParamDefinition(name="death-date-actual", path="Observation.valueDateTime", description="Actual Date of Death", type="date" )
+	public static final String SP_DEATH_DATE_ACTUAL = "death-date-actual";
+	/**
+   	 * <b>Fluent Client</b> search parameter constant for <b>death-date-actual</b>
+	 * <p>
+	 * Description: <b>Actual Date of Death</b><br>
+   	 * Type: <b>date</b><br>
+	 * Path: <b>Observation.valueDateTime</b><br>
+	 * </p>
+   	 */
+	public static final ca.uhn.fhir.rest.gclient.DateClientParam DEATH_DATE_ACTUAL = new ca.uhn.fhir.rest.gclient.DateClientParam(SP_DEATH_DATE_ACTUAL);
+
+	/**
+	 * Search parameter: <b>death-date-pronounced</b>
+	 * <p>
+	 * Description: <b>Actual Date of Pronounced Death</b><br>
+   	 * Type: <b>date</b><br>
+	 * Path: <b>Observation.component</b><br>
+	 * </p>
+	 */
+	@SearchParamDefinition(name="death-date-pronounced", path="Observation.valueDateTime", description="Date of Pronounced Death", type="date" )
+	public static final String SP_DEATH_DATE_PRONOUNCED = "death-date-pronounced";
+	/**
+   	 * <b>Fluent Client</b> search parameter constant for <b>death-date-pronounced</b>
+	 * <p>
+	 * Description: <b>Actual Date of Pronounced Death</b><br>
+   	 * Type: <b>date</b><br>
+	 * Path: <b>Observation.component</b><br>
+	 * </p>
+   	 */
+	public static final ca.uhn.fhir.rest.gclient.DateClientParam DEATH_DATE_PRONOUNCED = new ca.uhn.fhir.rest.gclient.DateClientParam(SP_DEATH_DATE_PRONOUNCED);
+
+	/**
+	 * Search parameter: <b>death-date</b>
+	 * <p>
+	 * Description: <b>Date of Death</b><br>
+   	 * Type: <b>date</b><br>
+	 * Path: <b>Observation.valueDateTime or Observation.component</b><br>
+	 * </p>
+	 */
+	@SearchParamDefinition(name="death-date", path="Observation.component", description="Date of Death", type="date" )
+	public static final String SP_DEATH_DATE = "death-date";
+	/**
+   	 * <b>Fluent Client</b> search parameter constant for <b>death-date-pronounced</b>
+	 * <p>
+	 * Description: <b>Date of Death</b><br>
+   	 * Type: <b>date</b><br>
+	 * Path: <b>Observation.valueDateTime or Observation.component</b><br>
+	 * </p>
+   	 */
+	public static final ca.uhn.fhir.rest.gclient.DateClientParam DEATH_DATE = new ca.uhn.fhir.rest.gclient.DateClientParam(SP_DEATH_DATE);
+
+	/**
+	 * Search parameter: <b>death-location</b>
+	 * <p>
+	 * Description: <b>District of death location</b><br>
+   	 * Type: <b>string</b><br>
+	 * Path: <b>Composition.death-location</b><br>
+	 * </p>
+	 */
+	@SearchParamDefinition(name="death-location", path="Location.name", description="District of death location", type="string" )
+	public static final String SP_DEATH_LOCATION = "death-location";
+	/**
+   	 * <b>Fluent Client</b> search parameter constant for <b>edrs-file-number</b>
+	 * <p>
+	 * Description: <b>District of death location</b><br>
+   	 * Type: <b>string</b><br>
+	 * Path: <b>Composition.death-location</b><br>
+	 * </p>
+   	 */
+	public static final ca.uhn.fhir.rest.gclient.StringClientParam DEATH_LOCATION = new ca.uhn.fhir.rest.gclient.StringClientParam(SP_DEATH_LOCATION);
+
+	/**
+	 * Search parameter: <b>edrs-file-number</b>
+	 * <p>
+	 * Description: <b>A composition extension identifier for edrs-file-number</b><br>
+   	 * Type: <b>token</b><br>
+	 * Path: <b>Composition.edrs-file-number</b><br>
+	 * </p>
+	 */
+	@SearchParamDefinition(name="edrs-file-number", path="Composition.extension-tracking-numbers", description="Extension Trakcing Number for EDRS file", type="token" )
+	public static final String SP_EDRS_FILE_NUMBER = "edrs-file-number";
+	/**
+   	 * <b>Fluent Client</b> search parameter constant for <b>edrs-file-number</b>
+	 * <p>
+	 * Description: <b>A composition extension identifier for edrs-file-number</b><br>
+   	 * Type: <b>token</b><br>
+	 * Path: <b>Composition.edrs-file-number</b><br>
+	 * </p>
+   	 */
+	public static final ca.uhn.fhir.rest.gclient.TokenClientParam EDRS_FILE_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_EDRS_FILE_NUMBER);
+
+	/**
+	 * Search parameter: <b>mdi-case-number</b>
+	 * <p>
+	 * Description: <b>A composition extension identifier for mdi-case-number</b><br>
+   	 * Type: <b>token</b><br>
+	 * Path: <b>Composition.mdi-case-number</b><br>
+	 * </p>
+	 */
+	@SearchParamDefinition(name="mdi-case-number", path="Composition.extension-tracking-numbers", description="Extension Trakcing Number for MDI case", type="token" )
+	public static final String SP_MDI_CASE_NUMBER = "mdi-case-number";
+	/**
+   	 * <b>Fluent Client</b> search parameter constant for <b>mdi-case-number</b>
+   	 * <p>
+	 * Description: <b>A composition extension identifier for mdi-case-number</b><br>
+	 * Type: <b>token</b><br>
+   	 * Path: <b>Composition.mdi-case-number</b><br>
+   	 * </p>
+   	 */
+  	public static final ca.uhn.fhir.rest.gclient.TokenClientParam MDI_CASE_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_MDI_CASE_NUMBER);
+	
 
 	public CompositionResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -180,9 +310,11 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Composition.SP_TYPE) TokenOrListParam theOrTypes,
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
+			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE_ACTUAL) DateRangeParam theDeathDateActual,
+			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED) DateRangeParam theDeathDatePronounced,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE) DateRangeParam theDeathDate,
-			@OptionalParam(name = CompositionResourceProvider.SP_EDRS_TRACKING_NUMBER) StringParam theEdrsTrackingNumber,
-			@OptionalParam(name = CompositionResourceProvider.SP_MDI_TRACKING_NUMBER) StringParam theMdiTrackingNumber,
+			@OptionalParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) TokenOrListParam theEdrsFileNumber,
+			@OptionalParam(name = CompositionResourceProvider.SP_MDI_CASE_NUMBER) TokenOrListParam theMdiCaseNumber,
 			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", 
 					USCorePatient.SP_ADDRESS_CITY,
 					USCorePatient.SP_ADDRESS_COUNTRY,
@@ -271,7 +403,16 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			whereParameters.add(districtOrWhere);
 		}
 
+		if (theDeathDateActual != null) {
+			// TODO: Implement this
+		}
+
+		if (theDeathDatePronounced != null) {
+			// TODO: Implement this
+		}
+
 		if (theDeathDate != null) {
+			// TODO: revisit and implement this to be search observation.valueDateTime and observation.component
 			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
 			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
 			String deathDateWhere = constructDateRangeWhereParameter(theDeathDate, "o", "valueDateTime");
@@ -300,16 +441,54 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
-		if (theEdrsTrackingNumber != null) {
+		if (theEdrsFileNumber != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
-			String where = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"edrs-file-number\"}]}, \"value\": \"" + theEdrsTrackingNumber.getValue() + "\"}}'::jsonb";
+
+			String where = "";
+			for (TokenParam edrsFileNumberToken : theEdrsFileNumber.getValuesAsQueryTokens()) {
+				String system = edrsFileNumberToken.getSystem();
+				String value = edrsFileNumberToken.getValue();
+				String whereItem;
+				if (system == null || system.isEmpty()) {
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_EDRS_FILE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+				} else {
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_EDRS_FILE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+				}
+				if (where.isEmpty()) {
+					where = whereItem;
+				} else {
+					where += " or " + whereItem;
+				}
+			}
+
 			whereParameters.add(where);
+			returnAll = false;
 		}
 
-		if (theMdiTrackingNumber != null) {
+		if (theMdiCaseNumber != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
-			String where = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"mdi-case-number\"}]}, \"value\": \"" + theMdiTrackingNumber.getValue() + "\"}}'::jsonb";
+
+			String where = "";
+			for (TokenParam mdiCaseNumberToken : theMdiCaseNumber.getValuesAsQueryTokens()) {
+				TokenParam token = new TokenParam(mdiCaseNumberToken.getValue());
+				
+				String system = token.getSystem();
+				String value = token.getValue();
+				String whereItem;
+				if (system == null || system.isEmpty()) {
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+				} else {
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+				}
+				if (where.isEmpty()) {
+					where = whereItem;
+				} else {
+					where += " or " + whereItem;
+				}
+			}
+
 			whereParameters.add(where);
+			returnAll = false;		
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
@@ -427,6 +606,17 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						.resource(reference.getReferenceElement().getResourceType())
 						.withId(reference.getReferenceElement().getIdPart()).encodedJson()
 						.execute();
+
+				if (resource == null || resource.isEmpty()) {
+					OperationOutcome outcome = new OperationOutcome();
+
+					outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+							.setDetails((new CodeableConcept())
+									.setText("resource (" + reference.getReferenceElement().getValue()
+											+ ") in Composition section not found"));
+					throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+				}
+
 				bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource, addToSection));
 				addedResource.add(referenceId);
 
@@ -489,6 +679,43 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		return myBundleProvider;
 	}
 
+	DateParam getDateParam(String date) {
+		if (date == null || date.isEmpty()) return null;
+
+		// check first two characters for prefix.
+		ParamPrefixEnum prefix = null;
+
+		if (date.startsWith("eq")) {
+			prefix = ParamPrefixEnum.EQUAL;
+			date = date.substring(2);
+		} else if (date.startsWith("lt")) {
+			prefix = ParamPrefixEnum.LESSTHAN;
+			date = date.substring(2);
+		} else if (date.startsWith("gt")) {
+			prefix = ParamPrefixEnum.GREATERTHAN;
+			date = date.substring(2);
+		} else if (date.startsWith("le")) {
+			prefix = ParamPrefixEnum.LESSTHAN_OR_EQUALS;
+			date = date.substring(2);
+		} else if (date.startsWith("ge")) {
+			prefix = ParamPrefixEnum.GREATERTHAN_OR_EQUALS;
+			date = date.substring(2);
+		} else if (date.startsWith("sa")) {
+			prefix = ParamPrefixEnum.STARTS_AFTER;
+			date = date.substring(2);
+		} else if (date.startsWith("eb")) {
+			prefix = ParamPrefixEnum.ENDS_BEFORE;
+			date = date.substring(2);
+		} else if (date.startsWith("ap")) {
+			prefix = ParamPrefixEnum.APPROXIMATE;
+			date = date.substring(2);
+		}
+
+		DateParam dateParam = new DateParam(prefix, date);
+
+		return dateParam;
+	}
+
 	private IQuery<IBaseBundle> queryForDates (IQuery<IBaseBundle> query, DateOrListParam dateRange) {
 		List<DateParam> dates = dateRange.getValuesAsQueryTokens();
 		boolean shouldQuery = false;
@@ -527,26 +754,111 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 	}
 
+	// private String toTokenParamString(String token) {
+	// 	int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
+	// 	String system = null;
+	// 	String value = null;
+	// 	if (barIndex != -1) {
+	// 		system = token.substring(0, barIndex);
+	// 		value = ParameterUtil.unescape(token.substring(barIndex + 1));
+	// 	} else {
+	// 		value = ParameterUtil.unescape(token);
+	// 	}
+
+	// 	Identifier identifier = new BaseIdentifierDt();
+	// 	String system = token.getSystem();
+	// 	String value = StringUtils.defaultString(token.getValue());
+	// 	if (StringUtils.isNotBlank(system)) {
+	// 		return system + "|" + value;
+	// 	} else if (system == null) {
+	// 		return value;
+	// 	} else {
+	// 		return "|" + value;
+	// 	}
+	// }
+
+	private boolean addTokenToQuery (IQuery<IBaseBundle> query, TokenClientParam clientParam, StringOrListParam theTokenList) {
+		boolean retVal = false;
+
+		if (theTokenList == null) {
+			return retVal;
+		}
+
+		List<BaseIdentifierDt> identifiers = new ArrayList<BaseIdentifierDt>();
+		for (StringParam tokenParam : theTokenList.getValuesAsQueryTokens()) {
+			String token = tokenParam.getValue();
+			int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
+			String system = null;
+			String value = null;
+			if (barIndex != -1) {
+				system = token.substring(0, barIndex);
+				value = ParameterUtil.unescape(token.substring(barIndex + 1));
+			} else {
+				value = ParameterUtil.unescape(token);
+			}
+
+			BaseIdentifierDt identifierDt = new BaseIdentifierDt() {
+				UriDt theSystem;
+				StringDt theValue;
+
+				@Override
+				public boolean isEmpty() {
+					return false;
+				}
+
+				@Override
+				public <T extends IElement> List<T> getAllPopulatedChildElementsOfType(Class<T> theType) {
+					return null;
+				}
+
+				@Override
+				public UriDt getSystemElement() {
+					return theSystem;
+				}
+
+				@Override
+				public StringDt getValueElement() {
+					return theValue;
+				}
+
+				@Override
+				public BaseIdentifierDt setSystem(String theUri) {
+					theSystem = new UriDt(theUri);
+					return this;
+				}
+
+				@Override
+				public BaseIdentifierDt setValue(String theString) {
+					theValue = new StringDt(theString);
+					return this;
+				}
+			};
+
+			identifierDt.setSystem(system);
+			identifierDt.setValue(value);
+	
+			identifiers.add(identifierDt);
+		}
+
+		if (identifiers.size() > 0) {
+			query = query.and(clientParam.exactly().identifiers(identifiers));
+			retVal = true;
+		}
+
+		return retVal;
+	}
+
 	@Operation(name = "$mdi-documents", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
 			@IdParam(optional=true) IdType theCompositionId,
 			@OperationParam(name = "id") UriOrListParam theIds, 
-			@OperationParam(name = "decedent.address-city") StringAndListParam theAddressCities,
-			@OperationParam(name = "decedent.address-postalcode") StringAndListParam theAddressPostalCodes,
-			@OperationParam(name = "decedent.address-state") StringAndListParam theAddressStates,
-			@OperationParam(name = "decedent.address-use") TokenAndListParam theAddressUses,
-			@OperationParam(name = "decedent.birthdate") DateOrListParam theBirthDateRange,
-			@OperationParam(name = "decedent.email") TokenAndListParam theEmails,
-			@OperationParam(name = "decedent.family") StringAndListParam theFamilies,
-			@OperationParam(name = "decedent.gender") TokenAndListParam theGenders,
-			@OperationParam(name = "decedent.given") StringAndListParam theGivens,
-			@OperationParam(name = "decedent.identifier") TokenAndListParam theIdentifiers,
-			@OperationParam(name = "decedent.name") StringAndListParam theNames,
-			@OperationParam(name = "decedent.phone") TokenAndListParam thePhones,
-			@OperationParam(name = "decedent.telecom") TokenAndListParam theTelecoms,
-			@OperationParam(name = "vrdr-death-certification.identifier") TokenAndListParam theCaseIds,
-			@OperationParam(name = "vrdr-death-location.district") StringOrListParam theDeathLocations,
-			@OperationParam(name = "vrdr-death-date.value-date", max = 2) DateOrListParam theProfileDeathDateRange) {
+			@OperationParam(name = Composition.SP_PATIENT) ParametersParameterComponent thePatient,
+			@OperationParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) StringOrListParam theEdrsFileNumber,
+			@OperationParam(name = CompositionResourceProvider.SP_MDI_CASE_NUMBER) StringOrListParam theMdiCaseNumber,
+			@OperationParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
+			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_ACTUAL, max = 2) DateOrListParam theDeathDateActual,  
+			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED, max = 2) DateOrListParam theDeathDatePronounced,
+			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE, max = 2) DateOrListParam theProfileDeathDateRange) {
 				
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
@@ -566,6 +878,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				.execute();
 		}
 
+		// We construct where statement...
 		retBundle.setType(BundleType.SEARCHSET);
 		retBundle.setId(UUID.randomUUID().toString());
 		retBundle.setTotal(totalSize);
@@ -596,236 +909,106 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			return retBundle;
 		}
 		
+		boolean shouldQuery = false;
+
 		Bundle compositionsBundle = null;
 		IQuery<IBaseBundle> query = client.search().forResource(Composition.class);
 
-		if (theCaseIds != null) {
-			String namedQuery = "";
-			String caseIdOr = null;
-			String caseIdsAnd = null;
-			for (TokenOrListParam theCaseIdAnd: theCaseIds.getValuesAsQueryTokens()) {
-				caseIdOr = null;
-				for (TokenParam theIdentifier : theCaseIdAnd.getValuesAsQueryTokens()) {
-					if (caseIdOr == null) {
-						caseIdOr = theIdentifier.getSystem() + "|" + theIdentifier.getValue();
-					} else {
-						caseIdOr = caseIdOr.concat("," + theIdentifier.getSystem() + "|" + theIdentifier.getValue());
-					}
-				}
-				if (caseIdsAnd == null) {
-					caseIdsAnd = "case-id=" + caseIdOr;
-				} else {
-					caseIdsAnd = "&case-id=" + caseIdOr;
-				}
-			}
+		if (addTokenToQuery(query, EDRS_FILE_NUMBER, theEdrsFileNumber) == true) {
+			shouldQuery = true;
+		}
 
-			if (caseIdsAnd != null && !caseIdsAnd.isEmpty()) {
-				namedQuery = "Composition?_query=" + CompositionResourceProvider.NQ_EVENT_DETAIL + "&" +caseIdsAnd;
-				compositionsBundle = client.search()
-					.byUrl(namedQuery)
-					.returnBundle(Bundle.class)
-					.execute();
-			}
-		} else {
-			boolean shouldQuery = false;
+ 		if (addTokenToQuery(query, MDI_CASE_NUMBER, theMdiCaseNumber) == true) {
+			shouldQuery = true;
+		}
 
-			List<String> addressCitySearchParams = new ArrayList<String>();
-			if (theAddressCities != null) {
-				for (StringOrListParam theAddressCitiesAnd : theAddressCities.getValuesAsQueryTokens()) {
-					addressCitySearchParams.clear();
-					for (StringParam theAddressCity : theAddressCitiesAnd.getValuesAsQueryTokens()) {
-						addressCitySearchParams.add(theAddressCity.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_CITY.matches().values(addressCitySearchParams)));
-					shouldQuery = true;
-				}
-			}
-
-			List<String> addressPostalCodeSearchParams = new ArrayList<String>();
-			if (theAddressPostalCodes != null) {
-				for (StringOrListParam theAddressPostalCodesAnd : theAddressPostalCodes.getValuesAsQueryTokens()) {
-					addressPostalCodeSearchParams.clear();
-					for (StringParam theAddressPostalCode : theAddressPostalCodesAnd.getValuesAsQueryTokens()) {
-						addressPostalCodeSearchParams.add(theAddressPostalCode.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_POSTALCODE.matches().values(addressPostalCodeSearchParams)));
-					shouldQuery = true;
-				}
-			}
-
-			List<String> addressStateSearchParams = new ArrayList<String>();
-			if (theAddressStates != null) {
-				for (StringOrListParam theAddressStatesAnd : theAddressStates.getValuesAsQueryTokens()) {
-					addressStateSearchParams.clear();
-					for (StringParam theAddressState : theAddressStatesAnd.getValuesAsQueryTokens()) {
-						addressStateSearchParams.add(theAddressState.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_STATE.matches().values(addressStateSearchParams)));
-					shouldQuery = true;
-				}
-			}
-
-			List<String> addressUseSearchParams = new ArrayList<String>();
-			if (theAddressUses != null) {
-				for (TokenOrListParam theAddressUseAnd: theAddressUses.getValuesAsQueryTokens()) {
-					addressUseSearchParams.clear();
-					for (TokenParam theAddressUse : theAddressUseAnd.getValuesAsQueryTokens()) {
-						addressUseSearchParams.add(theAddressUse.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.ADDRESS_USE.exactly().codes(addressCitySearchParams)));
-					shouldQuery = true;
-				}
-			}
-
-			if (theBirthDateRange != null) {
-				IQuery<IBaseBundle> queryDates = queryForDates(query, theBirthDateRange);
-				if (queryDates != null) {
-					query = queryDates;
-					shouldQuery = true;
-				}
-			}
-
-			List<String> emailSearchParams = new ArrayList<String>();
-			if (theEmails != null) {
-				for (TokenOrListParam theEmailAnd: theEmails.getValuesAsQueryTokens()) {
-					emailSearchParams.clear();
-					for (TokenParam theEmail : theEmailAnd.getValuesAsQueryTokens()) {
-						emailSearchParams.add(theEmail.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.EMAIL.exactly().codes(emailSearchParams)));
-					shouldQuery = true;
-				}
-			}
-
-			List<String> familySearchParams = new ArrayList<String>();
-			if (theFamilies != null) {
-				for (StringOrListParam theFamilyAnd : theFamilies.getValuesAsQueryTokens()) {
-					familySearchParams.clear();
-					for (StringParam theFamily : theFamilyAnd.getValuesAsQueryTokens()) {
-						familySearchParams.add(theFamily.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
-					shouldQuery = true;
-				}
-			}
-
-			List<String> genderSearchParams = new ArrayList<String>();
-			if (theGenders != null) {
-				for (TokenOrListParam theGenderAnd: theGenders.getValuesAsQueryTokens()) {
-					genderSearchParams.clear();
-					for (TokenParam theGender : theGenderAnd.getValuesAsQueryTokens()) {
-						genderSearchParams.add(theGender.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
-					shouldQuery = true;
-				}
-			}
-
-			List<String> givenSearchParams = new ArrayList<String>();
-			if (theGivens != null) {
-				for (StringOrListParam theGivenAnd : theGivens.getValuesAsQueryTokens()) {
-					givenSearchParams.clear();
-					for (StringParam theGiven : theGivenAnd.getValuesAsQueryTokens()) {
-						givenSearchParams.add(theGiven.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));
-					shouldQuery = true;
-				}
-			}
-
-			List<String> identifierSearchParams = new ArrayList<String>();
-			if (theIdentifiers != null) {
-				for (TokenOrListParam theIdentifierAnd: theIdentifiers.getValuesAsQueryTokens()) {
-					identifierSearchParams.clear();
-					for (TokenParam theIdentifier : theIdentifierAnd.getValuesAsQueryTokens()) {
-						identifierSearchParams.add(theIdentifier.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.IDENTIFIER.exactly().codes(identifierSearchParams)));
-					shouldQuery = true;
-				}
-			}
-
-			List<String> nameSearchParams = new ArrayList<String>();
-			if (theNames != null) {
-				for (StringOrListParam theNamesAnd: theNames.getValuesAsQueryTokens()) {
-					nameSearchParams.clear();
-					for (StringParam theName : theNamesAnd.getValuesAsQueryTokens()) {
-						String nameValue = theName.getValue();
-						if ("ERROR:DEMO-ERROR".equals(nameValue)) {
-							throwSimulatedOO(nameValue);
+		if (thePatient != null) {
+			for (ParametersParameterComponent patientParam : thePatient.getPart()) {
+				if ("family".equals(patientParam.getName())) {
+					StringType theFamilies = (StringType) patientParam.getValue();
+					if (theFamilies != null && !theFamilies.isEmpty()) {
+						String[] familyStrings = theFamilies.asStringValue().split(",");
+						List<String> familySearchParams = new ArrayList<String>();
+						for (String family : familyStrings) {
+							familySearchParams.add(family);
 						}
-						nameSearchParams.add(nameValue);
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.NAME.matches().values(nameSearchParams)));
-					shouldQuery = true;
-				}
-
-			}
-
-			List<String> phoneSearchParams = new ArrayList<String>();
-			if (thePhones != null) {
-				for (TokenOrListParam thePhoneAnd: thePhones.getValuesAsQueryTokens()) {
-					phoneSearchParams.clear();
-					for (TokenParam thePhone : thePhoneAnd.getValuesAsQueryTokens()) {
-						phoneSearchParams.add(thePhone.getValue());
-					}
-					query = query.and(Composition.PATIENT.hasChainedProperty(Patient.PHONE.exactly().codes(phoneSearchParams)));
-					shouldQuery = true;
-				}
-
-			}
-
-			List<String> telecomSearchParams = new ArrayList<String>();
-			if (theTelecoms != null) {
-				for (TokenOrListParam theTelecomAnd: theTelecoms.getValuesAsQueryTokens()) {
-					telecomSearchParams.clear();
-					String systemName = "";
-					for (TokenParam theTelecom : theTelecomAnd.getValuesAsQueryTokens()) {
-						if (systemName.isEmpty()) {
-							systemName = theTelecom.getSystem();
+						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
+						shouldQuery = true;
+					}		
+				} else if ("given".equals(patientParam.getName())) {
+					StringType theGivens = (StringType) patientParam.getValue();
+					if (theGivens != null && !theGivens.isEmpty()) {
+						String[] givenStrings = theGivens.asStringValue().split(",");
+						List<String> givenSearchParams = new ArrayList<String>();
+						for (String given : givenStrings) {
+							givenSearchParams.add(given);
 						}
-						telecomSearchParams.add(theTelecom.getValue());
+						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));
+						shouldQuery = true;		
 					}
-
-					if (systemName.isEmpty()) {
-						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.TELECOM.exactly().codes(telecomSearchParams)));
+				} else if ("gender".equals(patientParam.getName())) {
+					StringType theGenders = (StringType) patientParam.getValue();
+					if (theGenders != null && !theGenders.isEmpty()) {
+						String[] genderStrings = theGenders.asStringValue().split(",");
+						List<String> genderSearchParams = new ArrayList<String>();
+						for (String gender : genderStrings) {
+							genderSearchParams.add(gender);
+						}
+						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
+						shouldQuery = true;
+					}
+				} else if ("birthdate".equals(patientParam.getName())) {
+					StringType birthDate = (StringType) patientParam.getValue();
+					DateParam date = getDateParam(birthDate.asStringValue());
+					ParamPrefixEnum prefix = date.getPrefix();
+					if (prefix == null) {
+						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
 					} else {
-						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.TELECOM.exactly().systemAndValues(systemName, telecomSearchParams)));
+						if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == prefix) {
+							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(date.getValue())));
+						} else if (ParamPrefixEnum.GREATERTHAN == prefix) {
+							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.after().day(date.getValue())));
+						} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == prefix) {
+							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(date.getValue())));
+						} else if (ParamPrefixEnum.LESSTHAN == prefix) {
+							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.before().day(date.getValue())));
+						} else {
+							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
+						}						
 					}
 
 					shouldQuery = true;
 				}
-
 			}
+		}
 
-			// Death Location is ONLY referenced from Death Date Observation. 
-			// Thus, we need to search Death Date and Location at the same time.
-			List<String> deathLocationSearchParams = new ArrayList<String>();
-			if (theDeathLocations != null) {
-				for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
-					deathLocationSearchParams.add(theDeathLocation.getValue());
-				}
-				query = query.and(
-					(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_DEATH_LOCATION))
-						.matches()
-						.values(deathLocationSearchParams)
-					);
+		// Death Location is ONLY referenced from Death Date Observation. 
+		// Thus, we need to search Death Date and Location at the same time.
+		List<String> deathLocationSearchParams = new ArrayList<String>();
+		if (theDeathLocations != null) {
+			for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
+				deathLocationSearchParams.add(theDeathLocation.getValue());
+			}
+			query = query.and(
+				(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_DEATH_LOCATION))
+					.matches()
+					.values(deathLocationSearchParams)
+				);
 
+			shouldQuery = true;
+		}
+
+		// Death Date 
+		if (theProfileDeathDateRange != null) {
+			IQuery<IBaseBundle> queryDates = queryForDates(query, theProfileDeathDateRange);
+			if (queryDates != null) {
+				query = queryDates;
 				shouldQuery = true;
 			}
+		}
 
-			// Death Date 
-			if (theProfileDeathDateRange != null) {
-				IQuery<IBaseBundle> queryDates = queryForDates(query, theProfileDeathDateRange);
-				if (queryDates != null) {
-					query = queryDates;
-					shouldQuery = true;
-				}
-			}
-
-			if (shouldQuery) {
-				compositionsBundle = query.returnBundle(Bundle.class).execute();
-			}
+		if (shouldQuery) {
+			compositionsBundle = query.returnBundle(Bundle.class).execute();
 		}
 
 		if (compositionsBundle != null && !compositionsBundle.isEmpty()) {
@@ -919,10 +1102,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				typeCode = coding.getCode(); 
 				if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "86807-5".equalsIgnoreCase(typeCode)) {
 					documentType = "MDI-DOCUMENT";
-				} else if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "11502-2".equalsIgnoreCase(typeCode)) {
-					documentType = "LAB-DOCUMENT";
-				} else {
-					documentType = typeSystem + "^" + typeCode;
+					break;
 				}
 			}
 		}
@@ -968,25 +1148,28 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					String referenceId = reference.getReferenceElement().getValue();
 					addToSection = false;
 
-					if (!addedResource.contains(referenceId)) {
-						// get the reference.
-						Resource response = (Resource) client.read()
-								.resource(reference.getReferenceElement().getResourceType())
-								.withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
-						if (response == null || response.isEmpty()) {
-							outcome.addIssue().setSeverity(IssueSeverity.ERROR)
-									.setDetails((new CodeableConcept())
-											.setText("resource (" + reference.getReferenceElement().getValue()
-													+ ") in Composition section not found"));
-							throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-						}
-						bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, response, addToSection));
-						addedResource.add(referenceId);
+
+					processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
+
+					// if (!addedResource.contains(referenceId)) {
+					// 	// get the reference.
+					// 	Resource response = (Resource) client.read()
+					// 			.resource(reference.getReferenceElement().getResourceType())
+					// 			.withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
+					// 	if (response == null || response.isEmpty()) {
+					// 		outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+					// 				.setDetails((new CodeableConcept())
+					// 						.setText("resource (" + reference.getReferenceElement().getValue()
+					// 								+ ") in Composition section not found"));
+					// 		throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+					// 	}
+					// 	bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, response, addToSection));
+					// 	addedResource.add(referenceId);
 	
-						if (response instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
-							addedPractitioner.add(response.getIdElement().getIdPart());
-						}
-					}					
+					// 	if (response instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
+					// 		addedPractitioner.add(response.getIdElement().getIdPart());
+					// 	}
+					// }					
 				}
 			}
 			
@@ -999,193 +1182,195 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			}
 
 			// Add all observations
-			Bundle obsBundle = client.search().forResource(Observation.class)
-					.where(Observation.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			List<BundleEntryComponent> obsEntries = obsBundle.getEntry();
-			for (BundleEntryComponent obsEntry : obsEntries) {
-				Observation observation = (Observation) obsEntry.getResource();
-				if (observation != null && !observation.isEmpty()) {
-					// First add this resource to section and entry of this bundle document.
-					if (!addedResource.contains("Observation/" + observation.getIdElement().getIdPart())) {
-						bundleEntries.add(addToSectAndEntryofDoc(composition,
-								"Observation/" + observation.getIdElement().getIdPart(), observation, addToSection));
-						addedResource.add("Observation/" + observation.getIdElement().getIdPart());
-					}
+			// Bundle obsBundle = client.search().forResource(Observation.class)
+			// 		.where(Observation.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
+			// List<BundleEntryComponent> obsEntries = obsBundle.getEntry();
+			// for (BundleEntryComponent obsEntry : obsEntries) {
+			// 	Observation observation = (Observation) obsEntry.getResource();
+			// 	if (observation != null && !observation.isEmpty()) {
+			// 		// First add this resource to section and entry of this bundle document.
+			// 		if (!addedResource.contains("Observation/" + observation.getIdElement().getIdPart())) {
+			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
+			// 					"Observation/" + observation.getIdElement().getIdPart(), observation, addToSection));
+			// 			addedResource.add("Observation/" + observation.getIdElement().getIdPart());
+			// 		}
 
-					// find out any resources that referenced by this observation.
-					// First locations in the extension
-					List<Extension> obsExts = observation.getExtension();
-					for (Extension obsExt : obsExts) {
-						if (obsExt != null && !obsExt.isEmpty()) {
-							Type value = obsExt.getValue();
-							if (value instanceof Reference) {
-								Reference reference = (Reference) value;
-								String referenceId = reference.getReferenceElement().getValue();
-								if (!addedResource.contains(referenceId)) {
-									Resource resource = (Resource) client.read()
-											.resource(reference.getReferenceElement().getResourceType())
-											.withId(reference.getReferenceElement().getIdPart()).encodedJson()
-											.execute();
-									bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource, addToSection));
-									addedResource.add(referenceId);
-								}
-							}
-						}
-					}
+			// 		// find out any resources that referenced by this observation.
+			// 		// First locations in the extension
+			// 		List<Extension> obsExts = observation.getExtension();
+			// 		for (Extension obsExt : obsExts) {
+			// 			if (obsExt != null && !obsExt.isEmpty()) {
+			// 				Type value = obsExt.getValue();
+			// 				if (value instanceof Reference) {
+			// 					Reference reference = (Reference) value;
+			// 					String referenceId = reference.getReferenceElement().getValue();
+			// 					if (!addedResource.contains(referenceId)) {
+			// 						Resource resource = (Resource) client.read()
+			// 								.resource(reference.getReferenceElement().getResourceType())
+			// 								.withId(reference.getReferenceElement().getIdPart()).encodedJson()
+			// 								.execute();
+			// 						bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource, addToSection));
+			// 						addedResource.add(referenceId);
+			// 					}
+			// 				}
+			// 			}
+			// 		}
 
-					// get performer (practitioner)
-					List<Reference> obsPerformers = observation.getPerformer();
-					for (Reference reference : obsPerformers) {
-						processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
-					}
-				}
-			}
+			// 		// get performer (practitioner)
+			// 		List<Reference> obsPerformers = observation.getPerformer();
+			// 		for (Reference reference : obsPerformers) {
+			// 			processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
+			// 		}
+			// 	}
+			// }
 
-			// Add Conditions
-			Bundle condBundle = client.search().forResource(Condition.class)
-					.where(Condition.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			List<BundleEntryComponent> condEntries = condBundle.getEntry();
-			for (BundleEntryComponent condEntry : condEntries) {
-				Condition condition = (Condition) condEntry.getResource();
-				if (condition != null && !condition.isEmpty()) {
-					if (!addedResource.contains("Condition/" + condition.getIdElement().getIdPart())) {
-						bundleEntries.add(addToSectAndEntryofDoc(composition,
-								"Condition/" + condition.getIdElement().getIdPart(), condition, addToSection));
-						addedResource.add("Condition/" + condition.getIdElement().getIdPart());
-					}
+			// // Add Conditions
+			// Bundle condBundle = client.search().forResource(Condition.class)
+			// 		.where(Condition.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
+			// List<BundleEntryComponent> condEntries = condBundle.getEntry();
+			// for (BundleEntryComponent condEntry : condEntries) {
+			// 	Condition condition = (Condition) condEntry.getResource();
+			// 	if (condition != null && !condition.isEmpty()) {
+			// 		if (!addedResource.contains("Condition/" + condition.getIdElement().getIdPart())) {
+			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
+			// 					"Condition/" + condition.getIdElement().getIdPart(), condition, addToSection));
+			// 			addedResource.add("Condition/" + condition.getIdElement().getIdPart());
+			// 		}
 
-					// Get asserter
-					Reference reference = condition.getAsserter();
-					processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
-				}
-			}
+			// 		// Get asserter
+			// 		Reference reference = condition.getAsserter();
+			// 		processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
+			// 	}
+			// }
 
-			// Procedure
-			Bundle relProcedureBundle = client.search().forResource(Procedure.class)
-					.where(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			List<BundleEntryComponent> relProcedureEntries = relProcedureBundle.getEntry();
-			for (BundleEntryComponent relProcedureEntry : relProcedureEntries) {
-				Procedure procedure = (Procedure) relProcedureEntry.getResource();
-				if (procedure != null && !procedure.isEmpty()) {
-					// First add this resource to section and entry of this bundle document.
-					if (!addedResource.contains("Procedure/" + procedure.getIdElement().getIdPart())) {
-						bundleEntries.add(addToSectAndEntryofDoc(composition,
-								"Procedure/" + procedure.getIdElement().getIdPart(), procedure, addToSection));
-						addedResource.add("Procedure/" + procedure.getIdElement().getIdPart());
-					}
+			// // Procedure
+			// Bundle relProcedureBundle = client.search().forResource(Procedure.class)
+			// 		.where(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+			// List<BundleEntryComponent> relProcedureEntries = relProcedureBundle.getEntry();
+			// for (BundleEntryComponent relProcedureEntry : relProcedureEntries) {
+			// 	Procedure procedure = (Procedure) relProcedureEntry.getResource();
+			// 	if (procedure != null && !procedure.isEmpty()) {
+			// 		// First add this resource to section and entry of this bundle document.
+			// 		if (!addedResource.contains("Procedure/" + procedure.getIdElement().getIdPart())) {
+			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
+			// 					"Procedure/" + procedure.getIdElement().getIdPart(), procedure, addToSection));
+			// 			addedResource.add("Procedure/" + procedure.getIdElement().getIdPart());
+			// 		}
 					
-					// Get performer.actor
-					ProcedurePerformerComponent performer = procedure.getPerformerFirstRep();
-					if (!performer.isEmpty()) {
-						Reference reference = performer.getActor();
-						processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
-					}
-				}
-			}
+			// 		// Get performer.actor
+			// 		ProcedurePerformerComponent performer = procedure.getPerformerFirstRep();
+			// 		if (!performer.isEmpty()) {
+			// 			Reference reference = performer.getActor();
+			// 			processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
+			// 		}
+			// 	}
+			// }
 
 
-			// Practitioner referenced resources
-			for (String idPart : addedPractitioner) {
-				// Get List (this is Cause of Death pathway)
-				Bundle listBundle = client.search().forResource(ListResource.class)
-						.where(ListResource.SOURCE.hasId("Practitioner/" + idPart)).returnBundle(Bundle.class)
-						.execute();
-				List<BundleEntryComponent> entries = listBundle.getEntry();
-				for (BundleEntryComponent entry : entries) {
-					ListResource list = (ListResource) entry.getResource();
-					if (list != null && !list.isEmpty()) {
-						if (!addedResource.contains("List/" + list.getIdElement().getIdPart())) {
-							bundleEntries.add(addToSectAndEntryofDoc(composition,
-									"List/" + list.getIdElement().getIdPart(), list, addToSection));
-							addedResource.add("List/" + list.getIdElement().getIdPart());
-						}
-					}
-				}
+			// // Practitioner referenced resources
+			// for (String idPart : addedPractitioner) {
+			// 	// Get List (this is Cause of Death pathway)
+			// 	Bundle listBundle = client.search().forResource(ListResource.class)
+			// 			.where(ListResource.SOURCE.hasId("Practitioner/" + idPart)).returnBundle(Bundle.class)
+			// 			.execute();
+			// 	List<BundleEntryComponent> entries = listBundle.getEntry();
+			// 	for (BundleEntryComponent entry : entries) {
+			// 		ListResource list = (ListResource) entry.getResource();
+			// 		if (list != null && !list.isEmpty()) {
+			// 			if (!addedResource.contains("List/" + list.getIdElement().getIdPart())) {
+			// 				bundleEntries.add(addToSectAndEntryofDoc(composition,
+			// 						"List/" + list.getIdElement().getIdPart(), list, addToSection));
+			// 				addedResource.add("List/" + list.getIdElement().getIdPart());
+			// 			}
+			// 		}
+			// 	}
 
-				// Get PractitionerRole
-				Bundle practRoleBundle = client.search().forResource(PractitionerRole.class)
-						.where(PractitionerRole.PRACTITIONER.hasId(idPart)).returnBundle(Bundle.class).execute();
-				List<BundleEntryComponent> practRoleEntries = practRoleBundle.getEntry();
-				for (BundleEntryComponent practRoleEntry : practRoleEntries) {
-					PractitionerRole practRole = (PractitionerRole) practRoleEntry.getResource();
-					if (practRole != null && !practRole.isEmpty()) {
-						if (!addedResource.contains("PractitionerRole/" + practRole.getIdElement().getIdPart())) {
-							bundleEntries.add(addToSectAndEntryofDoc(composition,
-									"PractitionerRole/" + practRole.getIdElement().getIdPart(), practRole, addToSection));
-							addedResource.add("PractitionerRole/" + practRole.getIdElement().getIdPart());
+			// 	// Get PractitionerRole
+			// 	Bundle practRoleBundle = client.search().forResource(PractitionerRole.class)
+			// 			.where(PractitionerRole.PRACTITIONER.hasId(idPart)).returnBundle(Bundle.class).execute();
+			// 	List<BundleEntryComponent> practRoleEntries = practRoleBundle.getEntry();
+			// 	for (BundleEntryComponent practRoleEntry : practRoleEntries) {
+			// 		PractitionerRole practRole = (PractitionerRole) practRoleEntry.getResource();
+			// 		if (practRole != null && !practRole.isEmpty()) {
+			// 			if (!addedResource.contains("PractitionerRole/" + practRole.getIdElement().getIdPart())) {
+			// 				bundleEntries.add(addToSectAndEntryofDoc(composition,
+			// 						"PractitionerRole/" + practRole.getIdElement().getIdPart(), practRole, addToSection));
+			// 				addedResource.add("PractitionerRole/" + practRole.getIdElement().getIdPart());
 
-							// add Organization (Funeral Home) if not added.
-							Reference reference = practRole.getOrganization();
-							String referenceId = reference.getReferenceElement().getValue();
-							if (reference != null && !reference.isEmpty() && !addedResource.contains(referenceId)) {
-								Resource resource = (Resource) client.read()
-										.resource(reference.getReferenceElement().getResourceType())
-										.withId(reference.getReferenceElement().getIdPart()).encodedJson()
-										.execute();
-								bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource, addToSection));
-								addedResource.add(referenceId);
-							}
-						}
-					}
-				}
-			}
+			// 				// add Organization (Funeral Home) if not added.
+			// 				Reference reference = practRole.getOrganization();
+			// 				String referenceId = reference.getReferenceElement().getValue();
+			// 				if (reference != null && !reference.isEmpty() && !addedResource.contains(referenceId)) {
+			// 					Resource resource = (Resource) client.read()
+			// 							.resource(reference.getReferenceElement().getResourceType())
+			// 							.withId(reference.getReferenceElement().getIdPart()).encodedJson()
+			// 							.execute();
+			// 					bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource, addToSection));
+			// 					addedResource.add(referenceId);
+			// 				}
+			// 			}
+			// 		}
+			// 	}
+			// }
 			
-			// List resource, which is a pathway for cause of death, must be included from
-			// certifier. However, if this is missed and the list has subject, then use it to 
-			// include here. 
-			Bundle listBundle = client.search().forResource(ListResource.class)
-					.where(ListResource.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			List<BundleEntryComponent> listEntries = listBundle.getEntry();
-			for (BundleEntryComponent entry : listEntries) {
-				ListResource list = (ListResource) entry.getResource();
-				if (list != null && !list.isEmpty()) {
-					if (!addedResource.contains("List/" + list.getIdElement().getIdPart())) {
-						bundleEntries.add(addToSectAndEntryofDoc(composition,
-								"List/" + list.getIdElement().getIdPart(), list, addToSection));
-						addedResource.add("List/" + list.getIdElement().getIdPart());
-					}
-				}
-			}
+			// // List resource, which is a pathway for cause of death, must be included from
+			// // certifier. However, if this is missed and the list has subject, then use it to 
+			// // include here. 
+			// Bundle listBundle = client.search().forResource(ListResource.class)
+			// 		.where(ListResource.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+			// List<BundleEntryComponent> listEntries = listBundle.getEntry();
+			// for (BundleEntryComponent entry : listEntries) {
+			// 	ListResource list = (ListResource) entry.getResource();
+			// 	if (list != null && !list.isEmpty()) {
+			// 		if (!addedResource.contains("List/" + list.getIdElement().getIdPart())) {
+			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
+			// 					"List/" + list.getIdElement().getIdPart(), list, addToSection));
+			// 			addedResource.add("List/" + list.getIdElement().getIdPart());
+			// 		}
+			// 	}
+			// }
 
-			// RelatedPerson
-			Bundle relPersonBundle = client.search().forResource(RelatedPerson.class)
-					.where(RelatedPerson.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			List<BundleEntryComponent> relPersonEntries = relPersonBundle.getEntry();
-			for (BundleEntryComponent relPersonEntry : relPersonEntries) {
-				RelatedPerson relatedPerson = (RelatedPerson) relPersonEntry.getResource();
-				if (relatedPerson != null && !relatedPerson.isEmpty()) {
-					// First add this resource to section and entry of this bundle document.
-					if (!addedResource.contains("RelatedPerson/" + relatedPerson.getIdElement().getIdPart())) {
-						bundleEntries.add(addToSectAndEntryofDoc(composition,
-								"RelatedPerson/" + relatedPerson.getIdElement().getIdPart(), relatedPerson, addToSection));
-						addedResource.add("RelatedPerson/" + relatedPerson.getIdElement().getIdPart());
-					}
-				}
-			}
-		} else if ("LAB-DOCUMENT".equalsIgnoreCase(documentType)) {
-			for (SectionComponent section : composition.getSection()) {
-				for (Reference reference : section.getEntry()) {
-					// get the reference.
-					Resource response = (Resource) client.read()
-							.resource(reference.getReferenceElement().getResourceType())
-							.withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
-					if (response == null || response.isEmpty()) {
-						outcome.addIssue().setSeverity(IssueSeverity.ERROR)
-								.setDetails((new CodeableConcept())
-										.setText("resource (" + reference.getReferenceElement().getValue()
-												+ ") in Composition section not found"));
-						throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-					}
+			// // RelatedPerson
+			// Bundle relPersonBundle = client.search().forResource(RelatedPerson.class)
+			// 		.where(RelatedPerson.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
+			// List<BundleEntryComponent> relPersonEntries = relPersonBundle.getEntry();
+			// for (BundleEntryComponent relPersonEntry : relPersonEntries) {
+			// 	RelatedPerson relatedPerson = (RelatedPerson) relPersonEntry.getResource();
+			// 	if (relatedPerson != null && !relatedPerson.isEmpty()) {
+			// 		// First add this resource to section and entry of this bundle document.
+			// 		if (!addedResource.contains("RelatedPerson/" + relatedPerson.getIdElement().getIdPart())) {
+			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
+			// 					"RelatedPerson/" + relatedPerson.getIdElement().getIdPart(), relatedPerson, addToSection));
+			// 			addedResource.add("RelatedPerson/" + relatedPerson.getIdElement().getIdPart());
+			// 		}
+			// 	}
+			// }
+		} 
+		// else if ("LAB-DOCUMENT".equalsIgnoreCase(documentType)) {
+		// 	for (SectionComponent section : composition.getSection()) {
+		// 		for (Reference reference : section.getEntry()) {
+		// 			// get the reference.
+		// 			Resource response = (Resource) client.read()
+		// 					.resource(reference.getReferenceElement().getResourceType())
+		// 					.withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
+		// 			if (response == null || response.isEmpty()) {
+		// 				outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+		// 						.setDetails((new CodeableConcept())
+		// 								.setText("resource (" + reference.getReferenceElement().getValue()
+		// 										+ ") in Composition section not found"));
+		// 				throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+		// 			}
 
-					bundleEntry = new BundleEntryComponent();
-					bundleEntry.setFullUrl(reference.getReferenceElement().getValue());
-					bundleEntry.setResource(response);
-					bundleEntries.add(bundleEntry);
-				}
-			}
-		} else {
+		// 			bundleEntry = new BundleEntryComponent();
+		// 			bundleEntry.setFullUrl(reference.getReferenceElement().getValue());
+		// 			bundleEntry.setResource(response);
+		// 			bundleEntries.add(bundleEntry);
+		// 		}
+		// 	}
+		// }
+		 else {
 			outcome.addIssue().setSeverity(IssueSeverity.ERROR)
-					.setDetails((new CodeableConcept()).setText("This composition type, " + documentType + ", is not supported."));
+					.setDetails((new CodeableConcept()).setText("This composition type document is not supported."));
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
@@ -1206,15 +1391,11 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		return retBundle;
 	}
 
+	// TODO: finish update after update API is developed.
 	@Operation(name = "$update-mdi")
 	public Parameters updateMdiDocumentOperation(RequestDetails theRequestDetails,
-		@OperationParam(name = "tracking-number") StringParam theTrackingNumber,
+		@OperationParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) TokenOrListParam theEdrsFileNumbers,
 		@OperationParam(name = "mdi-document") Bundle theBundle) {
-
-		String trackingId = null;
-		if (theTrackingNumber != null) {
-			trackingId = theTrackingNumber.getValue();
-		}
 
 		if (theBundle != null) {
 			OperationOutcome outcome = new OperationOutcome();
@@ -1223,7 +1404,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			setupClientForAuth(client);
 
 			// if tracking number is not in the parameter, get it from the bundle.
-			if (trackingId == null) {
+			if (theEdrsFileNumbers == null) {
 				BundleEntryComponent firstEntry = theBundle.getEntryFirstRep();
 				Resource resource = firstEntry.getResource();
 				if (resource instanceof Composition) {
@@ -1238,15 +1419,15 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					}
 			
 					Coding typeCoding = null;
-					String typeSystem = null;
-					String typeCode = null;
+					String identifierSystem = null;
+					String identifierValue = null;
 			
 					String documentType = null;
 					for (Coding coding : myType.getCoding()) {
 						if (!coding.isEmpty()) {
 							typeCoding = coding;
-							typeSystem = coding.getSystem();
-							typeCode = coding.getCode(); 
+							String typeSystem = coding.getSystem();
+							String typeCode = coding.getCode(); 
 							if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "86807-5".equalsIgnoreCase(typeCode)) {
 								documentType = "MDI-DOCUMENT";
 							} else if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "11502-2".equalsIgnoreCase(typeCode)) {
@@ -1271,29 +1452,40 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 								if (tType != null && !tType.isEmpty()) {
 									for (Coding code : tType.getCoding()) {
 										if ("http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes".equals(code.getSystem())
-											&& "edrs-file-number".equals(code.getCode())) {
-											trackingId = trackingIdentifier.getValue();
+											&& CompositionResourceProvider.EDRS_FILE_NUMBER.equals(code.getCode())) {
+											identifierSystem = trackingIdentifier.getSystem();
+											identifierValue = trackingIdentifier.getValue();
 										}
 									}
 								}
 							}
 						}
 
-						if (trackingId == null) {
+						if (identifierValue == null) {
 							outcome.addIssue().setSeverity(IssueSeverity.ERROR)
 								.setDetails((new CodeableConcept()).setText("Tracking number for EDRS not found in the bundle"));
 							throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 						}
 
 						// Search the composition that has this tracking number.
-						Bundle compositionBundle = client.search().forResource(Composition.class).and(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_EDRS_TRACKING_NUMBER)
-								.matches()
-								.values(trackingId)
+						Bundle compositionBundle;
+						if (identifierSystem != null && !identifierSystem.isEmpty()) {
+							compositionBundle = client.search().forResource(Composition.class)
+								.and(CompositionResourceProvider.EDRS_FILE_NUMBER
+								.exactly()
+								.systemAndCode(identifierSystem, identifierValue)
 							).returnBundle(Bundle.class).execute();
+						} else {
+							compositionBundle = client.search().forResource(Composition.class)
+								.and(CompositionResourceProvider.EDRS_FILE_NUMBER
+								.exactly()
+								.code(identifierValue)
+							).returnBundle(Bundle.class).execute();
+						}
 						BundleEntryComponent entry = compositionBundle.getEntryFirstRep();
 						if (entry.isEmpty()) {
 							outcome.addIssue().setSeverity(IssueSeverity.ERROR)
-									.setDetails((new CodeableConcept()).setText("Composition.id = " + trackingId + " is not found"));
+									.setDetails((new CodeableConcept()).setText("EDRS file number (" + identifierSystem + "|" + identifierValue + ") is not found"));
 							throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 						}
 						
