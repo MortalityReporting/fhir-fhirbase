@@ -19,6 +19,9 @@ import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
+import org.hl7.fhir.r4.model.Composition.CompositionAttesterComponent;
+import org.hl7.fhir.r4.model.Composition.CompositionEventComponent;
+import org.hl7.fhir.r4.model.Composition.CompositionRelatesToComponent;
 import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.DateType;
@@ -1143,9 +1146,51 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			List<String> addedResource = new ArrayList<String>();
 			List<String> addedPractitioner = new ArrayList<String>();
 
+			// String patientId = composition.getSubject().getReferenceElement().getIdPart();
+
+			// if (!addedResource.contains("Patient/" + patientId)) {
+			// 	Patient patient = client.read().resource(Patient.class).withId(patientId).encodedJson().execute();
+			// 	bundleEntries.add(addToSectAndEntryofDoc(composition, "Patient/" + patientId, patient, addToSection));
+			// 	addedResource.add("Patient/" + patientId);
+			// }
+
+			// Add patient reference
+			processReference(client, bundleEntries, addedResource, addedPractitioner, composition, composition.getSubject(), addToSection);
+
+			// Add encounter
+			processReference(client, bundleEntries, addedResource, addedPractitioner, composition, composition.getEncounter(), addToSection);
+
+			// Add authors
+			for (Reference reference : composition.getAuthor()) {
+				processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
+			}
+
+			// Add Attester
+			for (CompositionAttesterComponent attester : composition.getAttester()) {
+				processReference(client, bundleEntries, addedResource, addedPractitioner, composition, attester.getParty(), addToSection);
+			}
+
+			// Add custodian
+			processReference(client, bundleEntries, addedResource, addedPractitioner, composition, composition.getCustodian(), addToSection);
+
+			// Add related to composition
+			for (CompositionRelatesToComponent relatedTo : composition.getRelatesTo()) {
+				Type target = relatedTo.getTarget();
+				if (target != null && target instanceof Reference) {
+					processReference(client, bundleEntries, addedResource, addedPractitioner, composition, (Reference) target, addToSection);
+				}
+			}
+
+			// Add event detail
+			for (CompositionEventComponent event : composition.getEvent()) {
+				for (Reference detail : event.getDetail()) {
+					processReference(client, bundleEntries, addedResource, addedPractitioner, composition, detail, addToSection);
+				}
+			}
+
 			for (SectionComponent section : composition.getSection()) {
 				for (Reference reference : section.getEntry()) {
-					String referenceId = reference.getReferenceElement().getValue();
+					// String referenceId = reference.getReferenceElement().getValue();
 					addToSection = false;
 
 
@@ -1173,14 +1218,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				}
 			}
 			
-			String patientId = composition.getSubject().getReferenceElement().getIdPart();
-
-			if (!addedResource.contains("Patient/" + patientId)) {
-				Patient patient = client.read().resource(Patient.class).withId(patientId).encodedJson().execute();
-				bundleEntries.add(addToSectAndEntryofDoc(composition, "Patient/" + patientId, patient, addToSection));
-				addedResource.add("Patient/" + patientId);
-			}
-
 			// Add all observations
 			// Bundle obsBundle = client.search().forResource(Observation.class)
 			// 		.where(Observation.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
