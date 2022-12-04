@@ -16,6 +16,8 @@ public class MdiProfileUtil {
 
 	private MdiProfileUtil() {}
 
+	public static Coding TOXICOLOGY_LAB_RESULT = new Coding("http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes", "tox-result-report", "Toxicology Lab Results"); 
+	
 	private static Map<String, String> singletonMap;
 	static {
 		singletonMap = new HashMap<String, String>();

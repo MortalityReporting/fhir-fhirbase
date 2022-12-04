@@ -416,7 +416,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = "_count") IntegerType theCount) {
 
 		if (thePatientId == null) {
-			ThrowFHIRExceptions.unprocessableEntityException(getFhirContext(), "Patient Id must be present");
+			ThrowFHIRExceptions.unprocessableEntityException("Patient Id must be present");
 		}
 
 		Date startDate = null;

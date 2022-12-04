@@ -8,7 +8,6 @@ import java.util.UUID;
 
 import javax.annotation.PostConstruct;
 
-import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.BooleanType;
@@ -23,18 +22,13 @@ import org.hl7.fhir.r4.model.Composition.CompositionAttesterComponent;
 import org.hl7.fhir.r4.model.Composition.CompositionEventComponent;
 import org.hl7.fhir.r4.model.Composition.CompositionRelatesToComponent;
 import org.hl7.fhir.r4.model.Composition.SectionComponent;
-import org.hl7.fhir.r4.model.Condition;
-import org.hl7.fhir.r4.model.DateType;
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Identifier;
-import org.hl7.fhir.r4.model.ListResource;
 import org.hl7.fhir.r4.model.Meta;
-import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Parameters;
 import org.hl7.fhir.r4.model.Reference;
-import org.hl7.fhir.r4.model.RelatedPerson;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.Type;
@@ -43,14 +37,8 @@ import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.hl7.fhir.r4.model.Parameters.ParametersParameterComponent;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
-import org.hl7.fhir.r4.model.PractitionerRole;
-import org.hl7.fhir.r4.model.Procedure;
-import org.hl7.fhir.r4.model.Property;
-import org.hl7.fhir.r4.model.Procedure.ProcedurePerformerComponent;
-import org.hl7.fhir.utilities.json.JsonTrackingParser.TokenType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.propertyeditors.PathEditor;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
@@ -81,7 +69,6 @@ import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
-import ca.uhn.fhir.rest.gclient.ICriterion;
 import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.gclient.TokenClientParam;
 import ca.uhn.fhir.rest.param.DateOrListParam;
@@ -90,7 +77,6 @@ import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.param.ParamPrefixEnum;
 import ca.uhn.fhir.rest.param.ParameterUtil;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
-import ca.uhn.fhir.rest.param.StringAndListParam;
 import ca.uhn.fhir.rest.param.StringOrListParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenAndListParam;
@@ -99,9 +85,9 @@ import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.param.UriOrListParam;
 import ca.uhn.fhir.rest.param.UriParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
-import ca.uhn.fhir.util.StringUtil;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
+import edu.gatech.chai.fhironfhirbase.utilities.OperationUtil;
 
 @Service
 @Scope("prototype")
@@ -632,18 +618,18 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		return resource;
 	}
 
-	private void setupClientForAuth(IGenericClient client) {
-		String authBasic = System.getenv("AUTH_BASIC");
-		String authBearer = System.getenv("AUTH_BEARER");
-		if (authBasic != null && !authBasic.isEmpty()) {
-			String[] auth = authBasic.split(":");
-			if (auth.length == 2) {
-				client.registerInterceptor(new BasicAuthInterceptor(auth[0], auth[1]));
-			}
-		} else if (authBearer != null && !authBearer.isEmpty()) {
-			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
-		}
-	}
+	// private void setupClientForAuth(IGenericClient client) {
+	// 	String authBasic = System.getenv("AUTH_BASIC");
+	// 	String authBearer = System.getenv("AUTH_BEARER");
+	// 	if (authBasic != null && !authBasic.isEmpty()) {
+	// 		String[] auth = authBasic.split(":");
+	// 		if (auth.length == 2) {
+	// 			client.registerInterceptor(new BasicAuthInterceptor(auth[0], auth[1]));
+	// 		}
+	// 	} else if (authBearer != null && !authBearer.isEmpty()) {
+	// 		client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
+	// 	}
+	// }
 
 	@Search(queryName=CompositionResourceProvider.NQ_EVENT_DETAIL)
 	public IBundleProvider searchByNamedQuery(
@@ -780,77 +766,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	// 	}
 	// }
 
-	private boolean addTokenToQuery (IQuery<IBaseBundle> query, TokenClientParam clientParam, StringOrListParam theTokenList) {
-		boolean retVal = false;
-
-		if (theTokenList == null) {
-			return retVal;
-		}
-
-		List<BaseIdentifierDt> identifiers = new ArrayList<BaseIdentifierDt>();
-		for (StringParam tokenParam : theTokenList.getValuesAsQueryTokens()) {
-			String token = tokenParam.getValue();
-			int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
-			String system = null;
-			String value = null;
-			if (barIndex != -1) {
-				system = token.substring(0, barIndex);
-				value = ParameterUtil.unescape(token.substring(barIndex + 1));
-			} else {
-				value = ParameterUtil.unescape(token);
-			}
-
-			BaseIdentifierDt identifierDt = new BaseIdentifierDt() {
-				UriDt theSystem;
-				StringDt theValue;
-
-				@Override
-				public boolean isEmpty() {
-					return false;
-				}
-
-				@Override
-				public <T extends IElement> List<T> getAllPopulatedChildElementsOfType(Class<T> theType) {
-					return null;
-				}
-
-				@Override
-				public UriDt getSystemElement() {
-					return theSystem;
-				}
-
-				@Override
-				public StringDt getValueElement() {
-					return theValue;
-				}
-
-				@Override
-				public BaseIdentifierDt setSystem(String theUri) {
-					theSystem = new UriDt(theUri);
-					return this;
-				}
-
-				@Override
-				public BaseIdentifierDt setValue(String theString) {
-					theValue = new StringDt(theString);
-					return this;
-				}
-			};
-
-			identifierDt.setSystem(system);
-			identifierDt.setValue(value);
-	
-			identifiers.add(identifierDt);
-		}
-
-		if (identifiers.size() > 0) {
-			query = query.and(clientParam.exactly().identifiers(identifiers));
-			retVal = true;
-		}
-
-		return retVal;
-	}
-
 	@Operation(name = "$mdi-documents", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
 			@IdParam(optional=true) IdType theCompositionId,
@@ -865,7 +780,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
-		setupClientForAuth(client);
+		OperationUtil.setupClientForAuth(client);
 
 		int totalSize = 0;
 
@@ -1019,15 +934,15 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			for (BundleEntryComponent entry : entries) {
 				String compositionId = entry.getResource().getIdElement().getIdPart();
 
-				Bundle compositionBundle = client
+				Bundle documentBundle = client
 					.operation().onInstance(new IdType("Composition", compositionId))
 					.named("$document")
 					.withNoParameters(Parameters.class)
 					.returnResourceType(Bundle.class)
 					.execute();
 				BundleEntryComponent entryComponent = new BundleEntryComponent();
-				entryComponent.setFullUrl(compositionBundle.getId());
-				entryComponent.setResource(compositionBundle);
+				entryComponent.setFullUrl(documentBundle.getId());
+				entryComponent.setResource(documentBundle);
 				retBundle.addEntry(entryComponent);
 
 				totalSize++;
@@ -1127,7 +1042,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
-		setupClientForAuth(client);
+		OperationUtil.setupClientForAuth(client);
 
 		String metaProfile = "";
 		if ("MDI-DOCUMENT".equalsIgnoreCase(documentType)) {
@@ -1195,217 +1110,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 
 					processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
-
-					// if (!addedResource.contains(referenceId)) {
-					// 	// get the reference.
-					// 	Resource response = (Resource) client.read()
-					// 			.resource(reference.getReferenceElement().getResourceType())
-					// 			.withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
-					// 	if (response == null || response.isEmpty()) {
-					// 		outcome.addIssue().setSeverity(IssueSeverity.ERROR)
-					// 				.setDetails((new CodeableConcept())
-					// 						.setText("resource (" + reference.getReferenceElement().getValue()
-					// 								+ ") in Composition section not found"));
-					// 		throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-					// 	}
-					// 	bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, response, addToSection));
-					// 	addedResource.add(referenceId);
-	
-					// 	if (response instanceof Practitioner && !addedPractitioner.contains(referenceId)) {
-					// 		addedPractitioner.add(response.getIdElement().getIdPart());
-					// 	}
-					// }					
 				}
 			}
-			
-			// Add all observations
-			// Bundle obsBundle = client.search().forResource(Observation.class)
-			// 		.where(Observation.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			// List<BundleEntryComponent> obsEntries = obsBundle.getEntry();
-			// for (BundleEntryComponent obsEntry : obsEntries) {
-			// 	Observation observation = (Observation) obsEntry.getResource();
-			// 	if (observation != null && !observation.isEmpty()) {
-			// 		// First add this resource to section and entry of this bundle document.
-			// 		if (!addedResource.contains("Observation/" + observation.getIdElement().getIdPart())) {
-			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
-			// 					"Observation/" + observation.getIdElement().getIdPart(), observation, addToSection));
-			// 			addedResource.add("Observation/" + observation.getIdElement().getIdPart());
-			// 		}
-
-			// 		// find out any resources that referenced by this observation.
-			// 		// First locations in the extension
-			// 		List<Extension> obsExts = observation.getExtension();
-			// 		for (Extension obsExt : obsExts) {
-			// 			if (obsExt != null && !obsExt.isEmpty()) {
-			// 				Type value = obsExt.getValue();
-			// 				if (value instanceof Reference) {
-			// 					Reference reference = (Reference) value;
-			// 					String referenceId = reference.getReferenceElement().getValue();
-			// 					if (!addedResource.contains(referenceId)) {
-			// 						Resource resource = (Resource) client.read()
-			// 								.resource(reference.getReferenceElement().getResourceType())
-			// 								.withId(reference.getReferenceElement().getIdPart()).encodedJson()
-			// 								.execute();
-			// 						bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource, addToSection));
-			// 						addedResource.add(referenceId);
-			// 					}
-			// 				}
-			// 			}
-			// 		}
-
-			// 		// get performer (practitioner)
-			// 		List<Reference> obsPerformers = observation.getPerformer();
-			// 		for (Reference reference : obsPerformers) {
-			// 			processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
-			// 		}
-			// 	}
-			// }
-
-			// // Add Conditions
-			// Bundle condBundle = client.search().forResource(Condition.class)
-			// 		.where(Condition.SUBJECT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			// List<BundleEntryComponent> condEntries = condBundle.getEntry();
-			// for (BundleEntryComponent condEntry : condEntries) {
-			// 	Condition condition = (Condition) condEntry.getResource();
-			// 	if (condition != null && !condition.isEmpty()) {
-			// 		if (!addedResource.contains("Condition/" + condition.getIdElement().getIdPart())) {
-			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
-			// 					"Condition/" + condition.getIdElement().getIdPart(), condition, addToSection));
-			// 			addedResource.add("Condition/" + condition.getIdElement().getIdPart());
-			// 		}
-
-			// 		// Get asserter
-			// 		Reference reference = condition.getAsserter();
-			// 		processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
-			// 	}
-			// }
-
-			// // Procedure
-			// Bundle relProcedureBundle = client.search().forResource(Procedure.class)
-			// 		.where(Procedure.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			// List<BundleEntryComponent> relProcedureEntries = relProcedureBundle.getEntry();
-			// for (BundleEntryComponent relProcedureEntry : relProcedureEntries) {
-			// 	Procedure procedure = (Procedure) relProcedureEntry.getResource();
-			// 	if (procedure != null && !procedure.isEmpty()) {
-			// 		// First add this resource to section and entry of this bundle document.
-			// 		if (!addedResource.contains("Procedure/" + procedure.getIdElement().getIdPart())) {
-			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
-			// 					"Procedure/" + procedure.getIdElement().getIdPart(), procedure, addToSection));
-			// 			addedResource.add("Procedure/" + procedure.getIdElement().getIdPart());
-			// 		}
-					
-			// 		// Get performer.actor
-			// 		ProcedurePerformerComponent performer = procedure.getPerformerFirstRep();
-			// 		if (!performer.isEmpty()) {
-			// 			Reference reference = performer.getActor();
-			// 			processReference(client, bundleEntries, addedResource, addedPractitioner, composition, reference, addToSection);
-			// 		}
-			// 	}
-			// }
-
-
-			// // Practitioner referenced resources
-			// for (String idPart : addedPractitioner) {
-			// 	// Get List (this is Cause of Death pathway)
-			// 	Bundle listBundle = client.search().forResource(ListResource.class)
-			// 			.where(ListResource.SOURCE.hasId("Practitioner/" + idPart)).returnBundle(Bundle.class)
-			// 			.execute();
-			// 	List<BundleEntryComponent> entries = listBundle.getEntry();
-			// 	for (BundleEntryComponent entry : entries) {
-			// 		ListResource list = (ListResource) entry.getResource();
-			// 		if (list != null && !list.isEmpty()) {
-			// 			if (!addedResource.contains("List/" + list.getIdElement().getIdPart())) {
-			// 				bundleEntries.add(addToSectAndEntryofDoc(composition,
-			// 						"List/" + list.getIdElement().getIdPart(), list, addToSection));
-			// 				addedResource.add("List/" + list.getIdElement().getIdPart());
-			// 			}
-			// 		}
-			// 	}
-
-			// 	// Get PractitionerRole
-			// 	Bundle practRoleBundle = client.search().forResource(PractitionerRole.class)
-			// 			.where(PractitionerRole.PRACTITIONER.hasId(idPart)).returnBundle(Bundle.class).execute();
-			// 	List<BundleEntryComponent> practRoleEntries = practRoleBundle.getEntry();
-			// 	for (BundleEntryComponent practRoleEntry : practRoleEntries) {
-			// 		PractitionerRole practRole = (PractitionerRole) practRoleEntry.getResource();
-			// 		if (practRole != null && !practRole.isEmpty()) {
-			// 			if (!addedResource.contains("PractitionerRole/" + practRole.getIdElement().getIdPart())) {
-			// 				bundleEntries.add(addToSectAndEntryofDoc(composition,
-			// 						"PractitionerRole/" + practRole.getIdElement().getIdPart(), practRole, addToSection));
-			// 				addedResource.add("PractitionerRole/" + practRole.getIdElement().getIdPart());
-
-			// 				// add Organization (Funeral Home) if not added.
-			// 				Reference reference = practRole.getOrganization();
-			// 				String referenceId = reference.getReferenceElement().getValue();
-			// 				if (reference != null && !reference.isEmpty() && !addedResource.contains(referenceId)) {
-			// 					Resource resource = (Resource) client.read()
-			// 							.resource(reference.getReferenceElement().getResourceType())
-			// 							.withId(reference.getReferenceElement().getIdPart()).encodedJson()
-			// 							.execute();
-			// 					bundleEntries.add(addToSectAndEntryofDoc(composition, referenceId, resource, addToSection));
-			// 					addedResource.add(referenceId);
-			// 				}
-			// 			}
-			// 		}
-			// 	}
-			// }
-			
-			// // List resource, which is a pathway for cause of death, must be included from
-			// // certifier. However, if this is missed and the list has subject, then use it to 
-			// // include here. 
-			// Bundle listBundle = client.search().forResource(ListResource.class)
-			// 		.where(ListResource.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			// List<BundleEntryComponent> listEntries = listBundle.getEntry();
-			// for (BundleEntryComponent entry : listEntries) {
-			// 	ListResource list = (ListResource) entry.getResource();
-			// 	if (list != null && !list.isEmpty()) {
-			// 		if (!addedResource.contains("List/" + list.getIdElement().getIdPart())) {
-			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
-			// 					"List/" + list.getIdElement().getIdPart(), list, addToSection));
-			// 			addedResource.add("List/" + list.getIdElement().getIdPart());
-			// 		}
-			// 	}
-			// }
-
-			// // RelatedPerson
-			// Bundle relPersonBundle = client.search().forResource(RelatedPerson.class)
-			// 		.where(RelatedPerson.PATIENT.hasId(patientId)).returnBundle(Bundle.class).execute();
-			// List<BundleEntryComponent> relPersonEntries = relPersonBundle.getEntry();
-			// for (BundleEntryComponent relPersonEntry : relPersonEntries) {
-			// 	RelatedPerson relatedPerson = (RelatedPerson) relPersonEntry.getResource();
-			// 	if (relatedPerson != null && !relatedPerson.isEmpty()) {
-			// 		// First add this resource to section and entry of this bundle document.
-			// 		if (!addedResource.contains("RelatedPerson/" + relatedPerson.getIdElement().getIdPart())) {
-			// 			bundleEntries.add(addToSectAndEntryofDoc(composition,
-			// 					"RelatedPerson/" + relatedPerson.getIdElement().getIdPart(), relatedPerson, addToSection));
-			// 			addedResource.add("RelatedPerson/" + relatedPerson.getIdElement().getIdPart());
-			// 		}
-			// 	}
-			// }
-		} 
-		// else if ("LAB-DOCUMENT".equalsIgnoreCase(documentType)) {
-		// 	for (SectionComponent section : composition.getSection()) {
-		// 		for (Reference reference : section.getEntry()) {
-		// 			// get the reference.
-		// 			Resource response = (Resource) client.read()
-		// 					.resource(reference.getReferenceElement().getResourceType())
-		// 					.withId(reference.getReferenceElement().getIdPart()).encodedJson().execute();
-		// 			if (response == null || response.isEmpty()) {
-		// 				outcome.addIssue().setSeverity(IssueSeverity.ERROR)
-		// 						.setDetails((new CodeableConcept())
-		// 								.setText("resource (" + reference.getReferenceElement().getValue()
-		// 										+ ") in Composition section not found"));
-		// 				throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-		// 			}
-
-		// 			bundleEntry = new BundleEntryComponent();
-		// 			bundleEntry.setFullUrl(reference.getReferenceElement().getValue());
-		// 			bundleEntry.setResource(response);
-		// 			bundleEntries.add(bundleEntry);
-		// 		}
-		// 	}
-		// }
-		 else {
+		} else {
 			outcome.addIssue().setSeverity(IssueSeverity.ERROR)
 					.setDetails((new CodeableConcept()).setText("This composition type document is not supported."));
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
@@ -1438,7 +1145,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			OperationOutcome outcome = new OperationOutcome();
 			String myFhirServerBase = theRequestDetails.getFhirServerBase();
 			IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
-			setupClientForAuth(client);
+			OperationUtil.setupClientForAuth(client);
 
 			// if tracking number is not in the parameter, get it from the bundle.
 			if (theEdrsFileNumbers == null) {

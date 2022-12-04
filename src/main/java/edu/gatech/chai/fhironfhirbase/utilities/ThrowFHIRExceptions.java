@@ -19,18 +19,17 @@ import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 
-import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 
 public class ThrowFHIRExceptions {
 
-	public static UnprocessableEntityException unprocessableEntityException(FhirContext theContext, String message) {
+	public static UnprocessableEntityException unprocessableEntityException(String message) {
 		OperationOutcome outcome = new OperationOutcome();
 		CodeableConcept detailCode = new CodeableConcept();
 		detailCode.setText(message);
 		outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-		throw new UnprocessableEntityException(theContext, outcome);
+		throw new UnprocessableEntityException(OperationUtil.MyFhirContext, outcome);
 	}
 	
 	public static InternalErrorException internalErrorException(String message) {

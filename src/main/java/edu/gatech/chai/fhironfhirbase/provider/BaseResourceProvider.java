@@ -3,9 +3,11 @@ package edu.gatech.chai.fhironfhirbase.provider;
 import java.text.DateFormat;
 import java.text.Format;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
@@ -14,13 +16,22 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.model.api.IElement;
+import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
+import ca.uhn.fhir.model.primitive.StringDt;
+import ca.uhn.fhir.model.primitive.UriDt;
 import ca.uhn.fhir.rest.api.SortSpec;
+import ca.uhn.fhir.rest.gclient.IQuery;
+import ca.uhn.fhir.rest.gclient.TokenClientParam;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.param.ParamPrefixEnum;
+import ca.uhn.fhir.rest.param.ParameterUtil;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
+import ca.uhn.fhir.rest.param.StringOrListParam;
+import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
@@ -497,6 +508,77 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		}
 
 		return whereCodings;
+	}
+
+	protected boolean addTokenToQuery (IQuery<IBaseBundle> query, TokenClientParam clientParam, StringOrListParam theTokenList) {
+		boolean retVal = false;
+
+		if (theTokenList == null) {
+			return retVal;
+		}
+
+		List<BaseIdentifierDt> identifiers = new ArrayList<BaseIdentifierDt>();
+		for (StringParam tokenParam : theTokenList.getValuesAsQueryTokens()) {
+			String token = tokenParam.getValue();
+			int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
+			String system = null;
+			String value = null;
+			if (barIndex != -1) {
+				system = token.substring(0, barIndex);
+				value = ParameterUtil.unescape(token.substring(barIndex + 1));
+			} else {
+				value = ParameterUtil.unescape(token);
+			}
+
+			BaseIdentifierDt identifierDt = new BaseIdentifierDt() {
+				UriDt theSystem;
+				StringDt theValue;
+
+				@Override
+				public boolean isEmpty() {
+					return false;
+				}
+
+				@Override
+				public <T extends IElement> List<T> getAllPopulatedChildElementsOfType(Class<T> theType) {
+					return null;
+				}
+
+				@Override
+				public UriDt getSystemElement() {
+					return theSystem;
+				}
+
+				@Override
+				public StringDt getValueElement() {
+					return theValue;
+				}
+
+				@Override
+				public BaseIdentifierDt setSystem(String theUri) {
+					theSystem = new UriDt(theUri);
+					return this;
+				}
+
+				@Override
+				public BaseIdentifierDt setValue(String theString) {
+					theValue = new StringDt(theString);
+					return this;
+				}
+			};
+
+			identifierDt.setSystem(system);
+			identifierDt.setValue(value);
+	
+			identifiers.add(identifierDt);
+		}
+
+		if (identifiers.size() > 0) {
+			query = query.and(clientParam.exactly().identifiers(identifiers));
+			retVal = true;
+		}
+
+		return retVal;
 	}
 
 	protected void throwSimulatedOO(String errorCode) {

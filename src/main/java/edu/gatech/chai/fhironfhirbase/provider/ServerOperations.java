@@ -601,11 +601,11 @@ public class ServerOperations {
 			@OperationParam(name = "response-url") UriType theUri) {
 
 		if (theAsync != null && theAsync.booleanValue()) {
-			ThrowFHIRExceptions.unprocessableEntityException(ctx, "Asynchronous is not supported");
+			ThrowFHIRExceptions.unprocessableEntityException("Asynchronous is not supported");
 		}
 
 		if (theUri != null && !theUri.isEmpty()) {
-			ThrowFHIRExceptions.unprocessableEntityException(ctx, "response-uri is not supported as async message is not supported");
+			ThrowFHIRExceptions.unprocessableEntityException("response-uri is not supported as async message is not supported");
 		}
 
 		String requestUrl = System.getenv("INTERNAL_FHIR_REQUEST_URL");
@@ -670,16 +670,15 @@ public class ServerOperations {
 						updateReference(references.get(0));
 						createMessageHeader(client, messageHeader);
 					} else {
-						ThrowFHIRExceptions.unprocessableEntityException(ctx, 
-								"We currently support only observation-provided Message event");
+						ThrowFHIRExceptions.unprocessableEntityException("We currently support only observation-provided Message event");
 					}
 				} else {
 					ThrowFHIRExceptions
-							.unprocessableEntityException(ctx, "We currently support only MessageHeader.eventCoding");
+							.unprocessableEntityException("We currently support only MessageHeader.eventCoding");
 				}
 			}
 		} else {
-			ThrowFHIRExceptions.unprocessableEntityException(ctx, "The bundle must be a MESSAGE type");
+			ThrowFHIRExceptions.unprocessableEntityException("The bundle must be a MESSAGE type");
 		}
 
 		MessageHeader responseMessageHeader = new MessageHeader();

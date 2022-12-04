@@ -1,3 +1,11 @@
+/*
+ * Filename: /Users/mc142/Documents/workspace/mortality-reporting/raven-fhir-server-dev/fhir-fhirbase/src/main/java/edu/gatech/chai/fhironfhirbase/provider/PatientResourceProvider copy.java
+ * Path: /Users/mc142/Documents/workspace/mortality-reporting/raven-fhir-server-dev/fhir-fhirbase/src/main/java/edu/gatech/chai/fhironfhirbase/provider
+ * Created Date: Saturday, December 3rd 2022, 5:26:07 pm
+ * Author: Myung Choi
+ * 
+ * Copyright (c) 2022 GTRI - Health Emerging and Advanced Technologies (HEAT)
+ */
 /*******************************************************************************
  * Copyright (c) 2019 Georgia Tech Research Institute
  *
@@ -13,7 +21,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *******************************************************************************/
-
 package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.sql.SQLException;
@@ -24,8 +31,8 @@ import java.util.Set;
 import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.IdType;
-import org.hl7.fhir.r4.model.Practitioner;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
@@ -34,7 +41,6 @@ import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
 import ca.uhn.fhir.rest.annotation.IdParam;
-import ca.uhn.fhir.rest.annotation.IncludeParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
@@ -44,11 +50,9 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
-import ca.uhn.fhir.rest.param.StringParam;
-import ca.uhn.fhir.rest.param.TokenOrListParam;
+import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
-import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 /**
  * This is a resource provider which stores Patient resources in memory using a
@@ -57,23 +61,23 @@ import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
  */
 @Service
 @Scope("prototype")
-public class PractitionerResourceProvider extends BaseResourceProvider {
+public class BundleResourceProvider extends BaseResourceProvider {
 
-	public PractitionerResourceProvider(FhirContext ctx) {
+	public BundleResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(PractitionerResourceProvider.getType().toLowerCase());
-		setMyResourceType(PractitionerResourceProvider.getType());
+		setTableName(BundleResourceProvider.getType().toLowerCase());
+		setMyResourceType(BundleResourceProvider.getType());
 
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
 	public static String getType() {
-		return "Practitioner";
+		return "Bundle";
 	}
 
 	/**
@@ -81,8 +85,8 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	 * overridden to indicate what type of resource this provider supplies.
 	 */
 	@Override
-	public Class<Practitioner> getResourceType() {
-		return Practitioner.class;
+	public Class<Bundle> getResourceType() {
+		return Bundle.class;
 	}
 
 	/**
@@ -90,14 +94,14 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	 * which adds a new instance of a resource to the server.
 	 */
 	@Create()
-	public MethodOutcome createPractitioner(@ResourceParam Practitioner thePractitioner) {
-		validateResource(thePractitioner);
+	public MethodOutcome createBundle(@ResourceParam Bundle theBundle) {
+		validateResource(theBundle);
 		MethodOutcome retVal = new MethodOutcome();
-		
+
 		try {
-			IBaseResource createdPractitioner = getFhirbaseMapping().create(thePractitioner, getResourceType());
-			retVal.setId(createdPractitioner.getIdElement());
-			retVal.setResource(createdPractitioner);
+			IBaseResource createdBundle = getFhirbaseMapping().create(theBundle, getResourceType());
+			retVal.setId(createdBundle.getIdElement());
+			retVal.setResource(createdBundle);
 			retVal.setCreated(true);
 		} catch (SQLException e) {
 			retVal.setCreated(false);
@@ -110,8 +114,57 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 		return retVal;
 	}
 
+	/**
+	 * This is the "read" operation. The "@Read" annotation indicates that this
+	 * method supports the read and/or vread operation.
+	 * <p>
+	 * Read operations take a single parameter annotated with the {@link IdParam}
+	 * paramater, and should return a single resource instance.
+	 * </p>
+	 * 
+	 * @param theId The read operation takes one parameter, which must be of type
+	 *              IdDt and must be annotated with the "@Read.IdParam" annotation.
+	 * @return Returns a resource matching this identifier, or null if none exists.
+	 */
+	@Read()
+	public IBaseResource readBundle(@IdParam IdType theId) {
+		IBaseResource retVal = null;
+
+		try {
+			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return retVal;
+	}
+
+	/**
+	 * The "@Update" annotation indicates that this method supports replacing an
+	 * existing resource (by ID) with a new instance of that resource.
+	 * 
+	 * @param theId      This is the ID of the patient to update
+	 * @param thePatient This is the actual resource to save
+	 * @return This method returns a "MethodOutcome"
+	 */
+	@Update()
+	public MethodOutcome updateBundle(@IdParam IdType theId, @ResourceParam Bundle theBundle) {
+		validateResource(theBundle);
+		MethodOutcome retVal = new MethodOutcome();
+
+		try {
+			IBaseResource updatedBundle = getFhirbaseMapping().update(theBundle, getResourceType());
+			retVal.setId(updatedBundle.getIdElement());
+			retVal.setResource(updatedBundle);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return retVal;
+	}
+
 	@Delete()
-	public void deletePractitioner(@IdParam IdType theId) {
+	public void deleteBundle(@IdParam IdType theId) {
 		try {
 			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
 		} catch (SQLException e) {
@@ -139,81 +192,38 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	 * @return This method returns a list of Patients in bundle. This list may
 	 *         contain multiple matching resources, or it may also be empty.
 	 */
-	@Search()
-	public IBundleProvider findPractitionersByParams(
-			@OptionalParam(name = Practitioner.SP_RES_ID) TokenOrListParam thePractitionerIds,
-			@OptionalParam(name = Practitioner.SP_IDENTIFIER) TokenParam thePractitionerIdentifier,
-			@OptionalParam(name = Practitioner.SP_ACTIVE) TokenParam theActive,
-			@OptionalParam(name = Practitioner.SP_FAMILY) StringParam theFamilyName,
-			@OptionalParam(name = Practitioner.SP_GIVEN) StringParam theGivenName,
-			@OptionalParam(name = Practitioner.SP_NAME) StringParam theName,
-			@OptionalParam(name = Practitioner.SP_GENDER) StringParam theGender, @Sort SortSpec theSort,
-			@IncludeParam(allow = {}) final Set<Include> theIncludes,
-			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
+	@Search(allowUnknownParams = true)
+	public IBundleProvider findBundlesByParams(RequestDetails theRequestDetails,
+			@OptionalParam(name = Bundle.SP_RES_ID) TokenParam theBundleId,
+			@OptionalParam(name = Bundle.SP_IDENTIFIER) TokenParam theBundleIdentifier,
+			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
 		boolean returnAll = true;
 		
-		String fromStatement = "practitioner pract";
+		String fromStatement = "bundle b";
 
-		if (thePractitionerIds != null) {
-			for (TokenParam thePractitionerId : thePractitionerIds.getValuesAsQueryTokens()) {
-				whereParameters.add("pract.id = '" + thePractitionerId.getValue() + "'");
-			}
+		if (theBundleId != null) {
+			whereParameters.add("b.id = '" + theBundleId.getValue() + "'");
 			returnAll = false;
 		}
-		
-		if (thePractitionerIdentifier != null) {
-			String system = thePractitionerIdentifier.getSystem();
-			String value = thePractitionerIdentifier.getValue();
+
+		if (theBundleIdentifier != null) {
+			String system = theBundleIdentifier.getSystem();
+			String value = theBundleIdentifier.getValue();
 
 			if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
-				whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\",\"system\": \""
+				whereParameters.add("b.resource->'identifier' @> '[{\"value\": \"" + value + "\",\"system\": \""
 						+ system + "\"}]'::jsonb");
 			} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
-				whereParameters.add("pract.resource->'identifier' @> '[{\"system\": \"" + system + "\"}]'::jsonb");
+				whereParameters.add("b.resource->'identifier' @> '[{\"system\": \"" + system + "\"}]'::jsonb");
 			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
-				whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
+				whereParameters.add("b.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
 			returnAll = false;
 		}
 
-		if (theActive != null) {
-			whereParameters.add("pract.resource->>'active'=" + theActive.getValue());
-			returnAll = false;
-		}
-
-		if (theFamilyName != null) {
-			if (!fromStatement.contains("names")) {
-				fromStatement += ", jsonb_array_elements(pract.resource->'name') names";
-			}
-
-			if (theFamilyName.isExact()) {
-				whereParameters.add("names->>'family' = '" + theFamilyName.getValue() + "'");
-			} else {
-				whereParameters.add("names->>'family' like '%" + theFamilyName.getValue() + "%'");
-			}
-			returnAll = false;
-		}
-
-		if (theGivenName != null) {
-			if (!fromStatement.contains("names")) {
-				fromStatement += ", jsonb_array_elements(pract.resource->'name') names";
-			}
-
-			whereParameters.add("names->>'given' like '%" + theGivenName.getValue() + "%'");
-			returnAll = false;
-		}
-		if (theName != null) {
-			whereParameters.add("pract.resource->>'name' like '%" + theName.getValue() + "%'");
-			returnAll = false;
-		}
-
-		if (theGender != null) {
-			whereParameters.add("pract.resource->>'gender' = '" + theGender.getValue() + "'");
-			returnAll = false;
-		}
-
+		// Complete Query.
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
 		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
@@ -222,77 +232,34 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
-
-		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, theReverseIncludes);
+		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
+
 		return myBundleProvider;
 
-	}
-
-	/**
-	 * This is the "read" operation. The "@Read" annotation indicates that this
-	 * method supports the read and/or vread operation.
-	 * <p>
-	 * Read operations take a single parameter annotated with the {@link IdParam}
-	 * paramater, and should return a single resource instance.
-	 * </p>
-	 * 
-	 * @param theId The read operation takes one parameter, which must be of type
-	 *              IdDt and must be annotated with the "@Read.IdParam" annotation.
-	 * @return Returns a resource matching this identifier, or null if none exists.
-	 */
-	@Read()
-	public IBaseResource readPractitioner(@IdParam IdType theId) {
-		IBaseResource retVal = null;
-		
-		try {
-			retVal = getFhirbaseMapping().read(theId, getResourceType(), getTableName());
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-		
-		return retVal;
-	}
-
-	/**
-	 * The "@Update" annotation indicates that this method supports replacing an
-	 * existing resource (by ID) with a new instance of that resource.
-	 * 
-	 * @param theId           This is the ID of the patient to update
-	 * @param thePractitioner This is the actual resource to save
-	 * @return This method returns a "MethodOutcome"
-	 */
-	@Update()
-	public MethodOutcome updatePractitioner(@IdParam IdType theId, @ResourceParam Practitioner thePractitioner) {
-		validateResource(thePractitioner);
-		MethodOutcome retVal = new MethodOutcome();
-		
-		try {
-			IBaseResource updatedPractitioner = getFhirbaseMapping().update(thePractitioner, getResourceType());
-			retVal.setId(updatedPractitioner.getIdElement());
-			retVal.setResource(updatedPractitioner);
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-		
-		return retVal;
 	}
 
 	/**
 	 * This method just provides simple business validation for resources we are
 	 * storing.
 	 * 
-	 * @param thePractitioner The thePractitioner to validate
+	 * @param thePatient The patient to validate
 	 */
-	private void validateResource(Practitioner thePractitioner) {
+	private void validateResource(Bundle theBundle) {
 		/*
-		 * Our server will have a rule that practitioners must have a name or we will
+		 * Our server will have a rule that patients must have a family name or we will
 		 * reject them
+		 * 
+		 * commenting out this name validation as VRDR for MDI may not have names.
 		 */
-		if (thePractitioner.getName().isEmpty()) {
-			ThrowFHIRExceptions.unprocessableEntityException("No name provided, Practictioner resources must have at least one name.");
-		}
+//		if (thePatient.getNameFirstRep().getFamily().isEmpty()) {
+//			OperationOutcome outcome = new OperationOutcome();
+//			CodeableConcept detailCode = new CodeableConcept();
+//			detailCode.setText("No family name provided, Patient resources must have at least one family name.");
+//			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+//			throw new UnprocessableEntityException(getFhirContext(), outcome);
+//		}
 	}
 
 	class MyBundleProvider extends FhirbaseBundleProvider {
@@ -308,20 +275,22 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 
 		@Override
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
-			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
-			
+			List<IBaseResource> retv = new ArrayList<IBaseResource>();
+
 			String myQuery = query;			
 			if (toIndex - fromIndex > 0) {
 				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
 			}
 
 			try {
-				retVal.addAll(getFhirbaseMapping().search(myQuery, getResourceType()));
+				retv.addAll(getFhirbaseMapping().search(myQuery, getResourceType()));
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
-			return retVal;
+
+			return retv;
 		}
+
 	}
+
 }
