@@ -33,6 +33,8 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.param.ReferenceOrListParam;
+import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
@@ -102,7 +104,7 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 
 	@Search()
 	public IBundleProvider findMessageHeaderById(
-			@RequiredParam(name = MessageHeader.SP_RES_ID) TokenOrListParam theMessageHeaderIds, 
+			@RequiredParam(name = MessageHeader.SP_RES_ID) TokenOrListParam theMessageHeaderIds,
 			@Sort SortSpec theSort) {
 
 		if (theMessageHeaderIds == null) {
@@ -129,6 +131,7 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 	public IBundleProvider findMessageHeaderByParams(
 			@OptionalParam(name = MessageHeader.SP_SOURCE) StringParam theSource,
 			@OptionalParam(name = MessageHeader.SP_SOURCE_URI) StringParam theSourceUri,
+			@OptionalParam(name = MessageHeader.SP_FOCUS) ReferenceOrListParam theFocusReferences,
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
@@ -143,6 +146,21 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 		if (theSourceUri != null) {
 			whereParameters.add("mh.resource->'source'->>'endpoint' = '" + theSource.getValue() + "'");
 			returnAll = false;
+		}
+
+		if (theFocusReferences != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "focuses", "mh.resource->'focus'");
+
+			String whereFocuses = "";
+			for (ReferenceParam focusReference : theFocusReferences.getValuesAsQueryTokens()) {
+				if (!whereFocuses.isEmpty()) {
+					whereFocuses += " OR ";
+				}
+				
+				whereFocuses += "focuses @> '{\"reference\": \"" + focusReference.getValue() + "\"}'::jsonb";
+			}
+
+			whereParameters.add(whereFocuses);
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);

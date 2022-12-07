@@ -10,12 +10,19 @@ package edu.gatech.chai.fhironfhirbase.utilities;
 
 import java.util.UUID;
 
+import org.hl7.fhir.instance.model.api.IIdType;
+import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Identifier;
+import org.hl7.fhir.r4.model.OperationOutcome;
+import org.hl7.fhir.r4.model.Resource;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
+import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 
 public class OperationUtil {
 	public static FhirContext MyFhirContext = FhirContext.forR4();
@@ -53,5 +60,30 @@ public class OperationUtil {
 		identifier.setValue(UUID.randomUUID().toString());
 
 		return identifier;
+	}
+
+	public static Resource createResource(IGenericClient client, String resourceType, Resource resource) {
+		IdType myId = resource.getIdElement();
+		MethodOutcome outcome;
+		if (myId != null) {
+			outcome = client.update().resource(resource).prettyPrint().encodedJson().execute();
+		} else {
+			outcome = client.create().resource(resource).prettyPrint().encodedJson().execute();
+		}
+		
+		if (outcome.getResponseStatusCode() != 201 && outcome.getResponseStatusCode() != 200) {
+			if (outcome.getResource() != null) {
+				resource = (Resource) outcome.getResource();
+			}
+		} else {
+			OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+			if (oo != null && !oo.isEmpty()) {
+				throw new UnprocessableEntityException("Resource Create Failed with " + outcome.getResponseStatusCode()  , oo);
+			} else {
+				throw new UnprocessableEntityException("Resource Create Failed with "  + outcome.getResponseStatusCode());
+			}
+		}
+
+		return resource;
 	}
 }

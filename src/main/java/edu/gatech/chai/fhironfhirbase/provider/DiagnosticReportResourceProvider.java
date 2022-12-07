@@ -252,6 +252,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = DiagnosticReport.SP_SUBJECT, chainWhitelist = { "",
 					USCorePatient.SP_NAME }) ReferenceAndListParam theSubjects,
 			@OptionalParam(name = DiagnosticReportResourceProvider.SP_TOX_LAB_CASE_NUMBER) TokenOrListParam theToxLabCaseNumber,
+			@OptionalParam(name = DiagnosticReportResourceProvider.SP_MDI_CASE_NUMBER) TokenOrListParam theMdiCaseNumber,
 			@OptionalParam(name = DiagnosticReport.SP_IDENTIFIER) TokenParam theDocumentReferenceIdentifier,
 			@OptionalParam(name = DiagnosticReport.SP_ENCOUNTER) ReferenceParam theEncounter,
 			@Sort SortSpec theSort,
@@ -308,6 +309,8 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		}
 
 		if (theToxLabCaseNumber != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "extensions", "diag.resource->'extension'");
+
 			String where = "";
 			for (TokenParam toxLabCaseNumberToken : theToxLabCaseNumber.getValuesAsQueryTokens()) {
 				String system = toxLabCaseNumberToken.getSystem();
@@ -556,7 +559,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			List<BundleEntryComponent> entries = diagnosticReportBundle.getEntry();
 			for (BundleEntryComponent entry : entries) {
 				DiagnosticReport diagnosticReport = (DiagnosticReport) entry.getResource();
-				if (diagnosticReport != null) {
+				if (diagnosticReport != null && !diagnosticReport.isEmpty()) {
 					Bundle messageBundle = constructMessageBundleFromDiagnosticReport(client, diagnosticReport);
 					BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(messageBundle.getIdElement().asStringValue()).setResource(messageBundle);
 					retMessageBundle.addEntry(bundleEntryComponent);

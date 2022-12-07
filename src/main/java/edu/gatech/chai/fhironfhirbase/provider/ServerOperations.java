@@ -66,7 +66,9 @@ import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
+import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import edu.gatech.chai.fhironfhirbase.utilities.OperationUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 public class ServerOperations {
@@ -84,8 +86,6 @@ public class ServerOperations {
 		if (ctx != null) {
 			this.ctx = ctx;
 		}
-
-		patientIds = new ArrayList<String>();
 	}
 
 	private void updateReference(Reference reference) {
@@ -143,11 +143,14 @@ public class ServerOperations {
 	
 	private void createMessageHeader(IGenericClient client, MessageHeader messageHeader) {
 		// We store all the messaging events.
-		client.create().resource(messageHeader).encodedJson().prettyPrint().execute();
+		if (messageHeader.getIdElement() != null && !messageHeader.getIdElement().isEmpty()) {
+			client.update().resource(messageHeader).encodedJson().prettyPrint().execute();
+		} else {
+			client.create().resource(messageHeader).encodedJson().prettyPrint().execute();
+		}
 	}
 
 	private OperationOutcome processPostResources(IGenericClient client, List<BundleEntryComponent> entries) {
-
 		// Patient and Binary
 		for (BundleEntryComponent entry : entries) {
 			Resource resource = entry.getResource();
@@ -156,59 +159,27 @@ public class ServerOperations {
 			String patientId = null;
 			if (resource instanceof Patient) {
 				Patient patient = (Patient) resource;
-				for (Identifier identifier : patient.getIdentifier()) {
-					Bundle responseBundle = client
-							.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly()
-									.systemAndCode(identifier.getSystem(), identifier.getValue()))
-							.returnBundle(Bundle.class).execute();
-
-					int total = responseBundle.getTotal();
-					if (total > 0) {
-						patientId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-						if (patientId == null || patientId.isEmpty()) {
-							logger.error("Found exising Patient. But patientId is null or empty");
-						}
-						break;
-					}
+				MethodOutcome outcome;
+				if (patient.getIdElement() != null && !patient.getIdElement().isEmpty()) {
+					outcome = client.update().resource(patient).prettyPrint().encodedJson().execute();
+				} else {
+					outcome = client.create().resource(patient).prettyPrint().encodedJson().execute();
 				}
-
-				// Toxicology does not have the identifier that we are using for Raven. Add it here.
-				Identifier ravenIdentifier = new Identifier();
-				Coding ravenIdCoding = new Coding ("urn:mdi:temporary:code", "1000007", "Case Number");
-				CodeableConcept ravenIdCodeable = new CodeableConcept();
-				ravenIdCodeable.addCoding(ravenIdCoding);
-				ravenIdentifier.setType(ravenIdCodeable);
-				ravenIdentifier.setSystem("urn:mdi:tox:connectathon");
-				ravenIdentifier.setValue("000001");
-				patient.addIdentifier(ravenIdentifier);
-
-				if (patientId != null && !patientId.isEmpty()) {
-					// We do not update the patient info from the lab report. So we just get
-					// patient id and keep the information
-					referenceIds.put("Patient/" + patient.getIdElement().getIdPart(), "Patient/" + patientId);
+				
+				OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+				if (oo == null) {
+					patientId = outcome.getId().getIdPart();
+					referenceIds.put("Patient/" + patient.getId(), "Patient/" + patientId);
 					patientIds.add("Patient/" + patientId);
-					patient.setId(patientId);
-					MethodOutcome outcome = client.update().resource(patient).prettyPrint().encodedJson().execute();
-					if (outcome.getId() == null || outcome.getId().isEmpty()) {
-						return (OperationOutcome) outcome.getOperationOutcome();
+
+					if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
+						entry.setResource((Resource) outcome.getResource());
+					} else {
+						patient.setId(patientId);
 					}
 				} else {
-					MethodOutcome outcome = client.create().resource(patient).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated().booleanValue()) {
-						patientId = outcome.getId().getIdPart();
-						referenceIds.put("Patient/" + patient.getId(), "Patient/" + patientId);
-						patientIds.add("Patient/" + patientId);
-
-						if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
-							entry.setResource((Resource) outcome.getResource());
-						} else {
-							patient.setId(patientId);
-						}
-					} else {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+					throw new UnprocessableEntityException("Unable to create/update Patient : " + patient.getId(), oo);
 				}
-				entry.setFullUrl("Patient/" + patientId);
 			}
 
 			// We do the Binary here as this does not depend on anything but others can reference this
@@ -225,53 +196,6 @@ public class ServerOperations {
 			// }
 		}
 
-		// We can't really do the search for existing ones to update. We just delete them all 
-		// and repopulate. We do not delete Practitioner though...
-
-		for (String pid : patientIds) {
-			IdType subjectIdType = new IdType("Patient", pid);
-
-			// Delete Specimens
-			Bundle currentBundles = client.search().forResource(Specimen.class).where(Specimen.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
-			if (currentBundles.getTotal() > 0) {
-				List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
-				for (BundleEntryComponent currentEntry : currentEntries) {
-					Specimen currentResource = (Specimen) currentEntry.getResource();
-					client.delete().resourceById(currentResource.getIdElement()).execute();
-				}
-			}
-	
-			// Delete Observations
-			currentBundles = client.search().forResource(Observation.class).where(Observation.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
-			if (currentBundles.getTotal() > 0) {
-				List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
-				for (BundleEntryComponent currentEntry : currentEntries) {
-					Observation currentResource = (Observation) currentEntry.getResource();
-					client.delete().resourceById(currentResource.getIdElement()).execute();
-				}
-			}
-
-			// Delete DocumentReference
-			currentBundles = client.search().forResource(DocumentReference.class).where(DocumentReference.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
-			if (currentBundles.getTotal() > 0) {
-				List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
-				for (BundleEntryComponent currentEntry : currentEntries) {
-					DocumentReference currentResource = (DocumentReference) currentEntry.getResource();
-					client.delete().resourceById(currentResource.getIdElement()).execute();
-				}
-			}
-
-			// Delete DiagnosticReport
-			currentBundles = client.search().forResource(DiagnosticReport.class).where(DiagnosticReport.SUBJECT.hasId(subjectIdType)).returnBundle(Bundle.class).execute();
-			if (currentBundles.getTotal() > 0) {
-				List<BundleEntryComponent> currentEntries = currentBundles.getEntry();
-				for (BundleEntryComponent currentEntry : currentEntries) {
-					DiagnosticReport currentResource = (DiagnosticReport) currentEntry.getResource();
-					client.delete().resourceById(currentResource.getIdElement()).execute();
-				}
-			}
-		}
-
 		// Practitioner
 		for (BundleEntryComponent entry : entries) {
 			Resource resource = entry.getResource();
@@ -279,38 +203,21 @@ public class ServerOperations {
 			if (resource instanceof Practitioner) {
 				Practitioner practitioner = (Practitioner) resource;
 				String practitionerId = null;
-				for (Identifier identifier : practitioner.getIdentifier()) {
-					Bundle responseBundle = client
-							.search().forResource(Practitioner.class).where(Practitioner.IDENTIFIER.exactly()
-									.systemAndCode(identifier.getSystem(), identifier.getValue()))
-							.returnBundle(Bundle.class).execute();
 
-					int total = responseBundle.getTotal();
-					if (total > 0) {
-						practitionerId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-						break;
-					}
-				}
-
-				if (practitionerId != null && !practitionerId.isEmpty()) {
-					// Now we need to write this to fhirbase.
-					referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
-					MethodOutcome outcome = client.update().resource(practitioner).prettyPrint().encodedJson().execute();
-					if (outcome.getId() == null || outcome.getId().isEmpty()) {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+				MethodOutcome outcome;
+				if (practitioner.getIdElement() != null && !practitioner.getIdElement().isEmpty()) {
+					outcome = client.update().resource(practitioner).prettyPrint().encodedJson().execute();
 				} else {
-					MethodOutcome outcome = client.create().resource(practitioner).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated().booleanValue()) {
-						practitionerId = outcome.getId().getIdPart();
-						referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
-					} else {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+					outcome = client.create().resource(practitioner).prettyPrint().encodedJson().execute();
 				}
 
-				practitioner.setId(practitionerId);
-				entry.setFullUrl("Practitioner/" + practitionerId);
+				OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+				if (oo == null) {
+					practitionerId = outcome.getId().getIdPart();
+					referenceIds.put("Practitioner/" + practitioner.getIdElement().getIdPart(), "Practitioner/" + practitionerId);
+				} else {
+					throw new UnprocessableEntityException("Unable to create/update Practitioner : " + practitioner.getId(), oo);
+				}
 			}
 		}
 
@@ -346,42 +253,21 @@ public class ServerOperations {
 					updateReference(reference);
 				}
 
-				// check if we already have this using accessIdentifier.
-				Identifier accessionIdentifier = specimen.getAccessionIdentifier();
-				String specimenId = "";
-				if (accessionIdentifier != null && !accessionIdentifier.isEmpty()) {
-					for (String pId : patientIds) {
-						Bundle responseBundle = client.search().forResource(Specimen.class)
-							.where(Specimen.SUBJECT.hasId(pId))
-							.and(Specimen.ACCESSION.exactly().systemAndCode(accessionIdentifier.getSystem(), accessionIdentifier.getValue()))
-							.returnBundle(Bundle.class).execute();
-	
-						int total = responseBundle.getTotal();
-						if (total > 0) {
-							specimenId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-							break;
-						}
-					}
-				}
-
-				if (specimenId != null && !specimenId.isEmpty()) {
-					referenceIds.put("Specimen/" + specimen.getIdElement().getIdPart(), "Specimen/" + specimenId);
-					MethodOutcome outcome = client.update().resource(specimen).prettyPrint().encodedJson().execute();
-					if (outcome.getId() == null || outcome.getId().isEmpty()) {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+				String specimenId = null;
+				MethodOutcome outcome; 
+				if (specimen.getIdElement() != null && !specimen.getIdElement().isEmpty()) {
+					outcome = client.update().resource(specimen).prettyPrint().encodedJson().execute();
 				} else {
-					MethodOutcome outcome = client.create().resource(specimen).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated().booleanValue()) {
-						specimenId = outcome.getId().getIdPart();
-						referenceIds.put("Specimen/" + specimen.getIdElement().getIdPart(), "Specimen/" + specimenId);
-					} else {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+					outcome = client.create().resource(specimen).prettyPrint().encodedJson().execute();
 				}
 
-				specimen.setId(specimenId);
-				entry.setFullUrl("Specimen/" + specimenId);
+				OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+				if (oo == null) {
+					specimenId = outcome.getId().getIdPart();
+					referenceIds.put("Specimen/" + specimen.getIdElement().getIdPart(), "Specimen/" + specimenId);
+				} else {
+					throw new UnprocessableEntityException("Unable to create/update Specimen : " + specimen.getId(), oo);
+				}
 			}
 		}
 
@@ -394,55 +280,21 @@ public class ServerOperations {
 				updateReference(observation.getSubject());
 				updateReference(observation.getPerformerFirstRep());
 
-				String observationId = "";
-				for (String pId : patientIds) {
-					CodeableConcept obsCode = observation.getCode();
-					List<Coding> obsCodings = obsCode.getCoding();
-					for (Coding obsCoding : obsCodings) {
-						String theSystem = obsCoding.getSystem();
-						String theCode = obsCoding.getCode();
-						DateTimeType theDateType = observation.getEffectiveDateTimeType();
-						if (theDateType == null || theDateType.isEmpty()) {
-							break;
-						}
-
-						Date theDate = theDateType.getValue();
-						Bundle responseBundle = client.search().forResource(Observation.class)
-								.where(Observation.SUBJECT.hasId(pId))
-								.and(Observation.CODE.exactly().systemAndCode(theSystem, theCode))
-								.and(Observation.DATE.exactly().second(theDate)).returnBundle(Bundle.class).execute();
-
-						int total = responseBundle.getTotal();
-						if (total > 0) {
-							observationId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-							break;
-						}
-					}
-
-					if (observationId != null && !observationId.isEmpty()) {
-						break;
-					}
-				}
-
-				if (observationId != null && !observationId.isEmpty()) {
-					referenceIds.put("Observation/" + observation.getIdElement().getIdPart(), "Observation/" + observationId);
-					MethodOutcome outcome = client.update().resource(observation).prettyPrint().encodedJson().execute();
-					if (outcome.getId() == null || outcome.getId().isEmpty()) {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+				String observationId = null;
+				MethodOutcome outcome;
+				if (observation.getIdElement() != null && !observation.getIdElement().isEmpty()) {
+					outcome = client.update().resource(observation).prettyPrint().encodedJson().execute();
 				} else {
-					MethodOutcome outcome = client.create().resource(observation).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated().booleanValue()) {
-						observationId = outcome.getId().getIdPart();
-						referenceIds.put("Observation/" + observation.getIdElement().getIdPart(), "Observation/" + observationId);
-					} else {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
-
+					outcome = client.create().resource(observation).prettyPrint().encodedJson().execute();
 				}
 
-				observation.setId(observationId);
-				entry.setFullUrl("Observation/" + observationId);
+				OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+				if (oo == null) {
+					observationId = outcome.getId().getIdPart();
+					referenceIds.put("Observation/" + observation.getIdElement().getIdPart(), "Observation/" + observationId);
+				} else {
+					throw new UnprocessableEntityException("Unable to create/update Observation : " + observation.getId(), oo);
+				}
 			}
 		}
 
@@ -454,39 +306,21 @@ public class ServerOperations {
 				DocumentReference documentReference = (DocumentReference) resource;
 
 				updateReference(documentReference.getSubject());
-
 				String documentReferenceId = null;
-				for (Identifier identifier : documentReference.getIdentifier()) {
-					Bundle responseBundle = client
-							.search().forResource(DocumentReference.class).where(DocumentReference.IDENTIFIER.exactly()
-									.systemAndCode(identifier.getSystem(), identifier.getValue()))
-							.returnBundle(Bundle.class).execute();
-
-					int total = responseBundle.getTotal();
-					if (total > 0) {
-						documentReferenceId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-						break;
-					}
-				}
-
-				if (documentReferenceId != null && !documentReferenceId.isEmpty()) {
-					// Now we need to write this to fhirbase.
-					referenceIds.put("DocumentReference/" + documentReference.getIdElement().getIdPart(), "DocumentReference/" + documentReferenceId);
-					MethodOutcome outcome = client.update().resource(documentReference).prettyPrint().encodedJson().execute();
-					if (outcome.getId() == null || outcome.getId().isEmpty()) {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+				MethodOutcome outcome;
+				if (documentReference.getIdElement() != null && !documentReference.getIdElement().isEmpty()) {
+					outcome = client.update().resource(documentReference).prettyPrint().encodedJson().execute();
 				} else {
-					MethodOutcome outcome = client.create().resource(documentReference).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated().booleanValue()) {
-						documentReferenceId = outcome.getId().getIdPart();
-						referenceIds.put("DocumentReference/" + documentReference.getIdElement().getIdPart(), "DocumentReference/" + documentReferenceId);
-					} else {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+					outcome = client.create().resource(documentReference).prettyPrint().encodedJson().execute();
 				}
 
-				documentReference.setId(documentReferenceId);
+				OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+				if (oo == null) {
+					documentReferenceId = outcome.getId().getIdPart();
+					referenceIds.put("DocumentReference/" + documentReference.getIdElement().getIdPart(), "DocumentReference/" + documentReferenceId);
+				} else {
+					throw new UnprocessableEntityException("Unable to create/update DocumentReference : " + documentReference.getId(), oo);
+				}
 
 				// DocumentReference may have an attachment. Check and handle this here.
 				List<DocumentReferenceContentComponent> contents = documentReference.getContent();
@@ -511,7 +345,6 @@ public class ServerOperations {
 						}
 					}
 				}
-				entry.setFullUrl("DocumentReference/" + documentReferenceId);				
 			}
 		}
 
@@ -553,41 +386,20 @@ public class ServerOperations {
 				}
 
 				String diagnosticReportId = null;
-				for (Identifier identifier : diagnosticReport.getIdentifier()) {
-					updateReference(identifier.getAssigner());
-
-					if (diagnosticReportId == null) {
-						Bundle responseBundle = client
-								.search().forResource(DiagnosticReport.class).where(DiagnosticReport.IDENTIFIER.exactly()
-										.systemAndCode(identifier.getSystem(), identifier.getValue()))
-								.returnBundle(Bundle.class).execute();
-
-						int total = responseBundle.getTotal();
-						if (total > 0) {
-							diagnosticReportId = responseBundle.getEntryFirstRep().getResource().getIdElement().getIdPart();
-						}
-					}
-				}
-
-				if (diagnosticReportId != null && !diagnosticReportId.isEmpty()) {
-					// Now we need to write this to fhirbase.
-					referenceIds.put("DiagnosticReport/" + diagnosticReport.getIdElement().getIdPart(), "DiagnosticReport/" + diagnosticReportId);
-					MethodOutcome outcome = client.update().resource(diagnosticReport).prettyPrint().encodedJson().execute();
-					if (outcome.getId() == null || outcome.getId().isEmpty()) {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+				MethodOutcome outcome;
+				if (diagnosticReport.getIdElement() != null && !diagnosticReport.getIdElement().isEmpty()) {
+					outcome = client.update().resource(diagnosticReport).prettyPrint().encodedJson().execute();
 				} else {
-					MethodOutcome outcome = client.create().resource(diagnosticReport).prettyPrint().encodedJson().execute();
-					if (outcome.getCreated().booleanValue()) {
-						diagnosticReportId = outcome.getId().getIdPart();
-						referenceIds.put("DiagnosticReport/" + diagnosticReport.getIdElement().getIdPart(), "DiagnosticReport/" + diagnosticReportId);
-					} else {
-						return (OperationOutcome) outcome.getOperationOutcome();
-					}
+					outcome = client.create().resource(diagnosticReport).prettyPrint().encodedJson().execute();
 				}
 
-				diagnosticReport.setId(diagnosticReportId);
-				entry.setFullUrl("DiagnosticReport/" + diagnosticReportId);
+				OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+				if (oo == null) {
+					diagnosticReportId = outcome.getId().getIdPart();
+					referenceIds.put("DiagnosticReport/" + diagnosticReport.getIdElement().getIdPart(), "DiagnosticReport/" + diagnosticReportId);
+				} else {
+					throw new UnprocessableEntityException("Unable to create/update DiagnosticReport : " + diagnosticReport.getId(), oo);
+				}
 			}
 		}
 
@@ -625,11 +437,17 @@ public class ServerOperations {
 			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
 		}
 
+		// First save this bundle to fhirbase
+		OperationUtil.createResource(client, BundleResourceProvider.getType(), theContent);
+
 		Bundle responseBundle = new Bundle();
+		responseBundle.setId(new IdType(BundleResourceProvider.getType(), UUID.randomUUID().toString()));
 		responseBundle.setType(BundleType.MESSAGE);
 		responseBundle.getMeta().addProfile("http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-message-tox-to-mdi");
 
 		referenceIds = new HashMap<String, String>();
+		patientIds = new ArrayList<String>();
+
 		MessageHeader messageHeader = null;
 		String originalMessageHeaderId = null;
 
@@ -645,7 +463,7 @@ public class ServerOperations {
 				// We handle only MDI Toxicology Lab type.
 				Type eventType = messageHeader.getEvent();
 				if (eventType instanceof Coding) {
-					Coding event = eventType.castToCoding(eventType);
+					Coding event = (Coding) eventType;
 					if ("http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes".equals(event.getSystem())
 						&& "tox-result-report".equals(event.getCode())) {
 						
