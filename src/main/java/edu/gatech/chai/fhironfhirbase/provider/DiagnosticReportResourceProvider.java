@@ -332,6 +332,30 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
+		if (theMdiCaseNumber != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "extensions", "diag.resource->'extension'");
+
+			String where = "";
+			for (TokenParam theMdiCaseNumberToken : theMdiCaseNumber.getValuesAsQueryTokens()) {
+				String system = theMdiCaseNumberToken.getSystem();
+				String value = theMdiCaseNumberToken.getValue();
+				String whereItem;
+				if (system == null || system.isEmpty()) {
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+				} else {
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+				}
+				if (where.isEmpty()) {
+					where = whereItem;
+				} else {
+					where += " or " + whereItem;
+				}
+			}
+
+			whereParameters.add(where);
+			returnAll = false;
+		}
+
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
 		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) { 
