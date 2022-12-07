@@ -33,6 +33,7 @@ import javax.annotation.PostConstruct;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.codesystems.MeasureScoring;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
@@ -51,6 +52,8 @@ import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import ca.uhn.fhir.rest.param.ReferenceOrListParam;
+import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
@@ -196,6 +199,7 @@ public class BundleResourceProvider extends BaseResourceProvider {
 	public IBundleProvider findBundlesByParams(RequestDetails theRequestDetails,
 			@OptionalParam(name = Bundle.SP_RES_ID) TokenParam theBundleId,
 			@OptionalParam(name = Bundle.SP_IDENTIFIER) TokenParam theBundleIdentifier,
+			@OptionalParam(name = Bundle.SP_MESSAGE) ReferenceOrListParam theMessages,
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
@@ -221,6 +225,25 @@ public class BundleResourceProvider extends BaseResourceProvider {
 				whereParameters.add("b.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
 			returnAll = false;
+		}
+
+		if (theMessages != null) {
+			String messageEntries = "";
+			for (ReferenceParam messageReference : theMessages.getValuesAsQueryTokens()) {
+				if (!messageEntries.isEmpty()) {
+					messageEntries += " OR ";
+				}
+				String messageId = messageReference.getResourceType() + "/" + messageReference.getIdPart();
+
+				messageEntries += "b.resource->'entry'->0->>'fullUrl' like '%" + messageId + "%'";
+			}
+
+			if (!messageEntries.isEmpty()) {
+				whereParameters.add("b.resource->>'type' = 'message'");
+				whereParameters.add(messageEntries);
+
+				returnAll = false;
+			}
 		}
 
 		// Complete Query.

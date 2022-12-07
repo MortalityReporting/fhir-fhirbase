@@ -369,15 +369,17 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		MessageHeader messageHeader;
 		
 		// First find if we have a message header for this report.
+		String focusId = DiagnosticReportResourceProvider.getType() + "/" + diagnosticReport.getIdElement().getIdPart();
 		Bundle messageHeaders = client.search().forResource(MessageHeader.class)
-			.where(MessageHeader.FOCUS.hasId(diagnosticReport.getIdElement())).returnBundle(Bundle.class).execute();
+			.where(MessageHeader.FOCUS.hasId(focusId)).returnBundle(Bundle.class).execute();
 		if (messageHeaders != null && !messageHeaders.isEmpty() && messageHeaders.getTotal() > 0) {
 			// We may have multiple messageheaders that focus on the same diagnosticreport. We choose the first one.
 			messageHeader = (MessageHeader) messageHeaders.getEntryFirstRep().getResource();
 
 			// Now, we find a bundle message that has this messageheader.
+			String mhId = MessageHeaderResourceProvider.getType() + "/" + messageHeader.getIdElement().getIdPart();
 			Bundle respMessageBundle = client.search().forResource(Bundle.class)
-				.where(Bundle.MESSAGE.hasId(messageHeader.getIdElement())).returnBundle(Bundle.class).execute();
+				.where(Bundle.MESSAGE.hasId(mhId)).returnBundle(Bundle.class).execute();
 			if (respMessageBundle != null) {
 				// We have the Message bundle. Return this.
 				return respMessageBundle;
@@ -401,7 +403,8 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		retMessageBundle.setType(BundleType.MESSAGE);
 
 		// Add diagnosticreport to Bundle.entry
-		bundleEntryComponent = new BundleEntryComponent().setFullUrl(diagnosticReport.getId()).setResource(diagnosticReport);
+		String diagnosticReportLocalUrl = DiagnosticReportResourceProvider.getType() + "/" + diagnosticReport.getIdElement().getIdPart();
+		bundleEntryComponent = new BundleEntryComponent().setFullUrl(diagnosticReportLocalUrl).setResource(diagnosticReport);
 		retMessageBundle.addEntry(bundleEntryComponent);
 
 		// Add Patient.
