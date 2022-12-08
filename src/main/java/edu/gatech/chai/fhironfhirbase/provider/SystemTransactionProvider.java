@@ -74,6 +74,7 @@ import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
 import ca.uhn.fhir.rest.gclient.TokenClientParam;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
+import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.MyBundle;
 import edu.gatech.chai.fhironfhirbase.utilities.OperationUtil;
 
@@ -165,11 +166,11 @@ public class SystemTransactionProvider {
 			return patient;
 		}
 
-		patient = (Patient) resource;
-		Patient retPatient = (Patient) checkForExisting(client, entry, patient.getIdentifier(), Patient.IDENTIFIER, PatientResourceProvider.getType(), response);
-		if (retPatient != null) {
-			return retPatient;
-		}
+		// patient = (Patient) resource;
+		// Patient retPatient = (Patient) checkForExisting(client, entry, patient.getIdentifier(), Patient.IDENTIFIER, PatientResourceProvider.getType(), response);
+		// if (retPatient != null) {
+		// 	return retPatient;
+		// }
 
 		patient = (Patient) createResource(client, entry, PatientResourceProvider.getType(), response);
 
@@ -188,11 +189,6 @@ public class SystemTransactionProvider {
 		Resource resource = entry.getResource();
 		if (!(resource instanceof Practitioner)) {
 			return null;
-		}
-		practitioner = (Practitioner) resource;
-		Practitioner retPractitioner = (Practitioner) checkForExisting(client, entry, practitioner.getIdentifier(), Practitioner.IDENTIFIER, PractitionerResourceProvider.getType(), response);
-		if (retPractitioner != null) {
-			return retPractitioner;
 		}
 
 		practitioner = (Practitioner) createResource(client, entry, PractitionerResourceProvider.getType(), response);
@@ -213,7 +209,6 @@ public class SystemTransactionProvider {
 			return  null;
 		}
 
-		location = (Location) resource;
 		location = (Location) createResource(client, entry, LocationResourceProvider.getType(), response);
 
 		return location;
@@ -232,15 +227,9 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		condition = (Condition) resource;
-		Condition retCondition = (Condition) checkForExisting(client, entry, condition.getIdentifier(), Condition.IDENTIFIER, ConditionResourceProvider.getType(), response);
-		if (retCondition != null) {
-			return retCondition;
-		}
-
+		condition = (Condition) createResource(client, entry, ConditionResourceProvider.getType(), response);
 		updateReference(condition.getSubject());
 		updateReference(condition.getAsserter());	
-		condition = (Condition) createResource(client, entry, ConditionResourceProvider.getType(), response);
 		
 		return condition;
 	}
@@ -258,12 +247,14 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		specimen = (Specimen) resource;
-		Specimen retSpecimen= (Specimen) checkForExisting(client, entry, specimen.getIdentifier(), Specimen.IDENTIFIER, SpecimenResourceProvider.getType(), response);
-		if (retSpecimen != null) {
-			return retSpecimen;
-		}
+		// specimen = (Specimen) resource;
+		// Specimen retSpecimen= (Specimen) checkForExisting(client, entry, specimen.getIdentifier(), Specimen.IDENTIFIER, SpecimenResourceProvider.getType(), response);
+		// if (retSpecimen != null) {
+		// 	return retSpecimen;
+		// }
 
+		specimen = (Specimen) createResource(client, entry, SpecimenResourceProvider.getType(), response);
+		
 		updateReference(specimen.getSubject());
 
 		// any parent specimen reference update
@@ -280,8 +271,6 @@ public class SystemTransactionProvider {
 			}
 		}
 
-		specimen = (Specimen) createResource(client, entry, SpecimenResourceProvider.getType(), response);
-		
 		return specimen;
 	}
 
@@ -299,18 +288,18 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		observation = (Observation) resource;
-		Observation retObservation = (Observation) checkForExisting(client, entry, observation.getIdentifier(), Observation.IDENTIFIER, ObservationResourceProvider.getType(), response);
-		if (retObservation != null) {
-			return retObservation;
-		}
+		// observation = (Observation) resource;
+		// Observation retObservation = (Observation) checkForExisting(client, entry, observation.getIdentifier(), Observation.IDENTIFIER, ObservationResourceProvider.getType(), response);
+		// if (retObservation != null) {
+		// 	return retObservation;
+		// }
+
+		observation = (Observation) createResource(client, entry, ObservationResourceProvider.getType(), response);
 
 		updateReference(observation.getSubject());
 		for (Reference reference : observation.getPerformer()) {
 			updateReference(reference);	
 		}
-
-		observation = (Observation) createResource(client, entry, ObservationResourceProvider.getType(), response);
 		
 		return observation;
 	}
@@ -328,12 +317,14 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		diagnosticReport = (DiagnosticReport) resource;
-		DiagnosticReport retObservation = (DiagnosticReport) checkForExisting(client, entry, diagnosticReport.getIdentifier(), DiagnosticReport.IDENTIFIER,  DiagnosticReportResourceProvider.getType(), response);
-		if (retObservation != null) {
-			return retObservation;
-		}
+		// diagnosticReport = (DiagnosticReport) resource;
+		// DiagnosticReport retObservation = (DiagnosticReport) checkForExisting(client, entry, diagnosticReport.getIdentifier(), DiagnosticReport.IDENTIFIER,  DiagnosticReportResourceProvider.getType(), response);
+		// if (retObservation != null) {
+		// 	return retObservation;
+		// }
 
+		diagnosticReport = (DiagnosticReport) createResource(client, entry, DiagnosticReportResourceProvider.getType(), response);
+		
 		updateReference(diagnosticReport.getSubject());
 		for (Reference reference : diagnosticReport.getPerformer()) {
 			updateReference(reference);	
@@ -346,8 +337,6 @@ public class SystemTransactionProvider {
 			updateReference(reference);	
 		}
 
-		diagnosticReport = (DiagnosticReport) createResource(client, entry, DiagnosticReportResourceProvider.getType(), response);
-		
 		return diagnosticReport;
 	}
 
@@ -364,12 +353,14 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		procedure = (Procedure) resource;
-		Procedure retProcedure = (Procedure) checkForExisting(client, entry, procedure.getIdentifier(), Procedure.IDENTIFIER, ProcedureResourceProvider.getType(), response);
-		if (retProcedure != null) {
-			return retProcedure;
-		}
+		// procedure = (Procedure) resource;
+		// Procedure retProcedure = (Procedure) checkForExisting(client, entry, procedure.getIdentifier(), Procedure.IDENTIFIER, ProcedureResourceProvider.getType(), response);
+		// if (retProcedure != null) {
+		// 	return retProcedure;
+		// }
 
+		procedure = (Procedure) createResource(client, entry, ProcedureResourceProvider.getType(), response);
+		
 		updateReference(procedure.getSubject());
 		ProcedurePerformerComponent performer = procedure.getPerformerFirstRep();
 		if (performer != null && !performer.isEmpty()) {
@@ -377,8 +368,6 @@ public class SystemTransactionProvider {
 		}
 		updateReference(procedure.getAsserter());
 
-		procedure = (Procedure) createResource(client, entry, ProcedureResourceProvider.getType(), response);
-		
 		return procedure;
 	}
 
@@ -412,33 +401,40 @@ public class SystemTransactionProvider {
 
 	private Resource createResource(IGenericClient client, BundleEntryComponent entry, String resourceType, BundleEntryResponseComponent response) {
 		Resource resource = entry.getResource();
-		MethodOutcome outcome = client.create().resource(resource).prettyPrint().encodedJson().execute();
-		if (outcome.getCreated()) {
-			IIdType resourceId = outcome.getId();
+		MethodOutcome outcome;
+		boolean created = false;
+		if (resource.getIdElement() != null && !resource.isEmpty()) {
+			outcome = client.update().resource(resource).prettyPrint().encodedJson().execute();
+		} else {
+			outcome = client.create().resource(resource).prettyPrint().encodedJson().execute();
+			created = true;
+		}
+
+		String resourceId = outcome.getId().getIdPart();
+		OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+		if (oo == null) {
+			referenceIds.put(resourceType + "/" + resource.getIdElement().getIdPart(), resourceType +"/" + resourceId);
+
 			if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
-				addReference(entry.getFullUrl(), resourceType, resource.getIdElement().getIdPart(), resourceId.getIdPart());
+				addReference(entry.getFullUrl(), resourceType, resource.getIdElement().getIdPart(), resourceId);
 			}
 
-			response.setStatus(
-					String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
+			if (created) {
+				response.setStatus(
+						String.valueOf(HttpStatus.CREATED.value()) + " " + HttpStatus.CREATED.getReasonPhrase());
+			} else {
+				response.setStatus(
+						String.valueOf(HttpStatus.OK.value()) + " " + HttpStatus.OK.getReasonPhrase());				
+			}
+
 			response.setLocation(resourceType + "/" + resourceId);
 
 			entry.setFullUrl(resourceType + "/" + resourceId);
 			if (outcome.getResource() != null && !outcome.getResource().isEmpty()) {
 				entry.setResource((Resource) outcome.getResource());
 			}
-
-			resource.setId(resourceId);
 		} else {
-			response.setStatus(String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()) + " "
-					+ HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
-
-			OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
-			if (oo != null && !oo.isEmpty()) {
-				response.setOutcome(oo);
-			} 
-
-			resource = null;
+			throw new UnprocessableEntityException("Unable to create/update " + resourceType + " : " + resourceId, oo);
 		}
 
 		entry.setRequest(null);
@@ -521,15 +517,14 @@ public class SystemTransactionProvider {
 
 		System.out.println("++++++++++++++++++++++++");
 		
-		messageHeader = (MessageHeader) resource;
+		// messageHeader = (MessageHeader) resource;
+		messageHeader = (MessageHeader) createResource(client, entry, MessageHeaderResourceProvider.getType(), response);
 
 		// MessageHeaders will not be checked for the duplication (not identifier exists)		
 		for (Reference focuseReference : messageHeader.getFocus()) {
 			updateReference(focuseReference);
 		}
 		
-		messageHeader = (MessageHeader) createResource(client, entry, MessageHeaderResourceProvider.getType(), response);
-
 		entry.setRequest(null);
 	
 		return messageHeader;
@@ -550,21 +545,23 @@ public class SystemTransactionProvider {
 
 		System.out.println("++++++++++++++++++++++++");
 		
-		composition = (Composition) resource;
+		// composition = (Composition) resource;
 
 		// Search if this composition exists
-		Composition existComposition = searchComposition(client, composition);
-		if (existComposition != null) {
-			// Composition exists
-			IdType resourceId = existComposition.getIdElement();
-			addReference(entry.getFullUrl(), CompositionResourceProvider.getType(), resource.getIdElement().getIdPart(), resourceId.getIdPart());
-			response.setStatus(HttpStatus.CONFLICT.name() + "- Composition Exists");
-			response.setLocation(existComposition.getIdElement().asStringValue());
-			entry.setRequest(null);
-			entry.setFullUrl(CompositionResourceProvider.getType() + "/" + resourceId.getIdPart());
+		// Composition existComposition = searchComposition(client, composition);
+		// if (existComposition != null) {
+		// 	// Composition exists
+		// 	IdType resourceId = existComposition.getIdElement();
+		// 	addReference(entry.getFullUrl(), CompositionResourceProvider.getType(), resource.getIdElement().getIdPart(), resourceId.getIdPart());
+		// 	response.setStatus(HttpStatus.CONFLICT.name() + "- Composition Exists");
+		// 	response.setLocation(existComposition.getIdElement().asStringValue());
+		// 	entry.setRequest(null);
+		// 	entry.setFullUrl(CompositionResourceProvider.getType() + "/" + resourceId.getIdPart());
 
-			return existComposition;
-		}
+		// 	return existComposition;
+		// }
+
+		composition = (Composition) createResource(client, entry, CompositionResourceProvider.getType(), response);
 
 		updateReference(composition.getSubject());
 		for (Reference author: composition.getAuthor()) {
@@ -596,8 +593,6 @@ public class SystemTransactionProvider {
 			}
 		}
 		
-		composition = (Composition) createResource(client, entry, CompositionResourceProvider.getType(), response);
-
 		entry.setRequest(null);
 	
 		return composition;
@@ -661,7 +656,6 @@ public class SystemTransactionProvider {
 			response = entry.getResponse();
 			Resource resource = entry.getResource();
 			if (resource != null && !resource.isEmpty()) {
-				String resourceId = null;
 				if (resource instanceof Patient) {
 					patient = processPostPatient(client, entry);
 					patientId = patient.getIdElement().getIdPart();
@@ -748,6 +742,17 @@ public class SystemTransactionProvider {
 			}
 		}		
 
+		// DiagnosticReport
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof DiagnosticReport) {
+					processPostDiagnositicReport(client, entry);
+				}
+			}
+		}		
+		
 		// MessageHeader
 		for (BundleEntryComponent entry : postEntries) {
 			response = entry.getResponse();
