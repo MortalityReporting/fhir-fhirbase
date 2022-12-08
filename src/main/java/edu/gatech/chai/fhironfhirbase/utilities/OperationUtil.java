@@ -71,17 +71,13 @@ public class OperationUtil {
 			outcome = client.create().resource(resource).prettyPrint().encodedJson().execute();
 		}
 		
-		if (outcome.getResponseStatusCode() != 201 && outcome.getResponseStatusCode() != 200) {
-			if (outcome.getResource() != null) {
-				resource = (Resource) outcome.getResource();
-			}
-		} else {
-			OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
-			if (oo != null && !oo.isEmpty()) {
-				throw new UnprocessableEntityException("Resource Create Failed with " + outcome.getResponseStatusCode()  , oo);
-			} else {
-				throw new UnprocessableEntityException("Resource Create Failed with "  + outcome.getResponseStatusCode());
-			}
+		OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+		if (oo != null && !oo.isEmpty()) {
+			throw new UnprocessableEntityException("Resource Create Failed with " + outcome.getResponseStatusCode()  , oo);
+		}
+
+		if (outcome.getResource() != null) {
+			resource = (Resource) outcome.getResource();
 		}
 
 		return resource;
