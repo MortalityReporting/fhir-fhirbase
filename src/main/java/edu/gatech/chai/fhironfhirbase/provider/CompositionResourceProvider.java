@@ -771,7 +771,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
 			@IdParam(optional=true) IdType theCompositionId,
 			@OperationParam(name = "id") UriOrListParam theIds, 
-			@OperationParam(name = Composition.SP_PATIENT) ParametersParameterComponent thePatient,
+			@OperationParam(name = Composition.SP_PATIENT) List<ParametersParameterComponent> thePatients,
 			@OperationParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) StringOrListParam theEdrsFileNumber,
 			@OperationParam(name = CompositionResourceProvider.SP_MDI_CASE_NUMBER) StringOrListParam theMdiCaseNumber,
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
@@ -841,62 +841,64 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			shouldQuery = true;
 		}
 
-		if (thePatient != null) {
-			for (ParametersParameterComponent patientParam : thePatient.getPart()) {
-				if ("family".equals(patientParam.getName())) {
-					StringType theFamilies = (StringType) patientParam.getValue();
-					if (theFamilies != null && !theFamilies.isEmpty()) {
-						String[] familyStrings = theFamilies.asStringValue().split(",");
-						List<String> familySearchParams = new ArrayList<String>();
-						for (String family : familyStrings) {
-							familySearchParams.add(family);
+		if (thePatients != null) {
+			for (ParametersParameterComponent thePatient : thePatients) {
+				for (ParametersParameterComponent patientParam : thePatient.getPart()) {
+					if (Patient.SP_FAMILY.equals(patientParam.getName())) {
+						StringType theFamilies = (StringType) patientParam.getValue();
+						if (theFamilies != null && !theFamilies.isEmpty()) {
+							String[] familyStrings = theFamilies.asStringValue().split(",");
+							List<String> familySearchParams = new ArrayList<String>();
+							for (String family : familyStrings) {
+								familySearchParams.add(family);
+							}
+							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
+							shouldQuery = true;
+						}		
+					} else if (Patient.SP_GIVEN.equals(patientParam.getName())) {
+						StringType theGivens = (StringType) patientParam.getValue();
+						if (theGivens != null && !theGivens.isEmpty()) {
+							String[] givenStrings = theGivens.asStringValue().split(",");
+							List<String> givenSearchParams = new ArrayList<String>();
+							for (String given : givenStrings) {
+								givenSearchParams.add(given);
+							}
+							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));
+							shouldQuery = true;		
 						}
-						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
-						shouldQuery = true;
-					}		
-				} else if ("given".equals(patientParam.getName())) {
-					StringType theGivens = (StringType) patientParam.getValue();
-					if (theGivens != null && !theGivens.isEmpty()) {
-						String[] givenStrings = theGivens.asStringValue().split(",");
-						List<String> givenSearchParams = new ArrayList<String>();
-						for (String given : givenStrings) {
-							givenSearchParams.add(given);
+					} else if (Patient.SP_GENDER.equals(patientParam.getName())) {
+						StringType theGenders = (StringType) patientParam.getValue();
+						if (theGenders != null && !theGenders.isEmpty()) {
+							String[] genderStrings = theGenders.asStringValue().split(",");
+							List<String> genderSearchParams = new ArrayList<String>();
+							for (String gender : genderStrings) {
+								genderSearchParams.add(gender);
+							}
+							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
+							shouldQuery = true;
 						}
-						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));
-						shouldQuery = true;		
-					}
-				} else if ("gender".equals(patientParam.getName())) {
-					StringType theGenders = (StringType) patientParam.getValue();
-					if (theGenders != null && !theGenders.isEmpty()) {
-						String[] genderStrings = theGenders.asStringValue().split(",");
-						List<String> genderSearchParams = new ArrayList<String>();
-						for (String gender : genderStrings) {
-							genderSearchParams.add(gender);
-						}
-						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
-						shouldQuery = true;
-					}
-				} else if ("birthdate".equals(patientParam.getName())) {
-					StringType birthDate = (StringType) patientParam.getValue();
-					DateParam date = getDateParam(birthDate.asStringValue());
-					ParamPrefixEnum prefix = date.getPrefix();
-					if (prefix == null) {
-						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
-					} else {
-						if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == prefix) {
-							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(date.getValue())));
-						} else if (ParamPrefixEnum.GREATERTHAN == prefix) {
-							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.after().day(date.getValue())));
-						} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == prefix) {
-							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(date.getValue())));
-						} else if (ParamPrefixEnum.LESSTHAN == prefix) {
-							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.before().day(date.getValue())));
-						} else {
+					} else if (Patient.SP_BIRTHDATE.equals(patientParam.getName())) {
+						StringType birthDate = (StringType) patientParam.getValue();
+						DateParam date = getDateParam(birthDate.asStringValue());
+						ParamPrefixEnum prefix = date.getPrefix();
+						if (prefix == null) {
 							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
-						}						
-					}
+						} else {
+							if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == prefix) {
+								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(date.getValue())));
+							} else if (ParamPrefixEnum.GREATERTHAN == prefix) {
+								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.after().day(date.getValue())));
+							} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == prefix) {
+								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(date.getValue())));
+							} else if (ParamPrefixEnum.LESSTHAN == prefix) {
+								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.before().day(date.getValue())));
+							} else {
+								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
+							}						
+						}
 
-					shouldQuery = true;
+						shouldQuery = true;
+					}
 				}
 			}
 		}
