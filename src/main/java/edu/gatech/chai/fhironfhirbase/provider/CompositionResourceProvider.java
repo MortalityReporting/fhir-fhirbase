@@ -104,17 +104,17 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	 * Path: <b>Observation.valueDateTime</b><br>
 	 * </p>
 	 */
-	@SearchParamDefinition(name="death-date-actual", path="Observation.valueDateTime", description="Actual Date of Death", type="date" )
-	public static final String SP_DEATH_DATE_ACTUAL = "death-date-actual";
+	@SearchParamDefinition(name="death-date-presumed", path="Observation.valueDateTime", description="Actual Date of Death", type="date" )
+	public static final String SP_DEATH_DATE_PRESUMED = "death-date-presumed";
 	/**
-   	 * <b>Fluent Client</b> search parameter constant for <b>death-date-actual</b>
+   	 * <b>Fluent Client</b> search parameter constant for <b>death-date-presumed</b>
 	 * <p>
-	 * Description: <b>Actual Date of Death</b><br>
+	 * Description: <b>Presumed Date of Death</b><br>
    	 * Type: <b>date</b><br>
 	 * Path: <b>Observation.valueDateTime</b><br>
 	 * </p>
    	 */
-	public static final ca.uhn.fhir.rest.gclient.DateClientParam DEATH_DATE_ACTUAL = new ca.uhn.fhir.rest.gclient.DateClientParam(SP_DEATH_DATE_ACTUAL);
+	public static final ca.uhn.fhir.rest.gclient.DateClientParam DEATH_DATE_PRESUMED = new ca.uhn.fhir.rest.gclient.DateClientParam(SP_DEATH_DATE_PRESUMED);
 
 	/**
 	 * Search parameter: <b>death-date-pronounced</b>
@@ -300,7 +300,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Composition.SP_TYPE) TokenOrListParam theOrTypes,
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
-			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE_ACTUAL) DateRangeParam theDeathDateActual,
+			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRESUMED) DateRangeParam theDeathDatePresumed,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED) DateRangeParam theDeathDatePronounced,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE) DateRangeParam theDeathDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) TokenOrListParam theEdrsFileNumber,
@@ -344,16 +344,23 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		// Set up join statements.
 		if (theSubjects != null || thePatients != null) {
+			// join patient and composition subject tables
 			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 		}
 
-		if (theDeathLocations != null || theDeathDate != null) {
+		if (theDeathLocations != null || theDeathDate != null || theDeathDatePronounced != null || theDeathDatePresumed != null) {
+			// join observation and composition tables on subject reference
 			fromStatement += " join observation o on comp.resource->'subject'->>'reference' = o.resource->'subject'->>'reference'";
 		}
 
 		if (theDeathLocations != null) {
 			fromStatement += " join location l on o.resource->'extension'->0->>'url' = 'http://hl7.org/fhir/us/vrdr/StructureDefinition/Observation-Location' " 
 				+ "and o.resource->'extension'->0->'valueReference'->>'reference' = concat('Location/', l.resource->>'id')";
+		}
+
+		if (theDeathDate != null || theDeathDatePronounced != null) {
+			// the pronunced death date is available in the component section
+			fromStatement += ", jsonb_array_elements(o.resource->'component') component, jsonb_array_elements(component->'code'->'coding') component_codings";
 		}
 
 		boolean returnAll = true;
@@ -393,23 +400,55 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			whereParameters.add(districtOrWhere);
 		}
 
-		if (theDeathDateActual != null) {
-			// TODO: Implement this
-		}
-
-		if (theDeathDatePronounced != null) {
-			// TODO: Implement this
-		}
-
 		if (theDeathDate != null) {
-			// TODO: revisit and implement this to be search observation.valueDateTime and observation.component
+			// add presumed date to path
 			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
 			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+			
+			// check observation.valueDateTime
 			String deathDateWhere = constructDateRangeWhereParameter(theDeathDate, "o", "valueDateTime");
+
+			String componentWhere = "";
+			String prouncedDateWhere = constructDateRangeAliasPathWhere(theDeathDate, "component", "valueDateTime");
+			if (prouncedDateWhere != null && !prouncedDateWhere.isEmpty()) {
+				componentWhere = "(component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb and " + prouncedDateWhere + ")";
+			}
+
+			if (componentWhere != null && !componentWhere.isEmpty()) {
+				if (deathDateWhere != null && !deathDateWhere.isEmpty()) {
+					deathDateWhere += " or " + componentWhere;
+				} else {
+					deathDateWhere = componentWhere;
+				}
+			}
 
 			if (deathDateWhere != null && !deathDateWhere.isEmpty()) {
 				whereParameters.add(deathDateWhere);
 			}
+		} else {
+			// If theDeathDate is selected, then presumed and pronunced both will be examined with 'OR'. Thus, presumed
+			// and pronounced will only be examined when deathdate search is not used. 
+			if (theDeathDatePresumed != null) {
+				// add presumed date to path
+				fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
+				addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+				
+				// check observation.valueDateTime
+				String deathDateWhere = constructDateRangeWhereParameter(theDeathDate, "o", "valueDateTime");
+				if (deathDateWhere != null && !deathDateWhere.isEmpty()) {
+					whereParameters.add(deathDateWhere);
+				}
+			}
+	
+			if (theDeathDatePronounced != null) {
+				// check pronounced death tiem component valueDate
+				// Add component code in where statement
+				whereParameters.add("component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb");
+				String prouncedDateWhere = constructDateRangeAliasPathWhere(theDeathDate, "component", "valueDateTime");
+				if (prouncedDateWhere != null && !prouncedDateWhere.isEmpty()) {
+					whereParameters.add(prouncedDateWhere);
+				}
+			}	
 		}
 
 		if (theOrTypes != null) {
@@ -775,7 +814,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) StringOrListParam theEdrsFileNumber,
 			@OperationParam(name = CompositionResourceProvider.SP_MDI_CASE_NUMBER) StringOrListParam theMdiCaseNumber,
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
-			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_ACTUAL, max = 2) DateOrListParam theDeathDateActual,  
+			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRESUMED, max = 2) DateOrListParam theDeathDatePresumed,  
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED, max = 2) DateOrListParam theDeathDatePronounced,
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE, max = 2) DateOrListParam theProfileDeathDateRange) {
 				
@@ -917,6 +956,24 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				);
 
 			shouldQuery = true;
+		}
+
+		// Death Date Pronounced
+		if (theDeathDatePronounced != null) {
+			IQuery<IBaseBundle> queryDates = queryForDates(query, theDeathDatePronounced);
+			if (queryDates != null) {
+				query = queryDates;
+				shouldQuery = true;
+			}
+		}
+
+		// Death Date Presumed
+		if (theDeathDatePresumed != null) {
+			IQuery<IBaseBundle> queryDates = queryForDates(query, theDeathDatePresumed);
+			if (queryDates != null) {
+				query = queryDates;
+				shouldQuery = true;
+			}
 		}
 
 		// Death Date 

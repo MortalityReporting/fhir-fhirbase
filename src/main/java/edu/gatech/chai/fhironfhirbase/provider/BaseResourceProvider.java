@@ -288,6 +288,39 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return dateWhere;
 	}
 
+	protected String constructDateRangeAliasPathWhere(DateRangeParam theDateRange, String aliasPath, String column) {
+		String dateWhere = "";
+
+		DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'");
+		if (theDateRange.getLowerBound() != null && !theDateRange.getLowerBound().isEmpty()
+			&& theDateRange.getUpperBound() != null && !theDateRange.getUpperBound().isEmpty()) {
+			// We have both lower and upper.
+			String lowerBound = formatter.format(theDateRange.getLowerBoundAsInstant());
+			String upperBound = formatter.format(theDateRange.getUpperBoundAsInstant());
+			dateWhere = aliasPath + "->>'" + column + "' >= '" + lowerBound + "' and " + 
+						aliasPath + "->>'" + column + "' <= '" + upperBound + "'";
+		} else if (theDateRange.getLowerBound() != null && !theDateRange.getLowerBound().isEmpty()) {
+			String lowerBound = formatter.format(theDateRange.getLowerBoundAsInstant());
+			if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == theDateRange.getLowerBound().getPrefix()) {
+				dateWhere = aliasPath + "->>'" + column + "' >= '" + lowerBound + "'";
+			} else if (ParamPrefixEnum.GREATERTHAN == theDateRange.getLowerBound().getPrefix()) {
+				dateWhere = aliasPath + "->>'" + column + "' > '" + lowerBound + "'";
+			} else {
+				dateWhere = aliasPath + "->>'" + column + "' = '" + lowerBound + "'";
+			}
+		} else {
+			String upperBound = formatter.format(theDateRange.getUpperBoundAsInstant());
+			if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == theDateRange.getUpperBound().getPrefix()) {
+				dateWhere = aliasPath + "->>'" + column + "' <= '" + upperBound + "'";
+			} else if (ParamPrefixEnum.LESSTHAN == theDateRange.getUpperBound().getPrefix()) {
+				dateWhere = aliasPath + "->>'" + column + "' < '" + upperBound + "'";
+			} else {
+				dateWhere = aliasPath + "->>'" + column + "' = '" + upperBound + "'";
+			}
+		}
+		return dateWhere;
+	}
+
 	protected String constructDateWhereParameter(DateParam theDate, String tableAlias, String column) {
 		Format formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		String dateString = formatter.format(theDate.getValue());
