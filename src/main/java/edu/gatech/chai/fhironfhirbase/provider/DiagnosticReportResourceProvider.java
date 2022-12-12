@@ -23,25 +23,19 @@ import java.util.UUID;
 
 import javax.annotation.PostConstruct;
 
-import org.hl7.fhir.exceptions.FHIRException;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.CodeableConcept;
-import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.MessageHeader;
-import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
-import org.hl7.fhir.r4.model.UriType;
 import org.hl7.fhir.r4.model.UrlType;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.DiagnosticReport.DiagnosticReportMediaComponent;
 import org.hl7.fhir.r4.model.MessageHeader.MessageSourceComponent;
-import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.hl7.fhir.r4.model.Parameters.ParametersParameterComponent;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
@@ -69,7 +63,6 @@ import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.IQuery;
-import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.StringOrListParam;
@@ -77,7 +70,6 @@ import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.param.UriOrListParam;
 import ca.uhn.fhir.rest.param.UriParam;
-import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.MdiProfileUtil;
@@ -405,8 +397,11 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			Bundle respMessageBundle = client.search().forResource(Bundle.class)
 				.where(Bundle.MESSAGE.hasId(mhId)).returnBundle(Bundle.class).execute();
 			if (respMessageBundle != null) {
-				// We have the Message bundle. Return this.
-				return respMessageBundle;
+				// We have the search bundle that contains message bundle. Since we are searching
+				// one message bundle, just send the first one. 
+				if (respMessageBundle.getTotal() > 0) {
+					return (Bundle) respMessageBundle.getEntryFirstRep().getResource();
+				}
 			}
 		} else {
 			// Ceate MessageHeader
@@ -520,7 +515,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 
 	@Operation(name = "$toxicology-message", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
 	public Bundle generateToxicologyMessageOperation(RequestDetails theRequestDetails, 
-			@IdParam(optional=true) IdType theDiagnosticReportId,
+			@IdParam(optional = true) IdType theDiagnosticReportId,
 			@OperationParam(name = "id") UriOrListParam theIds, 
 			@OperationParam(name = DiagnosticReport.SP_PATIENT) ParametersParameterComponent thePatient,
 			@OperationParam(name = DiagnosticReportResourceProvider.SP_MDI_CASE_NUMBER) StringOrListParam theMdiCaseNumber,
@@ -533,8 +528,6 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		int totalSize = 0;
 
 		Bundle retMessageBundle = new Bundle();
-
-		OperationOutcome outcome = new OperationOutcome();
 		if (theDiagnosticReportId != null) {
 			// this is read by the id. Get the diagnostic report and construct message bundle.
 			DiagnosticReport diagnosticReport = (DiagnosticReport) readDiagnosticReport(theDiagnosticReportId);
@@ -542,14 +535,15 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 				ThrowFHIRExceptions.unprocessableEntityException("DiagnosticReport.id, " + theDiagnosticReportId.asStringValue() + " does not exist");
 			}
 
-			return constructMessageBundleFromDiagnosticReport(client, diagnosticReport);
+			return  constructMessageBundleFromDiagnosticReport(client, diagnosticReport);
 		}
 
 		if (theIds != null) {
 			// We search on IDs
 			retMessageBundle.setType(BundleType.SEARCHSET);
 			for (UriParam theId : theIds.getValuesAsQueryTokens()) {
-				DiagnosticReport diagnosticReport = (DiagnosticReport) readDiagnosticReport(theDiagnosticReportId);
+				IdType myId = new IdType(theId.getValue());
+				DiagnosticReport diagnosticReport = (DiagnosticReport) readDiagnosticReport(myId);
 				if (diagnosticReport != null) {
 					Bundle messageBundle = constructMessageBundleFromDiagnosticReport(client, diagnosticReport);
 					BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(messageBundle.getIdElement().asStringValue()).setResource(messageBundle);
