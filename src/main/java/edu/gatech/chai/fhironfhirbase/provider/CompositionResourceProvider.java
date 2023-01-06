@@ -872,11 +872,11 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		Bundle compositionsBundle = null;
 		IQuery<IBaseBundle> query = client.search().forResource(Composition.class);
 
-		if (addTokenToQuery(query, EDRS_FILE_NUMBER, theEdrsFileNumber) == true) {
+		if (addTokenToIdentifierQuery(query, EDRS_FILE_NUMBER, theEdrsFileNumber) == true) {
 			shouldQuery = true;
 		}
 
- 		if (addTokenToQuery(query, MDI_CASE_NUMBER, theMdiCaseNumber) == true) {
+ 		if (addTokenToIdentifierQuery(query, MDI_CASE_NUMBER, theMdiCaseNumber) == true) {
 			shouldQuery = true;
 		}
 

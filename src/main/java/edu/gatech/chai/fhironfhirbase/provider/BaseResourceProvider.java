@@ -543,7 +543,7 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return whereCodings;
 	}
 
-	protected boolean addTokenToQuery (IQuery<IBaseBundle> query, TokenClientParam clientParam, StringOrListParam theTokenList) {
+	protected boolean addTokenToIdentifierQuery (IQuery<IBaseBundle> query, TokenClientParam clientParam, StringOrListParam theTokenList) {
 		boolean retVal = false;
 
 		if (theTokenList == null) {

@@ -383,6 +383,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 	private Bundle constructMessageBundleFromDiagnosticReport(IGenericClient client, DiagnosticReport diagnosticReport) {
 		Bundle retMessageBundle = new Bundle();
 		MessageHeader messageHeader;
+		Bundle originalMessageBundle = null;
 		
 		// First find if we have a message header for this report.
 		String focusId = DiagnosticReportResourceProvider.getType() + "/" + diagnosticReport.getIdElement().getIdPart();
@@ -400,7 +401,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 				// We have the search bundle that contains message bundle. Since we are searching
 				// one message bundle, just send the first one. 
 				if (respMessageBundle.getTotal() > 0) {
-					return (Bundle) respMessageBundle.getEntryFirstRep().getResource();
+					originalMessageBundle = (Bundle) respMessageBundle.getEntryFirstRep().getResource();
 				}
 			}
 		} else {
@@ -412,13 +413,15 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			messageHeader.addFocus(new Reference(new IdType(diagnosticReport.getIdElement())));
 		}
 
+		// Add profile to Message Bundle
+		retMessageBundle.getMeta().addProfile("http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-message-tox-to-mdi");
+
 		// Create a message bundle and add to messageheader to the entry
-		BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(messageHeader.getId()).setResource(messageHeader);
+		String messageHeaderLocalUrl = MessageHeaderResourceProvider.getType() + "/" + messageHeader.getIdElement().getIdPart();
+		BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(messageHeaderLocalUrl).setResource(messageHeader);
 		retMessageBundle.addEntry(bundleEntryComponent); 
 
 		// fill out other required fields
-		retMessageBundle.setId(new IdType("Bundle", UUID.randomUUID().toString()));
-		retMessageBundle.setIdentifier(OperationUtil.generateIdentifier(OperationUtil.RAVEN_TOX_SYSTEM));
 		retMessageBundle.setType(BundleType.MESSAGE);
 
 		// Add diagnosticreport to Bundle.entry
@@ -503,13 +506,22 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 				retMessageBundle.addEntry(bundleEntryComponent);
 			}
 		}
-		 for (Reference ref : references) {
+		for (Reference ref : references) {
 			bundleEntryComponent = makeEntryResourceToEntry(client, ref);
 			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
 				retMessageBundle.addEntry(bundleEntryComponent);
 			}
 		}
-		
+
+		if (originalMessageBundle != null) {
+			retMessageBundle.setId(originalMessageBundle.getIdElement());
+			retMessageBundle.setIdentifier(originalMessageBundle.getIdentifier());
+		} else {
+			retMessageBundle.setId(new IdType("Bundle", UUID.randomUUID().toString()));
+			retMessageBundle.setIdentifier(OperationUtil.generateIdentifier(OperationUtil.RAVEN_TOX_SYSTEM));	
+		}
+		client.update().resource(retMessageBundle).prettyPrint().encodedJson().execute();
+
 		return retMessageBundle;
 	}
 
@@ -562,11 +574,11 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 
 		IQuery<IBaseBundle> query = client.search().forResource(DiagnosticReport.class);
 
-		if (addTokenToQuery(query, MDI_CASE_NUMBER, theMdiCaseNumber) == true) {
+		if (addTokenToIdentifierQuery(query, MDI_CASE_NUMBER, theMdiCaseNumber) == true) {
 			shouldQuery = true;
 		}
 
- 		if (addTokenToQuery(query, TOX_LAB_CASE_NUMBER, theToxLabCaseNumber) == true) {
+ 		if (addTokenToIdentifierQuery(query, TOX_LAB_CASE_NUMBER, theToxLabCaseNumber) == true) {
 			shouldQuery = true;
 		}
 
