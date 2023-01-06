@@ -516,11 +516,12 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		if (originalMessageBundle != null) {
 			retMessageBundle.setId(originalMessageBundle.getIdElement());
 			retMessageBundle.setIdentifier(originalMessageBundle.getIdentifier());
+			client.update().resource(retMessageBundle).prettyPrint().encodedJson().execute();
 		} else {
 			retMessageBundle.setId(new IdType("Bundle", UUID.randomUUID().toString()));
 			retMessageBundle.setIdentifier(OperationUtil.generateIdentifier(OperationUtil.RAVEN_TOX_SYSTEM));	
+			client.create().resource(retMessageBundle).prettyPrint().encodedJson().execute();
 		}
-		client.update().resource(retMessageBundle).prettyPrint().encodedJson().execute();
 
 		return retMessageBundle;
 	}
