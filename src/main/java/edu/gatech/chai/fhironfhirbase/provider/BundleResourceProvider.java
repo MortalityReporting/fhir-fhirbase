@@ -54,6 +54,7 @@ import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
+import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
@@ -200,6 +201,7 @@ public class BundleResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Bundle.SP_RES_ID) TokenParam theBundleId,
 			@OptionalParam(name = Bundle.SP_IDENTIFIER) TokenParam theBundleIdentifier,
 			@OptionalParam(name = Bundle.SP_MESSAGE) ReferenceOrListParam theMessages,
+			@OptionalParam(name = Bundle.SP_TYPE) TokenOrListParam theTypes,
 			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
@@ -242,6 +244,35 @@ public class BundleResourceProvider extends BaseResourceProvider {
 				whereParameters.add("b.resource->>'type' = 'message'");
 				whereParameters.add(messageEntries);
 
+				returnAll = false;
+			}
+		}
+
+		if (theTypes != null) {
+			String typeOr = "";
+			for (TokenParam type : theTypes.getValuesAsQueryTokens()) {
+				if (typeOr.isBlank()) {
+					typeOr = "b.resource->>'type' = '" + type.getValue() + "'";
+				} else {
+					typeOr += " or b.resource->>'type' = '" + type.getValue() + "'";
+				}
+
+				String typeUrl = type.getSystem();
+				if (typeUrl != null && "http://config.raven.app/code".equalsIgnoreCase(typeUrl)) {
+					// Search Raven extension type code.
+					fromStatement = constructFromStatementPath(fromStatement, "types", "b.resource->'_type'->'extension'");
+					if (typeOr.isBlank()) {
+						typeOr = constructTypeWhereParameter(theTypes, "url", "valueCode");
+					} else {
+						typeOr += " or " + constructTypeWhereParameter(theTypes, "url", "valueCode");
+					}
+				}
+			}
+
+			// extended code search
+			if (!typeOr.isBlank()) {
+				typeOr = "(" + typeOr + ")";
+				whereParameters.add(typeOr);
 				returnAll = false;
 			}
 		}

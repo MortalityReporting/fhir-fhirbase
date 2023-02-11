@@ -598,6 +598,30 @@ public class SystemTransactionProvider {
 		return composition;
 	}
 
+	private Bundle processPostBundle(IGenericClient client, BundleEntryComponent entry) {
+		Bundle bundle = null;
+		BundleEntryResponseComponent response = entry.getResponse();
+
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
+		}
+
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Bundle)) {
+			return null;
+		}
+		
+		bundle = (Bundle) createResource(client, entry, BundleResourceProvider.getType(), response);
+
+		// Bundle has an entry. If it's not empty, process that
+		processEntries(client, bundle.getEntry());
+		
+		entry.setRequest(null);
+	
+		return bundle;
+	}
+
 	private boolean checkIfDocumentExist(IGenericClient client, List<BundleEntryComponent> entries) {
 		boolean retVal = false;
 
@@ -619,7 +643,7 @@ public class SystemTransactionProvider {
 	 * @param client
 	 * @param entries
 	 */
-	private void processBatch(IGenericClient client, List<BundleEntryComponent> entries) {
+	private void processEntries(IGenericClient client, List<BundleEntryComponent> entries) {
 		List<BundleEntryComponent> postEntries = new ArrayList<BundleEntryComponent>();
 		BundleEntryResponseComponent response;
 
@@ -650,15 +674,15 @@ public class SystemTransactionProvider {
 		}
 
 		// Process Patient first from POST entries.
-		String patientId = null;
-		Patient patient = null;
+		// String patientId = null;
+		// Patient patient = null;
 		for (BundleEntryComponent entry : postEntries) {
 			response = entry.getResponse();
 			Resource resource = entry.getResource();
 			if (resource != null && !resource.isEmpty()) {
 				if (resource instanceof Patient) {
-					patient = processPostPatient(client, entry);
-					patientId = patient.getIdElement().getIdPart();
+					processPostPatient(client, entry);
+					// patientId = patient.getIdElement().getIdPart();
 				}
 			}
 		}
@@ -763,6 +787,17 @@ public class SystemTransactionProvider {
 				}
 			}
 		}		
+
+		// Bundle
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Bundle) {
+					processPostBundle(client, entry);
+				}
+			}
+		}		
 		
 	}
 
@@ -794,16 +829,18 @@ public class SystemTransactionProvider {
 			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
 		}
 
-		// First save this bundle to fhirbase
-		MethodOutcome outcome = client.create().resource(theBundle).prettyPrint().encodedJson().execute();
-		if (!outcome.getCreated()) {
-			// The bundle couldn't be created in the fhirbase.
-			OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
-			if (oo != null && !oo.isEmpty()) {
-				throw new InternalErrorException("Bundle Transanction Error", oo);
-			} else {
-				throw new InternalErrorException("Bundle Transanction Error");
-			}
+		// First save this bundle to fhirbase 
+		MethodOutcome outcome;
+		if (theBundle.getIdElement() != null) {
+			outcome = client.update().resource(theBundle).prettyPrint().encodedJson().execute();
+		} else {
+			outcome = client.create().resource(theBundle).prettyPrint().encodedJson().execute();
+		}
+
+		// The bundle couldn't be created in the fhirbase.
+		OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
+		if (oo != null && !oo.isEmpty()) {
+			throw new InternalErrorException("Bundle Transanction Operation Error", oo);
 		}
 
 		referenceIds = new HashMap<String, String>();
@@ -819,7 +856,7 @@ public class SystemTransactionProvider {
 			// 5. Conditional Reference
 
 			processDelete(client, entries);
-			processBatch(client, entries);
+			processEntries(client, entries);
 			theBundle.setType(BundleType.BATCHRESPONSE);
 
 			break;
@@ -828,7 +865,7 @@ public class SystemTransactionProvider {
 			// One is VRDR, the other is Toxicology document
 			// We post all in the entries (based on VRDR resources) to server.
 			processDelete(client, entries);
-			processBatch(client, entries);
+			processEntries(client, entries);
 
 			break;
 		default:
@@ -893,7 +930,7 @@ public class SystemTransactionProvider {
 			// 5. Conditional Reference
 
 			processDelete(client, entries);
-			processBatch(client, entries);
+			processEntries(client, entries);
 			
 			theBundle.setType(BundleType.BATCHRESPONSE);
 

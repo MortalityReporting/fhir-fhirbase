@@ -223,6 +223,10 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 	}
 
 	protected String constructTypeWhereParameter(TokenOrListParam theOrTypes) {
+		return constructTypeWhereParameter(theOrTypes, "system", "code");
+	}
+
+	protected String constructTypeWhereParameter(TokenOrListParam theOrTypes, String systemName, String valueName) {
 		List<TokenParam> types = theOrTypes.getValuesAsQueryTokens();
 
 		String whereCodings = "";
@@ -235,13 +239,13 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 					whereCodings += " OR ";
 				}
 				if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
-					whereCodings += "types @> '{\"system\": \"" + system + "\", \"code\": \"" + value + "\"}'::jsonb";
+					whereCodings += "types @> '{\"" + systemName + "\": \"" + system + "\", \"" + valueName + "\": \"" + value + "\"}'::jsonb";
 				} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
-					whereCodings += "types @> '{\"system\": \"" + system + "\"}'::jsonb";
+					whereCodings += "types @> '{\"" + systemName + "\": \"" + system + "\"}'::jsonb";
 				} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
-					whereCodings += "types @> '{\"code\": \"" + value + "\"}'::jsonb";
+					whereCodings += "types @> '{\"" + valueName + "\": \"" + value + "\"}'::jsonb";
 				} else {
-					whereCodings += "types @> '{\"system\": \"\", \"code\": \"\"}'::jsonb";
+					whereCodings += "types @> '{\"" + systemName + "\": \"\", \"" + valueName + "\": \"\"}'::jsonb";
 				}
 			}
 

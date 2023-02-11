@@ -478,8 +478,10 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				String system = edrsFileNumberToken.getSystem();
 				String value = edrsFileNumberToken.getValue();
 				String whereItem;
-				if (system == null || system.isEmpty()) {
+				if (system == null || system.isBlank()) {
 					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_EDRS_FILE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+				} else if (value == null || value.isBlank()) {
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_EDRS_FILE_NUMBER + "\"}]}, \"system\": \"" + system + "\"}}'::jsonb";
 				} else {
 					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_EDRS_FILE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
 				}
@@ -499,13 +501,17 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 			String where = "";
 			for (TokenParam mdiCaseNumberToken : theMdiCaseNumber.getValuesAsQueryTokens()) {
-				TokenParam token = new TokenParam(mdiCaseNumberToken.getValue());
+				// TokenParam token = new TokenParam(mdiCaseNumberToken.getValue());
 				
-				String system = token.getSystem();
-				String value = token.getValue();
+				// String system = token.getSystem();
+				// String value = token.getValue();
+				String system = mdiCaseNumberToken.getSystem();
+				String value = mdiCaseNumberToken.getValue();
 				String whereItem;
-				if (system == null || system.isEmpty()) {
+				if (system == null || system.isBlank()) {
 					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+				} else if (value == null || value.isBlank()) { 
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"system\": \"" + system + "\"}}'::jsonb";
 				} else {
 					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
 				}
