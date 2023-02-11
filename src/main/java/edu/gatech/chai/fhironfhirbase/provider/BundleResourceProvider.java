@@ -251,21 +251,17 @@ public class BundleResourceProvider extends BaseResourceProvider {
 		if (theTypes != null) {
 			String typeOr = "";
 			for (TokenParam type : theTypes.getValuesAsQueryTokens()) {
-				if (typeOr.isBlank()) {
-					typeOr = "b.resource->>'type' = '" + type.getValue() + "'";
-				} else {
-					typeOr += " or b.resource->>'type' = '" + type.getValue() + "'";
-				}
-
 				String typeUrl = type.getSystem();
-				if (typeUrl != null && "http://config.raven.app/code".equalsIgnoreCase(typeUrl)) {
+				if (typeUrl != null && !typeUrl.isBlank()) {
 					// Search Raven extension type code.
 					fromStatement = constructFromStatementPath(fromStatement, "types", "b.resource->'_type'->'extension'");
+					typeOr = constructTypeToWhereParam(type, typeOr,  "url", "valueCode");
+				} else {
 					if (typeOr.isBlank()) {
-						typeOr = constructTypeWhereParameter(theTypes, "url", "valueCode");
+						typeOr = "b.resource->>'type' = '" + type.getValue() + "'";
 					} else {
-						typeOr += " or " + constructTypeWhereParameter(theTypes, "url", "valueCode");
-					}
+						typeOr += " or b.resource->>'type' = '" + type.getValue() + "'";
+					}	
 				}
 			}
 

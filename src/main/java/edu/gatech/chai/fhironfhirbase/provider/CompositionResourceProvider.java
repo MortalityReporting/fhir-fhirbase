@@ -453,7 +453,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		if (theOrTypes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "types", "comp.resource->'type'->'coding'");
-			String where = constructTypeWhereParameter(theOrTypes);
+			String where = constructTypesWhereParameter(theOrTypes);
 			if (where != null && !where.isEmpty()) {
 				whereParameters.add(where);
 			}

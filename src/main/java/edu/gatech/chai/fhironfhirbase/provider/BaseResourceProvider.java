@@ -222,31 +222,55 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		whereParameters.add(where);
 	}
 
-	protected String constructTypeWhereParameter(TokenOrListParam theOrTypes) {
-		return constructTypeWhereParameter(theOrTypes, "system", "code");
+	protected String constructTypesWhereParameter(TokenOrListParam theOrTypes) {
+		return constructTypesWhereParameter(theOrTypes, "system", "code");
 	}
 
-	protected String constructTypeWhereParameter(TokenOrListParam theOrTypes, String systemName, String valueName) {
+	protected String constructTypeToWhereParam(TokenParam type, String whereCodings, String systemName, String valueName) {
+		String system = type.getSystem();
+		String value = type.getValue();
+
+		if (whereCodings != null && !whereCodings.isEmpty()) {
+			whereCodings += " OR ";
+		} else {
+			whereCodings = "";
+		}
+		
+		if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
+			whereCodings += "types @> '{\"" + systemName + "\": \"" + system + "\", \"" + valueName + "\": \"" + value + "\"}'::jsonb";
+		} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
+			whereCodings += "types @> '{\"" + systemName + "\": \"" + system + "\"}'::jsonb";
+		} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
+			whereCodings += "types @> '{\"" + valueName + "\": \"" + value + "\"}'::jsonb";
+		} else {
+			whereCodings += "types @> '{\"" + systemName + "\": \"\", \"" + valueName + "\": \"\"}'::jsonb";
+		}
+
+		return whereCodings;
+	}
+
+	protected String constructTypesWhereParameter(TokenOrListParam theOrTypes, String systemName, String valueName) {
 		List<TokenParam> types = theOrTypes.getValuesAsQueryTokens();
 
 		String whereCodings = "";
 		if (!types.isEmpty()) {
 			for (TokenParam type : types) {
-				String system = type.getSystem();
-				String value = type.getValue();
+				whereCodings = constructTypeToWhereParam(type, whereCodings, systemName, valueName);
+				// String system = type.getSystem();
+				// String value = type.getValue();
 
-				if (!whereCodings.isEmpty()) {
-					whereCodings += " OR ";
-				}
-				if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
-					whereCodings += "types @> '{\"" + systemName + "\": \"" + system + "\", \"" + valueName + "\": \"" + value + "\"}'::jsonb";
-				} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
-					whereCodings += "types @> '{\"" + systemName + "\": \"" + system + "\"}'::jsonb";
-				} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
-					whereCodings += "types @> '{\"" + valueName + "\": \"" + value + "\"}'::jsonb";
-				} else {
-					whereCodings += "types @> '{\"" + systemName + "\": \"\", \"" + valueName + "\": \"\"}'::jsonb";
-				}
+				// if (!whereCodings.isEmpty()) {
+				// 	whereCodings += " OR ";
+				// }
+				// if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
+				// 	whereCodings += "types @> '{\"" + systemName + "\": \"" + system + "\", \"" + valueName + "\": \"" + value + "\"}'::jsonb";
+				// } else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
+				// 	whereCodings += "types @> '{\"" + systemName + "\": \"" + system + "\"}'::jsonb";
+				// } else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
+				// 	whereCodings += "types @> '{\"" + valueName + "\": \"" + value + "\"}'::jsonb";
+				// } else {
+				// 	whereCodings += "types @> '{\"" + systemName + "\": \"\", \"" + valueName + "\": \"\"}'::jsonb";
+				// }
 			}
 
 			if (!whereCodings.isEmpty()) {
