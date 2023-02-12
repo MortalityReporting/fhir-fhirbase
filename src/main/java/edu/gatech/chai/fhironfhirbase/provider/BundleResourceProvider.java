@@ -200,6 +200,7 @@ public class BundleResourceProvider extends BaseResourceProvider {
 	public IBundleProvider findBundlesByParams(RequestDetails theRequestDetails,
 			@OptionalParam(name = Bundle.SP_RES_ID) TokenParam theBundleId,
 			@OptionalParam(name = Bundle.SP_IDENTIFIER) TokenParam theBundleIdentifier,
+			@OptionalParam(name = Bundle.SP_COMPOSITION) ReferenceOrListParam theDocuments,
 			@OptionalParam(name = Bundle.SP_MESSAGE) ReferenceOrListParam theMessages,
 			@OptionalParam(name = Bundle.SP_TYPE) TokenOrListParam theTypes,
 			@Sort SortSpec theSort) {
@@ -227,6 +228,25 @@ public class BundleResourceProvider extends BaseResourceProvider {
 				whereParameters.add("b.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
 			}
 			returnAll = false;
+		}
+
+		if (theDocuments != null) {
+			String documentEntries = "";
+			for (ReferenceParam documentReference : theDocuments.getValuesAsQueryTokens()) {
+				if (!documentEntries.isEmpty()) {
+					documentEntries += " OR ";
+				}
+				String documentId = documentReference.getResourceType() + "/" + documentReference.getIdPart();
+
+				documentEntries += "b.resource->'entry'->0->>'fullUrl' like '%" + documentId + "%'";
+			}
+
+			if (!documentEntries.isEmpty()) {
+				whereParameters.add("b.resource->>'type' = 'document'");
+				whereParameters.add(documentEntries);
+
+				returnAll = false;
+			}
 		}
 
 		if (theMessages != null) {
