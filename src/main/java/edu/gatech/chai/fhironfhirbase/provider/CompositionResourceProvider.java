@@ -816,6 +816,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
 			@IdParam(optional=true) IdType theCompositionId,
 			@OperationParam(name = "id") UriOrListParam theIds, 
+			@OperationParam(name = "persist") BooleanType thePersist,
 			@OperationParam(name = Composition.SP_PATIENT) List<ParametersParameterComponent> thePatients,
 			@OperationParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) StringOrListParam theEdrsFileNumber,
 			@OperationParam(name = CompositionResourceProvider.SP_MDI_CASE_NUMBER) StringOrListParam theMdiCaseNumber,
@@ -831,13 +832,19 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		int totalSize = 0;
 
 		Bundle retBundle = new Bundle();
+
+		boolean saveIt = false;
+		if (thePersist != null && !thePersist.isEmpty() && thePersist.getValue().booleanValue()) {
+			saveIt = true;
+		}
+
 		if (theCompositionId != null) {
 			// if we have the composition id, then all search parameters will be ignored.
 			return client
 				.operation()
 				.onInstance(theCompositionId)
 				.named("$document")
-				.withNoParameters(Parameters.class)
+				.withParameter(Parameters.class, "persist", thePersist)
 				.returnResourceType(Bundle.class)
 				.execute();
 		}
@@ -870,6 +877,10 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 			retBundle.setTotal(totalSize);
 
+			if (saveIt) {
+				client.create().resource(retBundle).encodedJson().prettyPrint().execute();
+			}
+	
 			return retBundle;
 		}
 		
@@ -1014,6 +1025,10 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				totalSize++;
 			}
 
+			if (saveIt) {
+				client.create().resource(retBundle).encodedJson().prettyPrint().execute();
+			}
+	
 			retBundle.setTotal(totalSize);
 		} else {
 			throwSimulatedOO("No or No Known Parameters are received.");
@@ -1030,11 +1045,10 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = "graph") UriParam theGraph) {
 
 		OperationOutcome outcome = new OperationOutcome();
+
+		boolean saveIt = false;
 		if (thePersist != null && !thePersist.isEmpty() && thePersist.getValue().booleanValue()) {
-			// We can't store this bundler.
-			outcome.addIssue().setSeverity(IssueSeverity.ERROR)
-					.setDetails((new CodeableConcept()).setText("This server do not support Bundle persist"));
-			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+			saveIt = true;
 		}
 
 		if (theCompositionId == null || theCompositionId.isEmpty()) {
@@ -1197,6 +1211,10 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		retBundle.setEntry(bundleEntries);
 		retBundle.setId(UUID.randomUUID().toString());
+
+		if (saveIt) {
+			client.create().resource(retBundle).encodedJson().prettyPrint().execute();
+		}
 
 		return retBundle;
 	}
