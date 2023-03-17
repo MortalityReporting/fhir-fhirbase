@@ -861,12 +861,10 @@ public class SystemTransactionProvider {
 
 			break;
 		case DOCUMENT:
-			// We support two kinds of document here. 
-			// One is VRDR, the other is Toxicology document
-			// We post all in the entries (based on VRDR resources) to server.
+		case MESSAGE:
+			// MDI-to-EDRS document (for now)
 			processDelete(client, entries);
 			processEntries(client, entries);
-
 			break;
 		default:
 		}
