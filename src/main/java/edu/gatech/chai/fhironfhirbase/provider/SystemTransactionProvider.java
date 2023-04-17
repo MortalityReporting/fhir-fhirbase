@@ -30,6 +30,7 @@ import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.DocumentReference;
+import org.hl7.fhir.r4.model.Endpoint;
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryRequestComponent;
@@ -44,6 +45,7 @@ import org.hl7.fhir.r4.model.Composition.CompositionEventComponent;
 import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
+import org.hl7.fhir.r4.model.PractitionerRole;
 import org.hl7.fhir.r4.model.Procedure;
 import org.hl7.fhir.r4.model.Procedure.ProcedurePerformerComponent;
 import org.hl7.fhir.r4.model.Specimen.SpecimenContainerComponent;
@@ -54,6 +56,7 @@ import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Identifier;
 import org.hl7.fhir.r4.model.ListResource;
 import org.hl7.fhir.r4.model.ListResource.ListEntryComponent;
+import org.hl7.fhir.r4.model.Practitioner.PractitionerQualificationComponent;
 import org.hl7.fhir.r4.model.Location;
 import org.hl7.fhir.r4.model.MessageHeader;
 import org.slf4j.Logger;
@@ -77,6 +80,7 @@ import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.MyBundle;
 import edu.gatech.chai.fhironfhirbase.utilities.OperationUtil;
+import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 public class SystemTransactionProvider {
 	private static final Logger logger = LoggerFactory.getLogger(SystemTransactionProvider.class);
@@ -177,6 +181,51 @@ public class SystemTransactionProvider {
 		return patient;
 	}
 
+	private Endpoint processPostEndpoint(IGenericClient client, BundleEntryComponent entry) {
+		Endpoint endpoint = null;
+
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
+		}
+
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Endpoint)) {
+			return null;
+		}
+
+		endpoint = (Endpoint) createResource(client, entry, EndpointResourceProvider.getType(), response);
+
+		updateReference(endpoint.getManagingOrganization());
+
+		return endpoint;
+	}
+
+	private Organization processPostOrganization(IGenericClient client, BundleEntryComponent entry) {
+		Organization organization = null;
+
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
+		}
+
+		Resource resource = entry.getResource();
+		if (!(resource instanceof Organization)) {
+			return null;
+		}
+
+		organization = (Organization) createResource(client, entry, OrganizationResourceProvider.getType(), response);
+
+		updateReference(organization.getPartOf());
+		for (Reference endpoint : organization.getEndpoint()) {
+			updateReference(endpoint);
+		}
+
+		return organization;
+	}
+
 	private Practitioner processPostPractitioner(IGenericClient client, BundleEntryComponent entry) {
 		Practitioner practitioner = null;
 
@@ -193,7 +242,42 @@ public class SystemTransactionProvider {
 
 		practitioner = (Practitioner) createResource(client, entry, PractitionerResourceProvider.getType(), response);
 
+		for (PractitionerQualificationComponent qualification : practitioner.getQualification()) {
+			updateReference(qualification.getIssuer());
+		}
+
 		return practitioner;
+	}
+
+	private PractitionerRole processPostPractitionerRole(IGenericClient client, BundleEntryComponent entry) {
+		PractitionerRole practitionerRole = null;
+
+		BundleEntryResponseComponent response = entry.getResponse();
+		if (!response.isEmpty()) {
+			// We have already processed this.
+			return null;
+		}
+
+		Resource resource = entry.getResource();
+		if (!(resource instanceof PractitionerRole)) {
+			return null;
+		}
+
+		practitionerRole = (PractitionerRole) createResource(client, entry, PractitionerRoleResourceProvider.getType(), response);
+
+		updateReference(practitionerRole.getPractitioner());
+		updateReference(practitionerRole.getOrganization());
+		for (Reference location : practitionerRole.getLocation()) {
+			updateReference(location);
+		}
+		for (Reference healthCareService : practitionerRole.getHealthcareService()) {
+			updateReference(healthCareService);
+		}
+		for (Reference endpoint : practitionerRole.getEndpoint()) {
+			updateReference(endpoint);
+		}
+
+		return practitionerRole;
 	}
 
 	private Location processPostLocation(IGenericClient client, BundleEntryComponent entry) {
@@ -500,7 +584,100 @@ public class SystemTransactionProvider {
 
 		return null;
 	}
-	
+
+	DiagnosticReport searchDiagnosticReport (IGenericClient client, TokenClientParam tokenClientParam, String system, String value) {
+		Bundle resultBundle = client.search().forResource(DiagnosticReport.class).where(tokenClientParam.exactly().systemAndCode(system, value)).returnBundle(Bundle.class).execute();
+		if (resultBundle != null && !resultBundle.isEmpty()) {
+			BundleEntryComponent diagnosticReportEntry = resultBundle.getEntryFirstRep();
+			if (diagnosticReportEntry != null && !diagnosticReportEntry.isEmpty()) {
+				return (DiagnosticReport) diagnosticReportEntry.getResource();
+			}
+		}
+		
+		return null;
+	}
+
+	DiagnosticReport searchDiagnosticReport (IGenericClient client, DiagnosticReport diagnosticReport) {
+		// If patientId does not exist, we use tracking number
+		List<Extension> trackingNumExts = diagnosticReport.getExtensionsByUrl("http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number");
+		for (Extension trackingNumExt : trackingNumExts) {
+			Identifier trackingNumIdentifier = (Identifier) trackingNumExt.getValue();
+			String code = trackingNumIdentifier.getType().getCodingFirstRep().getCode();
+			String system = StringUtils.defaultString(trackingNumIdentifier.getSystem());
+			String value = StringUtils.defaultString(trackingNumIdentifier.getValue());
+			if ("mdi-case-number".equals(code)) {	
+				return searchDiagnosticReport(client, DiagnosticReportResourceProvider.MDI_CASE_NUMBER, system, value);
+			} else if ("tox-lab-case-number".equals(code)) {
+				return searchDiagnosticReport(client, DiagnosticReportResourceProvider.TOX_LAB_CASE_NUMBER, system, value);
+			}
+		}
+
+		return null;
+	}
+
+	boolean compareTrackingValue(String code, String system, String value, List<Extension> trackingNumbExts) {
+		for (Extension trackingNumbExt : trackingNumbExts) {
+			Identifier trackingNumIdentifier = (Identifier) trackingNumbExt.getValue();
+			String code_ = trackingNumIdentifier.getType().getCodingFirstRep().getCode();
+			String system_ = StringUtils.defaultString(trackingNumIdentifier.getSystem());
+			String value_ = StringUtils.defaultString(trackingNumIdentifier.getValue());
+			
+			if (code.equals(code_)) {
+				if (system.equals(system_) && value.equals(value_)) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	int compareCompositionsTrackingNumber(Composition c1, Composition c2) {
+		int resultCode = 0;
+		List<Extension> trackingNumExtsC1 = c1.getExtensionsByUrl("http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number");
+		List<Extension> trackingNumExtsC2 = c2.getExtensionsByUrl("http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number");
+		for (Extension trackingNumExtC1 : trackingNumExtsC1) {
+			Identifier trackingNumIdentifierC1 = (Identifier) trackingNumExtC1.getValue();
+			String code1 = trackingNumIdentifierC1.getType().getCodingFirstRep().getCode();
+			String system1 = StringUtils.defaultString(trackingNumIdentifierC1.getSystem());
+			String value1 = StringUtils.defaultString(trackingNumIdentifierC1.getValue());
+			if ("mdi-case-number".equals(code1)) {
+				if (compareTrackingValue("mdi-case-number", system1, value1, trackingNumExtsC2)) {
+					resultCode += 1;
+				}
+			} else if ("edrs-file-number".equals(code1)) {
+				if (compareTrackingValue("edrs-file-number", system1, value1, trackingNumExtsC2)) {
+					resultCode += 10;
+				}
+			}
+		}
+
+		return resultCode;
+	}
+
+	int compareDiagnosticReportsTrackingNumber(DiagnosticReport d1, DiagnosticReport d2) {
+		int resultCode = 0;
+		List<Extension> trackingNumExtsC1 = d1.getExtensionsByUrl("http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number");
+		List<Extension> trackingNumExtsC2 = d2.getExtensionsByUrl("http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number");
+		for (Extension trackingNumExtC1 : trackingNumExtsC1) {
+			Identifier trackingNumIdentifierC1 = (Identifier) trackingNumExtC1.getValue();
+			String code1 = trackingNumIdentifierC1.getType().getCodingFirstRep().getCode();
+			String system1 = StringUtils.defaultString(trackingNumIdentifierC1.getSystem());
+			String value1 = StringUtils.defaultString(trackingNumIdentifierC1.getValue());
+			if ("mdi-case-number".equals(code1)) {
+				if (compareTrackingValue("mdi-case-number", system1, value1, trackingNumExtsC2)) {
+					resultCode += 1;
+				}
+			} else if ("tox-lab-case-number".equals(code1)) {
+				if (compareTrackingValue("tox-lab-case-number", system1, value1, trackingNumExtsC2)) {
+					resultCode += 10;
+				}
+			}
+		}
+
+		return resultCode;
+	}
+
 	private MessageHeader processPostMessageHeader(IGenericClient client, BundleEntryComponent entry) {
 		MessageHeader messageHeader = null;
 		BundleEntryResponseComponent response = entry.getResponse();
@@ -622,20 +799,46 @@ public class SystemTransactionProvider {
 		return bundle;
 	}
 
-	private boolean checkIfDocumentExist(IGenericClient client, List<BundleEntryComponent> entries) {
-		boolean retVal = false;
+	private void checkIfDocumentOkToProceed(IGenericClient client, Composition composition) {
+		Composition searchedComposition = searchComposition(client, composition);
+		int resultCode = compareCompositionsTrackingNumber(composition, searchedComposition);
+		if (resultCode > 0) {
+			String error_message = "Case exists with";
+			if (!searchedComposition.getId().equals(composition.getId())) {
+				// IDs are not same. This is collision. This will create
+				// duplicate data. So, we should reject this and do not proceed.
+				if (resultCode % 10 == 1) {
+					error_message = error_message.concat(" mdi-case-number");
+				}
 
-		for (BundleEntryComponent entry : entries) {
-			BundleEntryResponseComponent response = entry.getResponse();
-			Resource resource = entry.getResource();
-			if (resource instanceof Composition) {
-				Composition composition = (Composition) resource;
-
-
+				if (resultCode / 10 == 1) {
+					error_message = error_message.concat(" edrs-file-number");
+				}
 			}
-		}
 
-		return retVal;
+			ThrowFHIRExceptions.unprocessableEntityException(error_message);
+		}
+	}
+
+	private void checkIfDiagnosticReportOkToProceed(IGenericClient client, DiagnosticReport diagnosticReport) {
+		DiagnosticReport searchedDiagnosticReport = searchDiagnosticReport(client, diagnosticReport);
+		int resultCode = compareDiagnosticReportsTrackingNumber(diagnosticReport, searchedDiagnosticReport);
+		if (resultCode > 0) {
+			String error_message = "Case exists with";
+			if (!searchedDiagnosticReport.getId().equals(diagnosticReport.getId())) {
+				// IDs are not same. This is collision. This will create
+				// duplicate data. So, we should reject this and do not proceed.
+				if (resultCode % 10 == 1) {
+					error_message = error_message.concat(" mdi-case-number");
+				}
+
+				if (resultCode / 10 == 1) {
+					error_message = error_message.concat(" tox-lab-case-number");
+				}
+			}
+
+			ThrowFHIRExceptions.unprocessableEntityException(error_message);
+		}
 	}
 
 	/***
@@ -688,6 +891,27 @@ public class SystemTransactionProvider {
 		}
 
 		// It's important the order of POST processing because of references.
+		// Endpoint
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Endpoint) {
+					processPostEndpoint(client, entry);
+				}
+			}
+		}
+
+		// Organization
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Organization) {
+					processPostOrganization(client, entry);
+				}
+			}
+		}
 
 		// Practitioner
 		for (BundleEntryComponent entry : postEntries) {
@@ -699,7 +923,18 @@ public class SystemTransactionProvider {
 				}
 			}
 		}
-				
+
+		// PractitionerRole
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof Practitioner) {
+					processPostPractitionerRole(client, entry);
+				}
+			}
+		}
+		
 		// Location
 		for (BundleEntryComponent entry : postEntries) {
 			response = entry.getResponse();
@@ -813,8 +1048,9 @@ public class SystemTransactionProvider {
 
 		List<BundleEntryComponent> entries = theBundle.getEntry();
 
-		if (entries.size() == 0)
+		if (entries.size() == 0) {
 			return null;
+		}
 
 		IGenericClient client = ctx.newRestfulGenericClient(OperationUtil.myHostUrl());
 
@@ -827,6 +1063,42 @@ public class SystemTransactionProvider {
 			}
 		} else if (authBearer != null && !authBearer.isEmpty()) {
 			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
+		}
+
+				// Duplication is not allowed. Check if this will cause the duplication. If it does,
+		// we send OO to avoid that.
+
+		// Check the first resource in the entry. We only worry about Composition and MessageHeader
+		BundleEntryComponent entryComponent = entries.get(0);
+		Resource resource = entryComponent.getResource();
+		if (resource == null) {
+			return null;
+		}
+
+		if (resource instanceof Composition) {
+			// This is MDI-to-EDRS document. 
+			checkIfDocumentOkToProceed(client, (Composition) resource);
+		} else if (resource instanceof MessageHeader) {
+			// This is Toxicology-to-CMS document if DiagnosticReport is at the focus.
+			MessageHeader messageHeader = (MessageHeader) resource;
+			Reference focus = messageHeader.getFocusFirstRep();
+			if (focus != null || !focus.isEmpty()) {
+				String focusReferenceId = focus.getId();
+				Resource focusResource = null;
+				for (BundleEntryComponent entry : entries) {
+					String entryId = entry.getId();
+					if (focusReferenceId != null && focusReferenceId.equals(entryId)) {
+						if (focusReferenceId.equals(entryId)) {
+							focusResource = entry.getResource();
+							break;
+						}
+					}
+				}
+
+				if (focusResource != null && !focusResource.isEmpty() && focusResource instanceof DiagnosticReport) {
+					checkIfDiagnosticReportOkToProceed(client, (DiagnosticReport) focusResource);
+				}
+			}
 		}
 
 		// First save this bundle to fhirbase 
