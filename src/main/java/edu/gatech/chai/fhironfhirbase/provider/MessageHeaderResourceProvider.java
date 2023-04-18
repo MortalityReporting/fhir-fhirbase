@@ -263,16 +263,23 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 		OperationOutcome outcome = new OperationOutcome();
 		CodeableConcept detailCode = new CodeableConcept();
 		if (theMessageHeader.getSource().isEmpty()) {
-			detailCode.setText("No source is provided.");
+			detailCode.setText("Missing source in MessageHeader resource.");
 			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
 		if (theMessageHeader.getEventCoding().isEmpty() && theMessageHeader.getEventUriType().isEmpty()) {
-			detailCode.setText("Event[x] is empty");
+			detailCode.setText("Event[x] is empty in MessageHeader resource");
 			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
+
+		if (theMessageHeader.getFocus().size() == 0) {
+			detailCode.setText("focus cannot be empty in MessageHeader resource for MDI FHIR IG");
+			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+		}
+
 	}
 
 }

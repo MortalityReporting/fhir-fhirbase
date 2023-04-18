@@ -801,10 +801,15 @@ public class SystemTransactionProvider {
 
 	private void checkIfDocumentOkToProceed(IGenericClient client, Composition composition) {
 		Composition searchedComposition = searchComposition(client, composition);
+		if (searchedComposition == null || searchedComposition.isEmpty()) {
+			// this is a new one. No need to compare.
+			return;
+		}
+
 		int resultCode = compareCompositionsTrackingNumber(composition, searchedComposition);
 		if (resultCode > 0) {
 			String error_message = "Case exists with";
-			if (!searchedComposition.getId().equals(composition.getId())) {
+			if (!searchedComposition.getIdPart().equals(composition.getIdPart())) {
 				// IDs are not same. This is collision. This will create
 				// duplicate data. So, we should reject this and do not proceed.
 				if (resultCode % 10 == 1) {
@@ -814,18 +819,23 @@ public class SystemTransactionProvider {
 				if (resultCode / 10 == 1) {
 					error_message = error_message.concat(" edrs-file-number");
 				}
-			}
 
-			ThrowFHIRExceptions.unprocessableEntityException(error_message);
+				ThrowFHIRExceptions.unprocessableEntityException(error_message);
+			}
 		}
 	}
 
 	private void checkIfDiagnosticReportOkToProceed(IGenericClient client, DiagnosticReport diagnosticReport) {
 		DiagnosticReport searchedDiagnosticReport = searchDiagnosticReport(client, diagnosticReport);
+		if (searchedDiagnosticReport == null || searchedDiagnosticReport.isEmpty()) {
+			// this is a new one. No need to compare.
+			return;
+		}
+
 		int resultCode = compareDiagnosticReportsTrackingNumber(diagnosticReport, searchedDiagnosticReport);
 		if (resultCode > 0) {
 			String error_message = "Case exists with";
-			if (!searchedDiagnosticReport.getId().equals(diagnosticReport.getId())) {
+			if (!searchedDiagnosticReport.getIdPart().equals(diagnosticReport.getIdPart())) {
 				// IDs are not same. This is collision. This will create
 				// duplicate data. So, we should reject this and do not proceed.
 				if (resultCode % 10 == 1) {
@@ -835,9 +845,9 @@ public class SystemTransactionProvider {
 				if (resultCode / 10 == 1) {
 					error_message = error_message.concat(" tox-lab-case-number");
 				}
-			}
 
-			ThrowFHIRExceptions.unprocessableEntityException(error_message);
+				ThrowFHIRExceptions.unprocessableEntityException(error_message);
+			}
 		}
 	}
 
@@ -1082,16 +1092,14 @@ public class SystemTransactionProvider {
 			// This is Toxicology-to-CMS document if DiagnosticReport is at the focus.
 			MessageHeader messageHeader = (MessageHeader) resource;
 			Reference focus = messageHeader.getFocusFirstRep();
-			if (focus != null || !focus.isEmpty()) {
-				String focusReferenceId = focus.getId();
+			if (focus != null && !focus.isEmpty()) {
+				String focusReferenceId = focus.getReferenceElement().getValueAsString();
 				Resource focusResource = null;
 				for (BundleEntryComponent entry : entries) {
-					String entryId = entry.getId();
+					String entryId = entry.getFullUrl();
 					if (focusReferenceId != null && focusReferenceId.equals(entryId)) {
-						if (focusReferenceId.equals(entryId)) {
-							focusResource = entry.getResource();
-							break;
-						}
+						focusResource = entry.getResource();
+						break;
 					}
 				}
 
