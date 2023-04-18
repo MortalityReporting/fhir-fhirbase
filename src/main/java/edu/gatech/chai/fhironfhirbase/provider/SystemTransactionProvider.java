@@ -939,7 +939,7 @@ public class SystemTransactionProvider {
 			response = entry.getResponse();
 			Resource resource = entry.getResource();
 			if (resource != null && !resource.isEmpty()) {
-				if (resource instanceof Practitioner) {
+				if (resource instanceof PractitionerRole) {
 					processPostPractitionerRole(client, entry);
 				}
 			}
