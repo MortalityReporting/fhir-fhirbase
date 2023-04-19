@@ -2,12 +2,14 @@ package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 import javax.annotation.PostConstruct;
 
+import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.BooleanType;
@@ -840,11 +842,16 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		if (theCompositionId != null) {
 			// if we have the composition id, then all search parameters will be ignored.
+			if (thePersist == null) {
+				thePersist = new BooleanType(false);
+			}
+
 			return client
 				.operation()
 				.onInstance(theCompositionId)
 				.named("$document")
 				.withParameter(Parameters.class, "persist", thePersist)
+				.useHttpGet()
 				.returnResourceType(Bundle.class)
 				.execute();
 		}
@@ -1136,7 +1143,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			// There is no order here. But, put patient first for human eye.
 			// If composition section is not empty, we honor that and do not add resources related to
 			// death certificate. But, we add them to entry.
-			boolean addToSection = true;
+			boolean addToSection = false;
 			
 			List<String> addedResource = new ArrayList<String>();
 			List<String> addedPractitioner = new ArrayList<String>();
@@ -1211,6 +1218,29 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		retBundle.setEntry(bundleEntries);
 		retBundle.setId(UUID.randomUUID().toString());
+
+		Identifier bundleIdentifier = new Identifier();
+		List<Extension> trackingNumExts = composition.getExtensionsByUrl("http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number");
+		for (Extension trackingNumExt : trackingNumExts) {
+			Identifier trackingNumIdentifier = (Identifier) trackingNumExt.getValue();
+			String code = trackingNumIdentifier.getType().getCodingFirstRep().getCode();
+			String system = StringUtils.defaultString(trackingNumIdentifier.getSystem());
+			String value = StringUtils.defaultString(trackingNumIdentifier.getValue());
+			if ("mdi-case-number".equals(code)) {
+				bundleIdentifier.setSystem(system);
+				bundleIdentifier.setValue(value);
+				break;
+			} else if ("edrs-file-number".equals(code)) {
+				bundleIdentifier.setSystem(system);
+				bundleIdentifier.setValue(value);
+			} 
+		}
+
+		if (!bundleIdentifier.isEmpty()) {
+			retBundle.setIdentifier(bundleIdentifier);
+		}
+
+		retBundle.setTimestamp(new Date());
 
 		if (saveIt) {
 			client.create().resource(retBundle).encodedJson().prettyPrint().execute();
