@@ -29,6 +29,7 @@ import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.MessageHeader;
+import org.hl7.fhir.r4.model.PractitionerRole;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.UrlType;
@@ -429,11 +430,15 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		bundleEntryComponent = new BundleEntryComponent().setFullUrl(diagnosticReportLocalUrl).setResource(diagnosticReport);
 		retMessageBundle.addEntry(bundleEntryComponent);
 
+		// list of references added.
+		List<Reference> addedReferences = new ArrayList<Reference>();
+
 		// Add Patient.
 		Reference reference = diagnosticReport.getSubject();
 		bundleEntryComponent = makeEntryResourceToEntry(client, reference);
 		if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
 			retMessageBundle.addEntry(bundleEntryComponent);
+			addedReferences.add(reference);
 		}
 
 		// Add Performer(s)
@@ -442,12 +447,60 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			bundleEntryComponent = makeEntryResourceToEntry(client, ref);
 			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
 				retMessageBundle.addEntry(bundleEntryComponent);
+				addedReferences.add(ref);
+
+				if (PractitionerRoleResourceProvider.getType().equals(ref.getReferenceElement().getResourceType())) {
+					// get the resource and its practitioner, organization, locations, and endpoints
+					PractitionerRole practitionerRole = (PractitionerRole) bundleEntryComponent.getResource();
+					
+					Reference practitionerRef = practitionerRole.getPractitioner();
+					if (!addedReferences.contains(practitionerRef)) {
+						bundleEntryComponent = makeEntryResourceToEntry(client, practitionerRef);
+						if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
+							retMessageBundle.addEntry(bundleEntryComponent);
+							addedReferences.add(practitionerRef);
+						}
+					}
+
+					Reference organizationRef = practitionerRole.getOrganization();
+					if (!addedReferences.contains(organizationRef)) {
+						bundleEntryComponent = makeEntryResourceToEntry(client, organizationRef);
+						if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
+							retMessageBundle.addEntry(bundleEntryComponent);
+							addedReferences.add(organizationRef);
+						}
+					}
+
+					List<Reference> locationRefs = practitionerRole.getLocation();
+					for (Reference locationRef : locationRefs) {
+						if (!addedReferences.contains(locationRef)) {
+							bundleEntryComponent = makeEntryResourceToEntry(client, locationRef);
+							if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
+								retMessageBundle.addEntry(bundleEntryComponent);
+								addedReferences.add(locationRef);
+							}
+						}
+					}
+
+					List<Reference> endpointRefs = practitionerRole.getEndpoint();
+					for (Reference endpointRef : endpointRefs) {
+						if (!addedReferences.contains(endpointRef)) {
+							bundleEntryComponent = makeEntryResourceToEntry(client, endpointRef);
+							if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
+								retMessageBundle.addEntry(bundleEntryComponent);
+								addedReferences.add(endpointRef);
+							}
+						}
+					}
+				}	
 			}
 		}
 
 		// Add specimen
 		references = diagnosticReport.getSpecimen();
 		for (Reference ref : references) {
+			if (addedReferences.contains(ref)) continue;
+
 			bundleEntryComponent = makeEntryResourceToEntry(client, ref);
 			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
 				retMessageBundle.addEntry(bundleEntryComponent);
@@ -457,6 +510,8 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		// Add result
 		references = diagnosticReport.getResult();
 		for (Reference ref : references) {
+			if (addedReferences.contains(ref)) continue;
+
 			bundleEntryComponent = makeEntryResourceToEntry(client, ref);
 			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
 				retMessageBundle.addEntry(bundleEntryComponent);
@@ -466,6 +521,8 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		// Add basedOn (if available - this is an optional)
 		references = diagnosticReport.getBasedOn();
 		for (Reference ref : references) {
+			if (addedReferences.contains(ref)) continue;
+
 			bundleEntryComponent = makeEntryResourceToEntry(client, ref);
 			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
 				retMessageBundle.addEntry(bundleEntryComponent);
@@ -474,14 +531,18 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 
 		// Add encounter
 		reference = diagnosticReport.getEncounter();
-		bundleEntryComponent = makeEntryResourceToEntry(client, reference);
-		if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
-			retMessageBundle.addEntry(bundleEntryComponent);
+		if (!addedReferences.contains(reference)) {
+			bundleEntryComponent = makeEntryResourceToEntry(client, reference);
+			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
+				retMessageBundle.addEntry(bundleEntryComponent);
+			}
 		}
 
 		// Add resultsInterpreter
 		references = diagnosticReport.getResultsInterpreter();
 		for (Reference ref : references) {
+			if (addedReferences.contains(ref)) continue;
+
 			bundleEntryComponent = makeEntryResourceToEntry(client, ref);
 			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
 				retMessageBundle.addEntry(bundleEntryComponent);
@@ -491,6 +552,8 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		// Add imagingStudy
 		references = diagnosticReport.getImagingStudy();
 		for (Reference ref : references) {
+			if (addedReferences.contains(ref)) continue;
+
 			bundleEntryComponent = makeEntryResourceToEntry(client, ref);
 			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
 				retMessageBundle.addEntry(bundleEntryComponent);
@@ -501,17 +564,19 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		List<DiagnosticReportMediaComponent> medias = diagnosticReport.getMedia();
 		for (DiagnosticReportMediaComponent media : medias) {
 			reference = media.getLink();
+			if (addedReferences.contains(reference)) continue;
+
 			bundleEntryComponent = makeEntryResourceToEntry(client, reference);
 			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
 				retMessageBundle.addEntry(bundleEntryComponent);
 			}
 		}
-		for (Reference ref : references) {
-			bundleEntryComponent = makeEntryResourceToEntry(client, ref);
-			if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
-				retMessageBundle.addEntry(bundleEntryComponent);
-			}
-		}
+		// for (Reference ref : references) {
+		// 	bundleEntryComponent = makeEntryResourceToEntry(client, ref);
+		// 	if (bundleEntryComponent != null && !bundleEntryComponent.isEmpty()) {
+		// 		retMessageBundle.addEntry(bundleEntryComponent);
+		// 	}
+		// }
 
 		if (originalMessageBundle != null) {
 			retMessageBundle.setId(originalMessageBundle.getIdElement());
