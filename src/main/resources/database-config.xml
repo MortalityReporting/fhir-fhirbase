@@ -20,6 +20,8 @@
 		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.2.xsd">
 	<context:property-placeholder
 		location="classpath:application.properties" />
+
+<!-- 
 	<bean id="dataSource"
 		class="org.apache.commons.dbcp2.BasicDataSource"
 		destroy-method="close">
@@ -29,5 +31,21 @@
 		<property name="username" value="${jdbc.username}" />
 		<property name="password" value="${jdbc.password}" />
 	</bean>
+ -->
+	
+	<bean id="hikariConfig" class="com.zaxxer.hikari.HikariConfig">  
+    	<property name="dataSourceProperties" >
+        	<props>
+            	<prop key="dataSource.url">${jdbc.url}</prop>
+            	<prop key="dataSource.user">${jdbc.username}</prop>
+            	<prop key="dataSource.password">${jdbc.password}</prop>
+        	</props>
+      	</property>  
+      	<property name="dataSourceClassName" value="org.postgresql.Driver" />  
+	</bean>  
+
+    <bean id="dataSource" class="com.zaxxer.hikari.HikariDataSource">  
+    	<constructor-arg ref="hikariConfig" />  
+    </bean>  
 
 </beans>
