@@ -395,6 +395,15 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		}
 		return null;
 	}
+
+	protected String constructCanonicalWhereParameter(ReferenceParam theSource, String tableAlias, String column) {
+		if (theSource != null) {
+			if (theSource.getResourceType() != null) { 
+				return tableAlias + ".resource->>'" + column + "' like '%" + theSource.getValue() + "%'";
+			} 
+		}
+		return null;
+	}
 	
 	protected String constructPatientWhereParameter(ReferenceParam thePatient) {
 		String where = "";

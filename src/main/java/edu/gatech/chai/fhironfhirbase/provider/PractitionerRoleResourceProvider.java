@@ -10,6 +10,7 @@ import javax.annotation.PostConstruct;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.PractitionerRole;
+import org.hl7.fhir.r4.model.ValueSet;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,7 @@ import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.IncludeParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
+import ca.uhn.fhir.rest.annotation.RequiredParam;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.annotation.Search;
 import ca.uhn.fhir.rest.annotation.Sort;
@@ -99,6 +101,30 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 	}
 
 	@Search()
+	public IBundleProvider findPractitionerRolesById(
+		@RequiredParam(name = PractitionerRole.SP_RES_ID) TokenOrListParam thePractitionerRoleIds, @Sort SortSpec theSort) {
+
+		if (thePractitionerRoleIds == null) {
+			return null;
+		}
+
+		String whereStatement = "WHERE ";
+		for (TokenParam thePractitionerRoleId : thePractitionerRoleIds.getValuesAsQueryTokens()) {
+			whereStatement += "practrole.id = '" + thePractitionerRoleId.getValue() + "' OR ";
+		}
+
+		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
+
+		String queryCount = "SELECT count(*) FROM " + getTableName() + " practrole " + whereStatement;
+		String query = "SELECT * FROM " + getTableName() + " practrole " + whereStatement;
+
+		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
+		myBundleProvider.setTotalSize(getTotalSize(queryCount));
+		myBundleProvider.setPreferredPageSize(preferredPageSize);
+		return myBundleProvider;
+	}
+
+	@Search()
 	public IBundleProvider findPractitionerRolesByParams(
 			@OptionalParam(name = PractitionerRole.SP_RES_ID) TokenOrListParam thePractitionerRoleIds,
 			@OptionalParam(name = PractitionerRole.SP_IDENTIFIER) TokenParam thePractitionerRoleIdentifier,
@@ -112,7 +138,7 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 		List<String> whereParameters = new ArrayList<String>();
 		boolean returnAll = true;
 		
-		String fromStatement = "practitionerrole practrole";
+		String fromStatement = getTableName() + " practrole";
 
 		if (thePractitionerRoleIds != null) {
 			for (TokenParam thePractitionerRoleId : thePractitionerRoleIds.getValuesAsQueryTokens()) {

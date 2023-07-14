@@ -25,10 +25,11 @@ import javax.annotation.PostConstruct;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.IdType;
-import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
-import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.QuestionnaireResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
@@ -48,8 +49,9 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
-import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
+import ca.uhn.fhir.rest.param.ReferenceOrListParam;
+import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
@@ -58,16 +60,17 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
 @Service
 @Scope("prototype")
-public class ObservationResourceProvider extends BaseResourceProvider {
+public class QuestionnaireResponseResourceProvider extends BaseResourceProvider {
+	private static final Logger logger = LoggerFactory.getLogger(QuestionnaireResponseResourceProvider.class);
 
-	public ObservationResourceProvider(FhirContext ctx) {
+	public QuestionnaireResponseResourceProvider(FhirContext ctx) {
 		super(ctx);
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(ObservationResourceProvider.getType().toLowerCase());
-		setMyResourceType(ObservationResourceProvider.getType());
+		setTableName(QuestionnaireResponseResourceProvider.getType().toLowerCase());
+		setMyResourceType(QuestionnaireResponseResourceProvider.getType());
 
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
@@ -75,12 +78,12 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	}
 
 	public static String getType() {
-		return "Observation";
+		return "QuestionnaireResponse";
 	}
 
 	@Override
-	public Class<Observation> getResourceType() {
-		return Observation.class;
+	public Class<QuestionnaireResponse> getResourceType() {
+		return QuestionnaireResponse.class;
 	}
 
 	/**
@@ -88,14 +91,14 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	 * which adds a new instance of a resource to the server.
 	 */
 	@Create()
-	public MethodOutcome createObservation(@ResourceParam Observation theObservation) {
-		validateResource(theObservation);
+	public MethodOutcome createQuestionnaireResponse(@ResourceParam QuestionnaireResponse theQuestionnaireResponse) {
+		validateResource(theQuestionnaireResponse);
 		MethodOutcome retVal = new MethodOutcome();
 		
 		try {
-			IBaseResource createdObservation = getFhirbaseMapping().create(theObservation, getResourceType());
-			retVal.setId(createdObservation.getIdElement());
-			retVal.setResource(createdObservation);
+			IBaseResource createdQuestionnaire = getFhirbaseMapping().create(theQuestionnaireResponse, getResourceType());
+			retVal.setId(createdQuestionnaire.getIdElement());
+			retVal.setResource(createdQuestionnaire);
 			retVal.setCreated(true);
 		} catch (SQLException e) {
 			retVal.setCreated(false);
@@ -109,7 +112,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	}
 
 	@Delete()
-	public void deleteObservation(@IdParam IdType theId) {
+	public void deleteQuestionnaireResponse (@IdParam IdType theId) {
 		try {
 			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
 		} catch (SQLException e) {
@@ -122,69 +125,59 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	}
 
 	@Search()
-	public IBundleProvider findObservationsById(
-			@RequiredParam(name = Observation.SP_RES_ID) TokenOrListParam theObservationIds, @Sort SortSpec theSort,
+	public IBundleProvider findQuestionnaireResponseById(
+		@RequiredParam(name = QuestionnaireResponse.SP_RES_ID) TokenOrListParam theQuestionnaireResponseIds, 
+		@IncludeParam(allow = { "QuestionnaireResponse:questionnaire", "Observation:patient", "Observation:subject" }) final Set<Include> theIncludes,
+		@Sort SortSpec theSort) {
 
-			@IncludeParam(allow = { "Observation:based-on", "Observation:device",
-					"Observation:encounter", "Observation:patient", "Observation:performer",
-					"Observation:related-target", "Observation:specimen",
-					"Observation:subject" }) final Set<Include> theIncludes,
-
-			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
-		if (theObservationIds == null) {
+		if (theQuestionnaireResponseIds == null) {
 			return null;
 		}
 
 		String whereStatement = "WHERE ";
-		for (TokenParam theObservation : theObservationIds.getValuesAsQueryTokens()) {
-			whereStatement += "o.id = '" + theObservation.getValue() + "' OR ";
+		for (TokenParam theQuestionnaireResponse : theQuestionnaireResponseIds.getValuesAsQueryTokens()) {
+			whereStatement += "qr.id = '" + theQuestionnaireResponse.getValue() + "' OR ";
 		}
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
 
-		String queryCount = "SELECT count(*) FROM " + getTableName() + " o " + whereStatement;
-		String query = "SELECT * FROM " + getTableName() + " o " + whereStatement;
+		String queryCount = "SELECT count(*) FROM " + getTableName() + " qr " + whereStatement;
+		String query = "SELECT * FROM " + getTableName() + " qr " + whereStatement;
 
-		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, theReverseIncludes);
+		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
 		return myBundleProvider;
 	}
 
 	@Search()
-	public IBundleProvider findObservationsByParams(
-			@OptionalParam(name = Observation.SP_CODE) TokenOrListParam theOrCodes,
-			@OptionalParam(name = Observation.SP_DATE) DateParam theDate,
-			@OptionalParam(name = Observation.SP_PATIENT, chainWhitelist = { "", USCorePatient.SP_NAME,
+	public IBundleProvider findQuestionnaireResponsesByParams(
+			@OptionalParam(name = QuestionnaireResponse.SP_QUESTIONNAIRE) ReferenceOrListParam theQuestionnaires,
+			@OptionalParam(name = QuestionnaireResponse.SP_PATIENT, chainWhitelist = {"", USCorePatient.SP_NAME,
 					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam thePatients,
-			@OptionalParam(name = Observation.SP_SUBJECT, chainWhitelist = {"", USCorePatient.SP_NAME, 
-					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam theSubjects,
-			@Sort SortSpec theSort,
-
-			@IncludeParam(allow = { "Observation:based-on", "Observation:context", "Observation:device",
-					"Observation:encounter", "Observation:patient", "Observation:performer",
-					"Observation:related-target", "Observation:specimen",
-					"Observation:subject" }) final Set<Include> theIncludes,
-
-			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
+			@OptionalParam(name = QuestionnaireResponse.SP_SUBJECT) ReferenceAndListParam theSubjects,
+			@IncludeParam(allow = { "QuestionnaireResponse:questionnaire", "QuestionnaireResponse:patient", "QuestionnaireResponse:subject" }) final Set<Include> theIncludes,
+			@Sort SortSpec theSort) {
 
 		List<String> whereParameters = new ArrayList<String>();
 		boolean returnAll = true;
 		
-		String fromStatement = getTableName() + " o";
-
-		if (theSubjects != null || thePatients != null) {
-			fromStatement += " join patient p on o.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
-
-			String updatedFromStatement = constructFromWherePatients (fromStatement, whereParameters, theSubjects);
-			if (updatedFromStatement.isEmpty()) {
-				// This means that we have unsupported resource. Since this is to search, we should discard all and
-				// return null.
-				return null;
+		String fromStatement = getTableName() + " qr";
+		
+		if (theQuestionnaires != null) {
+			for (ReferenceParam theQuestionnaire : theQuestionnaires.getValuesAsQueryTokens()) {
+				String where = constructCanonicalWhereParameter(theQuestionnaire, "qr", "questionnaire");
+				if (where != null && !where.isEmpty()) {
+					whereParameters.add(where);
+				}
 			}
-			fromStatement = updatedFromStatement;
+			returnAll = false;
+		}
 
-			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+		if (thePatients != null) {
+			fromStatement += " join patient p on qr.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+			
+			String updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
 			if (updatedFromStatement.isEmpty()) {
 				// This means that we have unsupported resource. Since this is to search, we should discard all and
 				// return null.
@@ -194,22 +187,40 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 			
 			returnAll = false;
 		}
-		
-		if (theOrCodes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "codings", "o.resource->'code'->'coding'");
-			String where = constructCodeWhereParameter(theOrCodes);
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
-		}
 
-		if (theDate != null) {
-			String where = constructDateWhereParameter(theDate, "o", "effectiveDateTime");
-			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
-			}
-			returnAll = false;
+		if (theSubjects != null) {
+			for (ReferenceOrListParam theReferences : theSubjects.getValuesAsQueryTokens()) {
+				String whereOr = "";
+				for (ReferenceParam theReference : theReferences.getValuesAsQueryTokens()) {
+					if ("Patient".equals(theReference.getResourceType())) {
+						if (!fromStatement.contains("patient p")) {
+							fromStatement += " join patient p on qr.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+						}
+
+						String where = constructPatientWhereParameter(theReference);
+						if (whereOr.isEmpty()) {
+							whereOr = where;
+						} else {
+							whereOr += " or " + where;
+						}
+						if (theReference.getChain() != null && !theReference.getChain().isEmpty()) {
+							fromStatement = constructFromStatementPatientChain(fromStatement, theReference.getChain());
+						}	
+					} else {
+						String where = "qr.resource->'subject'->>'reference' = '" + theReference.getValue() + "'"; 
+						if (whereOr.isEmpty()) {
+							whereOr = where;
+						} else {
+							whereOr += " or " + where;
+						}
+					}
+				}
+
+				if (whereOr != null && !whereOr.isEmpty()) {
+					whereParameters.add(whereOr);
+				}
+			}			
+
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
@@ -221,7 +232,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
 		String query = "SELECT * FROM " + fromStatement + whereStatement;
 
-		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, theReverseIncludes);
+		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
 		return myBundleProvider;
@@ -240,7 +251,7 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	 * @return Returns a resource matching this identifier, or null if none exists.
 	 */
 	@Read()
-	public IBaseResource readObservation(@IdParam IdType theId) {
+	public IBaseResource readQuestionnaireResponse(@IdParam IdType theId) {
 		IBaseResource retVal = null;
 		
 		try {
@@ -261,14 +272,14 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 	 * @return This method returns a "MethodOutcome"
 	 */
 	@Update()
-	public MethodOutcome updateObservation(@IdParam IdType theId, @ResourceParam Observation theObservation) {
-		validateResource(theObservation);
+	public MethodOutcome updateQuestionnaireResponse(@IdParam IdType theId, @ResourceParam QuestionnaireResponse theQuestionnaireResponse) {
+		validateResource(theQuestionnaireResponse);
 		MethodOutcome retVal = new MethodOutcome();
 		
 		try {
-			IBaseResource updatedObservation = getFhirbaseMapping().update(theObservation, getResourceType());
-			retVal.setId(updatedObservation.getIdElement());
-			retVal.setResource(updatedObservation);
+			IBaseResource updatedQuestionnaireResponse = getFhirbaseMapping().update(theQuestionnaireResponse, getResourceType());
+			retVal.setId(updatedQuestionnaireResponse.getIdElement());
+			retVal.setResource(updatedQuestionnaireResponse);
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
@@ -276,26 +287,11 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 		return retVal;
 	}
 
-	// TODO: Add more validation code here.
-	private void validateResource(Observation theObservation) {
+	private void validateResource(QuestionnaireResponse theQuestionnaireResponse) {
 		OperationOutcome outcome = new OperationOutcome();
 		CodeableConcept detailCode = new CodeableConcept();
-		if (theObservation.getCode().isEmpty()) {
-			detailCode.setText("No code is provided.");
-			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-		}
-
-		Reference subjectReference = theObservation.getSubject();
-		if (subjectReference == null || subjectReference.isEmpty()) {
-			detailCode.setText("Subject cannot be empty");
-			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-		}
-
-		String subjectResource = subjectReference.getReferenceElement().getResourceType();
-		if (!subjectResource.contentEquals("Patient")) {
-			detailCode.setText("Subject (" + subjectResource + ") must be Patient");
+		if (theQuestionnaireResponse.getStatus() == null) {
+			detailCode.setText("No status is provided.");
 			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
@@ -319,40 +315,16 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 			// _Include
 			List<String> includes = new ArrayList<String>();
 
-			if (theIncludes.contains(new Include("Observation:based-on"))) {
-				includes.add("Observation:based-on");
+			if (theIncludes.contains(new Include("QuestionnaireResponse:questionnaire"))) {
+				includes.add("QuestionnaireResponse:questionnaire");
+			}
+			
+			if (theIncludes.contains(new Include("QuestionnaireResponse:patient"))) {
+				includes.add("QuestionnaireResponse:patient");
 			}
 
-			if (theIncludes.contains(new Include("Observation:context"))) {
-				includes.add("Observation:context");
-			}
-
-			if (theIncludes.contains(new Include("Observation:device"))) {
-				includes.add("Observation:device");
-			}
-
-			if (theIncludes.contains(new Include("Observation:encounter"))) {
-				includes.add("Observation:encounter");
-			}
-
-			if (theIncludes.contains(new Include("Observation:patient"))) {
-				includes.add("Observation:patient");
-			}
-
-			if (theIncludes.contains(new Include("Observation:performer"))) {
-				includes.add("Observation:performer");
-			}
-
-			if (theIncludes.contains(new Include("Observation:related-target"))) {
-				includes.add("Observation:related-target");
-			}
-
-			if (theIncludes.contains(new Include("Observation:specimen"))) {
-				includes.add("Observation:specimen");
-			}
-
-			if (theIncludes.contains(new Include("Observation:subject"))) {
-				includes.add("Observation:subject");
+			if (theIncludes.contains(new Include("QuestionnaireResponse:subject"))) {
+				includes.add("QuestionnaireResponse:subject");
 			}
 
 			String myQuery = query;			
