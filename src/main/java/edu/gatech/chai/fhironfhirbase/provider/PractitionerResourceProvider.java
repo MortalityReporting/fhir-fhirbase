@@ -147,7 +147,9 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Practitioner.SP_FAMILY) StringParam theFamilyName,
 			@OptionalParam(name = Practitioner.SP_GIVEN) StringParam theGivenName,
 			@OptionalParam(name = Practitioner.SP_NAME) StringParam theName,
-			@OptionalParam(name = Practitioner.SP_GENDER) StringParam theGender, @Sort SortSpec theSort,
+			@OptionalParam(name = Practitioner.SP_GENDER) StringParam theGender, 
+			@OptionalParam(name = Practitioner.SP_TELECOM) TokenOrListParam theTelecoms,
+			@Sort SortSpec theSort,
 			@IncludeParam(allow = {}) final Set<Include> theIncludes,
 			@IncludeParam(reverse = true) final Set<Include> theReverseIncludes) {
 
@@ -213,6 +215,26 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 			whereParameters.add("pract.resource->>'gender' = '" + theGender.getValue() + "'");
 			returnAll = false;
 		}
+
+		if (theTelecoms != null) {
+			if (!fromStatement.contains("telecoms")) {
+				fromStatement += ", jsonb_array_elements(pract.resource->'telecom') telecoms";
+			}
+
+			String telecomString = new String();
+			for (TokenParam theTelecom : theTelecoms.getValuesAsQueryTokens()) {
+				telecomString = telecomString.concat("telecoms->>'value' = '" + theTelecom.getValue() + "'" + " OR ");
+			}
+
+			if (!telecomString.isBlank()) {
+				telecomString = telecomString.substring(0, telecomString.length()-4);
+			}
+
+			whereParameters.add(telecomString);
+			
+			returnAll = false;
+		}
+
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
 
