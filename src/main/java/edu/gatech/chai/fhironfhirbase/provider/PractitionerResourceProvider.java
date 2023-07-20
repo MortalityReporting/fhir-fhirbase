@@ -44,9 +44,11 @@ import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.param.InternalCodingDt;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
+import ca.uhn.fhir.rest.param.TokenParamModifier;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
@@ -136,6 +138,7 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 	 *                      here is StringParam, but there are other possible
 	 *                      parameter types depending on the specific search
 	 *                      criteria.
+	 * @param code 
 	 * @return This method returns a list of Patients in bundle. This list may
 	 *         contain multiple matching resources, or it may also be empty.
 	 */
@@ -168,14 +171,45 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 		if (thePractitionerIdentifier != null) {
 			String system = thePractitionerIdentifier.getSystem();
 			String value = thePractitionerIdentifier.getValue();
+			TokenParamModifier modifier = thePractitionerIdentifier.getModifier();
+			if (TokenParamModifier.OF_TYPE.equals(modifier)) {
+				// with :of-type modifier, system = identifier.type.coding.system, code = identifier.type.coding.code
+				String code = "";
+				String _value = "";
+				if (value != null && !value.isBlank()) {
+					String[] valueSplits = value.split("\\|", 2);
+					if (valueSplits.length >= 2) {
+						code = valueSplits[0];
+						_value = valueSplits[1];
+					} else {
+						_value = value;
+					}
+				}
 
-			if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
-				whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\",\"system\": \""
-						+ system + "\"}]'::jsonb");
-			} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
-				whereParameters.add("pract.resource->'identifier' @> '[{\"system\": \"" + system + "\"}]'::jsonb");
-			} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
-				whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
+				if (system != null && !system.isBlank()) {
+					if (code != null && !code.isBlank()) {
+						whereParameters.add("pract.resource->'identifier' @> '[{\"type\": {\"coding\":[{\"system\":\""+system+"\", \"code\":\""+code+"\"}]}}]'::jsonb");
+					} else {
+						whereParameters.add("pract.resource->'identifier' @> '[{\"type\": {\"coding\":[{\"system\":\""+system+"\"}]}}]'::jsonb");
+					} 
+				} else {
+					if (code != null && !code.isBlank()) {
+						whereParameters.add("pract.resource->'identifier' @> '[{\"type\": {\"coding\":[{\"code\":\""+code+"\"}]}}]'::jsonb");
+					}
+				}
+				
+				if (_value != null && !_value.isBlank()) {
+					whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + _value + "\"}]'::jsonb");
+				}
+			} else {
+				if (system != null && !system.isEmpty() && value != null && !value.isEmpty()) {
+					whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\",\"system\": \""
+							+ system + "\"}]'::jsonb");
+				} else if (system != null && !system.isEmpty() && (value == null || value.isEmpty())) {
+					whereParameters.add("pract.resource->'identifier' @> '[{\"system\": \"" + system + "\"}]'::jsonb");
+				} else if ((system == null || system.isEmpty()) && value != null && !value.isEmpty()) {
+					whereParameters.add("pract.resource->'identifier' @> '[{\"value\": \"" + value + "\"}]'::jsonb");
+				}
 			}
 			returnAll = false;
 		}
