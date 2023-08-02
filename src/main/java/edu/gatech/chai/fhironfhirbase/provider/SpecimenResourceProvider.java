@@ -239,8 +239,8 @@ public class SpecimenResourceProvider extends BaseResourceProvider {
 	 * The "@Update" annotation indicates that this method supports replacing an
 	 * existing resource (by ID) with a new instance of that resource.
 	 * 
-	 * @param theId      This is the ID of the patient to update
-	 * @param thePatient This is the actual resource to save
+	 * @param theId      This is the ID of the Specimen to update
+	 * @param theSpecimen This is the actual Specimen to save
 	 * @return This method returns a "MethodOutcome"
 	 */
 	@Update()

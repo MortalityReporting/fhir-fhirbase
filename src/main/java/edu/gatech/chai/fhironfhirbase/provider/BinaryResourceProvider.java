@@ -33,6 +33,7 @@ import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
 import ca.uhn.fhir.rest.annotation.IdParam;
+import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.RequiredParam;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
@@ -55,7 +56,7 @@ public class BinaryResourceProvider extends BaseResourceProvider {
 	@PostConstruct
 	private void postConstruct() {
 		setTableName(BinaryResourceProvider.getType().toLowerCase());
-		setMyResourceType(BinaryResourceProvider.getType());
+		setMyResourceType(BinaryResourceProvider.getType().replace("\"", ""));
 
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
@@ -63,7 +64,7 @@ public class BinaryResourceProvider extends BaseResourceProvider {
 	}
 
 	public static String getType() {
-		return "Binary";
+		return "\"Binary\"";
 	}
 
 	@Override
@@ -137,21 +138,20 @@ public class BinaryResourceProvider extends BaseResourceProvider {
 
 	@Search()
 	public IBundleProvider findDocumentReferenceByIds(
-			@RequiredParam(name = Binary.SP_RES_ID) TokenOrListParam theBinaryIds) {
+			@OptionalParam(name = Binary.SP_RES_ID) TokenOrListParam theBinaryIds) {
 
-		if (theBinaryIds == null) {
-			return null;
+		String whereStatement = "";
+		if (theBinaryIds != null) {
+			whereStatement = " WHERE ";
+			for (TokenParam theBinaryId : theBinaryIds.getValuesAsQueryTokens()) {
+				whereStatement += "b.id = '" + theBinaryId.getValue() + "' OR ";
+			}
+
+			whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
 		}
 
-		String whereStatement = "WHERE ";
-		for (TokenParam theBinaryId : theBinaryIds.getValuesAsQueryTokens()) {
-			whereStatement += "b.id = '" + theBinaryId.getValue() + "' OR ";
-		}
-
-		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
-
-		String queryCount = "SELECT count(*) FROM binary b " + whereStatement;
-		String query = "SELECT * FROM binary b " + whereStatement;
+		String queryCount = "SELECT count(*) FROM \"binary\" b" + whereStatement;
+		String query = "SELECT * FROM \"binary\" b" + whereStatement;
 
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
