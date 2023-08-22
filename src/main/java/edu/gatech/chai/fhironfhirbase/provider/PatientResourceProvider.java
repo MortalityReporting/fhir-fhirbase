@@ -25,7 +25,9 @@ import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.instance.model.api.IPrimitiveType;
+import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.CodeType;
+import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.DateType;
@@ -35,6 +37,7 @@ import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.Identifier;
 import org.hl7.fhir.r4.model.InstantType;
 import org.hl7.fhir.r4.model.IntegerType;
 import org.hl7.fhir.r4.model.ListResource;
@@ -42,6 +45,8 @@ import org.hl7.fhir.r4.model.Location;
 import org.hl7.fhir.r4.model.MedicationRequest;
 import org.hl7.fhir.r4.model.MedicationStatement;
 import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.OperationOutcome;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.hl7.fhir.r4.model.Organization;
@@ -50,6 +55,8 @@ import org.hl7.fhir.r4.model.Procedure;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.RelatedPerson;
 import org.hl7.fhir.r4.model.Type;
+import org.hl7.fhir.r4.model.UriType;
+import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.Include;
@@ -74,6 +81,8 @@ import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenParam;
+import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
+import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
@@ -110,6 +119,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 	 */
 	@Override
 	public Class<USCorePatient> getResourceType() {
+		
 		return USCorePatient.class;
 	}
 
@@ -661,6 +671,43 @@ public class PatientResourceProvider extends BaseResourceProvider {
 				return totalsize;
 			}
 		};
+
+	}
+	@Operation(name = "$summary", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
+	public Bundle ipsSummaryOperation(RequestDetails theRequestDetails, @IdParam IdType thePatientId,
+		@OperationParam(name = "identifier") Identifier theIdentifier, @OperationParam(name = "profile") UriType theProfile,
+		@OperationParam(name = "graph") UriType theGraph) {
+			return retrieveRelatedSummaryDocument(thePatientId);
+		}
+
+	@Operation(name = "$summary", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
+	public Bundle ipsSummaryOperation(RequestDetails theRequestDetails, @OperationParam(name = "identifier") Identifier theIdentifier,
+		@OperationParam(name = "profile") UriType theProfile, @OperationParam(name = "graph") UriType theGraph) {
+			if(theIdentifier == null || theIdentifier.isEmpty()){
+				throw new InvalidRequestException("This server requires a request of 'fhir/$[id]/$summary or a request of 'fhir/$summary' with a POST body containing a parameter named 'identifier' with a type of 'valueIdentifier'");
+			}
+			IdType thePatientId = new IdType("Patient", theIdentifier.getValue());
+			return retrieveRelatedSummaryDocument(thePatientId);
+		}
+
+	private Bundle retrieveRelatedSummaryDocument(IdType thePatientId){
+		String searchQuery = "SELECT * FROM bundle WHERE resource->'entry' @> '[{ \"resource\": { \"resourceType\": \"Patient\", \"id\": \""+thePatientId.getIdPart()+"\"}}]';";
+		List<IBaseResource> results;
+		try {
+			results = getFhirbaseMapping().search(searchQuery, Bundle.class);
+		} catch (SQLException e) {
+			OperationOutcome outcome = new OperationOutcome();
+			CodeableConcept detailCode = new CodeableConcept();
+			detailCode.setText(e.getLocalizedMessage());
+			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+			e.printStackTrace();
+			throw new UnprocessableEntityException(getFhirContext(), outcome);
+		}
+		if(results.size() == 0){
+			return new Bundle(); //TODO: make an appropriate IPS empty bundle
+		}
+		Bundle returnBundle = (Bundle)results.get(0);
+		return returnBundle;
 	}
 
 	private void getLocations(List<IBaseResource> resources, String patientId, String code, String extensionType) throws SQLException {
@@ -801,5 +848,4 @@ public class PatientResourceProvider extends BaseResourceProvider {
 		}
 
 	}
-
 }

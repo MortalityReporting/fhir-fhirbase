@@ -1,26 +1,3 @@
-/*
- * Filename: /Users/mc142/Documents/workspace/mortality-reporting/raven-fhir-server-dev/fhir-fhirbase/src/main/java/edu/gatech/chai/fhironfhirbase/provider/PatientResourceProvider copy.java
- * Path: /Users/mc142/Documents/workspace/mortality-reporting/raven-fhir-server-dev/fhir-fhirbase/src/main/java/edu/gatech/chai/fhironfhirbase/provider
- * Created Date: Saturday, December 3rd 2022, 5:26:07 pm
- * Author: Myung Choi
- * 
- * Copyright (c) 2022 GTRI - Health Emerging and Advanced Technologies (HEAT)
- */
-/*******************************************************************************
- * Copyright (c) 2019 Georgia Tech Research Institute
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.sql.SQLException;
@@ -32,10 +9,13 @@ import javax.annotation.PostConstruct;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.IdType;
-import org.hl7.fhir.r4.model.codesystems.MeasureScoring;
+import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.Resource;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.Include;
@@ -56,39 +36,31 @@ import ca.uhn.fhir.rest.param.ReferenceOrListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
+import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 
-/**
- * This is a resource provider which stores Patient resources in memory using a
- * HashMap. This is obviously not a production-ready solution for many reasons,
- * but it is useful to help illustrate how to build a fully-functional server.
- */
 @Service
 @Scope("prototype")
-public class BundleResourceProvider extends BaseResourceProvider {
+public class IPSBundlePlainProvider extends BasePlainProvider{
+	private PatientResourceProvider patientResourceProvider;
 
-	public BundleResourceProvider(FhirContext ctx) {
+	public IPSBundlePlainProvider(FhirContext ctx) {
 		super(ctx);
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(BundleResourceProvider.getType().toLowerCase());
-		setMyResourceType(BundleResourceProvider.getType());
+		setTableName("Bundle");
+		setMyResourceType("Bundle");
 
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
 
-	public static String getType() {
+	public static String getType() {	
 		return "Bundle";
 	}
 
-	/**
-	 * The getResourceType method comes from IResourceProvider, and must be
-	 * overridden to indicate what type of resource this provider supplies.
-	 */
-	@Override
 	public Class<Bundle> getResourceType() {
 		return Bundle.class;
 	}
@@ -97,11 +69,37 @@ public class BundleResourceProvider extends BaseResourceProvider {
 	 * The "@Create" annotation indicates that this method implements "create=type",
 	 * which adds a new instance of a resource to the server.
 	 */
-	@Create()
+	@Create(type = Bundle.class)
 	public MethodOutcome createBundle(@ResourceParam Bundle theBundle) {
 		validateResource(theBundle);
+		if(patientResourceProvider == null){
+			patientResourceProvider = new PatientResourceProvider(getFhirContext());
+			patientResourceProvider.setFhirbaseMapping(this.getFhirbaseMapping());
+			patientResourceProvider.setTableName(PatientResourceProvider.getType().toLowerCase());
+			patientResourceProvider.setMyResourceType(PatientResourceProvider.getType());
+		}
+		//Persist patient if exists
+		for(BundleEntryComponent bec:theBundle.getEntry()){
+			Resource resource = bec.getResource();
+			if(resource != null && resource instanceof USCorePatient){
+				USCorePatient thePatient = (USCorePatient)resource;
+				//Update Patient if exists
+				if(thePatient.getId() != null && !thePatient.getId().isEmpty()){
+					IBaseResource existingPatient = patientResourceProvider.readPatient(new IdType(thePatient.getId()));
+					if(existingPatient != null){
+						patientResourceProvider.updatePatient(new IdType(thePatient.getId()), thePatient);
+					}
+					else{
+						persistRelatedPatient(theBundle, thePatient);
+					}
+				}
+				//Else create patient
+				else{
+					persistRelatedPatient(theBundle, thePatient);
+				}
+			}
+		}
 		MethodOutcome retVal = new MethodOutcome();
-
 		try {
 			IBaseResource createdBundle = getFhirbaseMapping().create(theBundle, getResourceType());
 			retVal.setId(createdBundle.getIdElement());
@@ -130,7 +128,7 @@ public class BundleResourceProvider extends BaseResourceProvider {
 	 *              IdDt and must be annotated with the "@Read.IdParam" annotation.
 	 * @return Returns a resource matching this identifier, or null if none exists.
 	 */
-	@Read()
+	@Read(type = Bundle.class)
 	public IBaseResource readBundle(@IdParam IdType theId) {
 		IBaseResource retVal = null;
 
@@ -167,7 +165,7 @@ public class BundleResourceProvider extends BaseResourceProvider {
 		return retVal;
 	}
 
-	@Delete()
+	@Delete(type = Bundle.class)
 	public void deleteBundle(@IdParam IdType theId) {
 		try {
 			getFhirbaseMapping().delete(theId, getResourceType(), getTableName());
@@ -196,7 +194,7 @@ public class BundleResourceProvider extends BaseResourceProvider {
 	 * @return This method returns a list of Patients in bundle. This list may
 	 *         contain multiple matching resources, or it may also be empty.
 	 */
-	@Search(allowUnknownParams = true)
+	@Search(type = Bundle.class, allowUnknownParams = true)
 	public IBundleProvider findBundlesByParams(RequestDetails theRequestDetails,
 			@OptionalParam(name = Bundle.SP_RES_ID) TokenParam theBundleId,
 			@OptionalParam(name = Bundle.SP_IDENTIFIER) TokenParam theBundleIdentifier,
@@ -305,7 +303,6 @@ public class BundleResourceProvider extends BaseResourceProvider {
 		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
-
 		return myBundleProvider;
 
 	}
@@ -363,4 +360,17 @@ public class BundleResourceProvider extends BaseResourceProvider {
 
 	}
 
+	public PatientResourceProvider getPatientResourceProvider() {
+		return this.patientResourceProvider;
+	}
+
+	public void setPatientResourceProvider(PatientResourceProvider patientResourceProvider) {
+		this.patientResourceProvider = patientResourceProvider;
+	}
+
+	private Bundle persistRelatedPatient(Bundle bundle, USCorePatient patient){
+		MethodOutcome methodOutcome = patientResourceProvider.createPatient(patient);
+		patient.setId(methodOutcome.getId());
+		return bundle;
+	}
 }
