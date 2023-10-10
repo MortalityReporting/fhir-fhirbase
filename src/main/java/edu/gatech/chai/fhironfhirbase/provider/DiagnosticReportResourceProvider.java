@@ -89,8 +89,8 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 	 * Path: <b>DiagnosticReport.tox-lab-case-number</b><br>
 	 * </p>
 	 */
-	@SearchParamDefinition(name="tox-lab-case-number", path="DiagnosticReport.extension-tracking-numbers", description="Extension Trakcing Number for toxicology lab case", type="token" )
-	public static final String SP_TOX_LAB_CASE_NUMBER = "tox-lab-case-number";
+	@SearchParamDefinition(name="tracking-number", path="DiagnosticReport.extension-tracking-numbers", description="Extension Trakcing Number for toxicology lab case", type="token" )
+	public static final String SP_TRACKING_NUMBER = "tracking-number";
 	/**
    	 * <b>Fluent Client</b> search parameter constant for <b>tox-lab-case-number</b>
 	 * <p>
@@ -99,27 +99,27 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 	 * Path: <b>DiagnosticReport.tox-lab-case-number</b><br>
 	 * </p>
    	 */
-	public static final ca.uhn.fhir.rest.gclient.TokenClientParam TOX_LAB_CASE_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_TOX_LAB_CASE_NUMBER);
+	public static final ca.uhn.fhir.rest.gclient.TokenClientParam TRACKING_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_TRACKING_NUMBER);
 
-	/**
-	 * Search parameter: <b>mdi-case-number</b>
-	 * <p>
-	 * Description: <b>A DiagnosticReport extension identifier for mdi-case-number</b><br>
-   	 * Type: <b>token</b><br>
-	 * Path: <b>DiagnosticReport.mdi-case-number</b><br>
-	 * </p>
-	 */
-	@SearchParamDefinition(name="mdi-case-number", path="DiagnosticReport.extension-tracking-numbers", description="Extension Trakcing Number for MDI case", type="token" )
-	public static final String SP_MDI_CASE_NUMBER = "mdi-case-number";
-	/**
-   	 * <b>Fluent Client</b> search parameter constant for <b>mdi-case-number</b>
-   	 * <p>
-	 * Description: <b>A DiagnosticReport extension identifier for mdi-case-number</b><br>
-	 * Type: <b>token</b><br>
-   	 * Path: <b>DiagnosticReport.mdi-case-number</b><br>
-   	 * </p>
-   	 */
-  	public static final ca.uhn.fhir.rest.gclient.TokenClientParam MDI_CASE_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_MDI_CASE_NUMBER);
+	// /**
+	//  * Search parameter: <b>mdi-case-number</b>
+	//  * <p>
+	//  * Description: <b>A DiagnosticReport extension identifier for mdi-case-number</b><br>
+   	//  * Type: <b>token</b><br>
+	//  * Path: <b>DiagnosticReport.mdi-case-number</b><br>
+	//  * </p>
+	//  */
+	// @SearchParamDefinition(name="mdi-case-number", path="DiagnosticReport.extension-tracking-numbers", description="Extension Trakcing Number for MDI case", type="token" )
+	// public static final String SP_MDI_CASE_NUMBER = "mdi-case-number";
+	// /**
+   	//  * <b>Fluent Client</b> search parameter constant for <b>mdi-case-number</b>
+   	//  * <p>
+	//  * Description: <b>A DiagnosticReport extension identifier for mdi-case-number</b><br>
+	//  * Type: <b>token</b><br>
+   	//  * Path: <b>DiagnosticReport.mdi-case-number</b><br>
+   	//  * </p>
+   	//  */
+  	// public static final ca.uhn.fhir.rest.gclient.TokenClientParam MDI_CASE_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_MDI_CASE_NUMBER);
 
 
 	public DiagnosticReportResourceProvider(FhirContext ctx) {
@@ -244,8 +244,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 					USCorePatient.SP_NAME }) ReferenceAndListParam thePatients,
 			@OptionalParam(name = DiagnosticReport.SP_SUBJECT, chainWhitelist = { "",
 					USCorePatient.SP_NAME }) ReferenceAndListParam theSubjects,
-			@OptionalParam(name = DiagnosticReportResourceProvider.SP_TOX_LAB_CASE_NUMBER) TokenOrListParam theToxLabCaseNumber,
-			@OptionalParam(name = DiagnosticReportResourceProvider.SP_MDI_CASE_NUMBER) TokenOrListParam theMdiCaseNumber,
+			@OptionalParam(name = DiagnosticReportResourceProvider.SP_TRACKING_NUMBER) TokenOrListParam theTrackingNumber,
 			@OptionalParam(name = DiagnosticReport.SP_IDENTIFIER) TokenParam theDocumentReferenceIdentifier,
 			@OptionalParam(name = DiagnosticReport.SP_ENCOUNTER) ReferenceParam theEncounter,
 			@Sort SortSpec theSort,
@@ -301,42 +300,18 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
-		if (theToxLabCaseNumber != null) {
+		if (theTrackingNumber != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "extensions", "diag.resource->'extension'");
 
 			String where = "";
-			for (TokenParam toxLabCaseNumberToken : theToxLabCaseNumber.getValuesAsQueryTokens()) {
+			for (TokenParam toxLabCaseNumberToken : theTrackingNumber.getValuesAsQueryTokens()) {
 				String system = toxLabCaseNumberToken.getSystem();
 				String value = toxLabCaseNumberToken.getValue();
 				String whereItem;
 				if (system == null || system.isEmpty()) {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_TOX_LAB_CASE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
 				} else {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_TOX_LAB_CASE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
-				}
-				if (where.isEmpty()) {
-					where = whereItem;
-				} else {
-					where += " or " + whereItem;
-				}
-			}
-
-			whereParameters.add(where);
-			returnAll = false;
-		}
-
-		if (theMdiCaseNumber != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "extensions", "diag.resource->'extension'");
-
-			String where = "";
-			for (TokenParam theMdiCaseNumberToken : theMdiCaseNumber.getValuesAsQueryTokens()) {
-				String system = theMdiCaseNumberToken.getSystem();
-				String value = theMdiCaseNumberToken.getValue();
-				String whereItem;
-				if (system == null || system.isEmpty()) {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
-				} else {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
 				}
 				if (where.isEmpty()) {
 					where = whereItem;
@@ -596,8 +571,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			@IdParam(optional = true) IdType theDiagnosticReportId,
 			@OperationParam(name = "id") UriOrListParam theIds, 
 			@OperationParam(name = DiagnosticReport.SP_PATIENT) ParametersParameterComponent thePatient,
-			@OperationParam(name = DiagnosticReportResourceProvider.SP_MDI_CASE_NUMBER) StringOrListParam theMdiCaseNumber,
-			@OperationParam(name = DiagnosticReportResourceProvider.SP_TOX_LAB_CASE_NUMBER) StringOrListParam theToxLabCaseNumber) {
+			@OperationParam(name = DiagnosticReportResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber) {
 				
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
@@ -640,11 +614,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 
 		IQuery<IBaseBundle> query = client.search().forResource(DiagnosticReport.class);
 
-		if (addTokenToIdentifierQuery(query, MDI_CASE_NUMBER, theMdiCaseNumber) == true) {
-			shouldQuery = true;
-		}
-
- 		if (addTokenToIdentifierQuery(query, TOX_LAB_CASE_NUMBER, theToxLabCaseNumber) == true) {
+ 		if (addTokenToIdentifierQuery(query, TRACKING_NUMBER, theTrackingNumber) == true) {
 			shouldQuery = true;
 		}
 

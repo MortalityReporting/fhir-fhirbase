@@ -565,12 +565,10 @@ public class SystemTransactionProvider {
 			String code = trackingNumIdentifier.getType().getCodingFirstRep().getCode();
 			String system = StringUtils.defaultString(trackingNumIdentifier.getSystem());
 			String value = StringUtils.defaultString(trackingNumIdentifier.getValue());
-			if ("mdi-case-number".equals(code)) {	
-				return searchComposition(client, CompositionResourceProvider.MDI_CASE_NUMBER, system, value);
-			} else if ("edrs-file-number".equals(code)) {
-				return searchComposition(client, CompositionResourceProvider.EDRS_FILE_NUMBER, system, value);
+			if ("mdi-case-number".equals(code) || "edrs-file-number".equals(code)) {	
+				return searchComposition(client, CompositionResourceProvider.TRACKING_NUMBER, system, value);
 			} else if ("tox-lab-case-number".equals(code)) {
-				return searchComposition(client, DiagnosticReportResourceProvider.TOX_LAB_CASE_NUMBER, system, value);
+				return searchComposition(client, DiagnosticReportResourceProvider.TRACKING_NUMBER, system, value);
 			}
 		}
 
@@ -597,10 +595,8 @@ public class SystemTransactionProvider {
 			String code = trackingNumIdentifier.getType().getCodingFirstRep().getCode();
 			String system = StringUtils.defaultString(trackingNumIdentifier.getSystem());
 			String value = StringUtils.defaultString(trackingNumIdentifier.getValue());
-			if ("mdi-case-number".equals(code)) {	
-				return searchDiagnosticReport(client, DiagnosticReportResourceProvider.MDI_CASE_NUMBER, system, value);
-			} else if ("tox-lab-case-number".equals(code)) {
-				return searchDiagnosticReport(client, DiagnosticReportResourceProvider.TOX_LAB_CASE_NUMBER, system, value);
+			if ("mdi-case-number".equals(code) || "tox-lab-case-number".equals(code)) {	
+				return searchDiagnosticReport(client, DiagnosticReportResourceProvider.TRACKING_NUMBER, system, value);
 			}
 		}
 

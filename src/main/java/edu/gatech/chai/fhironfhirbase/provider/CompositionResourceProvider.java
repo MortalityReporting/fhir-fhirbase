@@ -69,17 +69,12 @@ import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
-import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
-import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
 import ca.uhn.fhir.rest.gclient.IQuery;
-import ca.uhn.fhir.rest.gclient.TokenClientParam;
 import ca.uhn.fhir.rest.param.DateOrListParam;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.param.ParamPrefixEnum;
-import ca.uhn.fhir.rest.param.ParameterUtil;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
-import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.StringOrListParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenAndListParam;
@@ -97,26 +92,6 @@ import edu.gatech.chai.fhironfhirbase.utilities.OperationUtil;
 public class CompositionResourceProvider extends BaseResourceProvider {
 	private static final Logger logger = LoggerFactory.getLogger(CompositionResourceProvider.class);
 	public static final String NQ_EVENT_DETAIL = "event-detail";
-
-	/**
-	 * Search parameter: <b>death-date-actual</b>
-	 * <p>
-	 * Description: <b>Actual Date of Death</b><br>
-   	 * Type: <b>date</b><br>
-	 * Path: <b>Observation.valueDateTime</b><br>
-	 * </p>
-	 */
-	@SearchParamDefinition(name="death-date-presumed", path="Observation.valueDateTime", description="Actual Date of Death", type="date" )
-	public static final String SP_DEATH_DATE_PRESUMED = "death-date-presumed";
-	/**
-   	 * <b>Fluent Client</b> search parameter constant for <b>death-date-presumed</b>
-	 * <p>
-	 * Description: <b>Presumed Date of Death</b><br>
-   	 * Type: <b>date</b><br>
-	 * Path: <b>Observation.valueDateTime</b><br>
-	 * </p>
-   	 */
-	public static final ca.uhn.fhir.rest.gclient.DateClientParam DEATH_DATE_PRESUMED = new ca.uhn.fhir.rest.gclient.DateClientParam(SP_DEATH_DATE_PRESUMED);
 
 	/**
 	 * Search parameter: <b>death-date-pronounced</b>
@@ -179,45 +154,24 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	public static final ca.uhn.fhir.rest.gclient.StringClientParam DEATH_LOCATION = new ca.uhn.fhir.rest.gclient.StringClientParam(SP_DEATH_LOCATION);
 
 	/**
-	 * Search parameter: <b>edrs-file-number</b>
+	 * Search parameter: <b>tracking-number</b>
 	 * <p>
-	 * Description: <b>A composition extension identifier for edrs-file-number</b><br>
+	 * Description: <b>A composition extension identifier for tracking-number</b><br>
    	 * Type: <b>token</b><br>
-	 * Path: <b>Composition.edrs-file-number</b><br>
+	 * Path: <b>Composition.tracking-number</b><br>
 	 * </p>
 	 */
-	@SearchParamDefinition(name="edrs-file-number", path="Composition.extension-tracking-numbers", description="Extension Trakcing Number for EDRS file", type="token" )
-	public static final String SP_EDRS_FILE_NUMBER = "edrs-file-number";
+	@SearchParamDefinition(name="tracking-number", path="Composition.extension-tracking-numbers", description="Extension Trakcing Number for Case File", type="token" )
+	public static final String SP_TRACKING_NUMBER = "tracking-number";
 	/**
-   	 * <b>Fluent Client</b> search parameter constant for <b>edrs-file-number</b>
+   	 * <b>Fluent Client</b> search parameter constant for <b>tracking-number</b>
 	 * <p>
-	 * Description: <b>A composition extension identifier for edrs-file-number</b><br>
+	 * Description: <b>A composition extension identifier for tracking-number</b><br>
    	 * Type: <b>token</b><br>
-	 * Path: <b>Composition.edrs-file-number</b><br>
+	 * Path: <b>Composition.tracking-number</b><br>
 	 * </p>
    	 */
-	public static final ca.uhn.fhir.rest.gclient.TokenClientParam EDRS_FILE_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_EDRS_FILE_NUMBER);
-
-	/**
-	 * Search parameter: <b>mdi-case-number</b>
-	 * <p>
-	 * Description: <b>A composition extension identifier for mdi-case-number</b><br>
-   	 * Type: <b>token</b><br>
-	 * Path: <b>Composition.mdi-case-number</b><br>
-	 * </p>
-	 */
-	@SearchParamDefinition(name="mdi-case-number", path="Composition.extension-tracking-numbers", description="Extension Trakcing Number for MDI case", type="token" )
-	public static final String SP_MDI_CASE_NUMBER = "mdi-case-number";
-	/**
-   	 * <b>Fluent Client</b> search parameter constant for <b>mdi-case-number</b>
-   	 * <p>
-	 * Description: <b>A composition extension identifier for mdi-case-number</b><br>
-	 * Type: <b>token</b><br>
-   	 * Path: <b>Composition.mdi-case-number</b><br>
-   	 * </p>
-   	 */
-  	public static final ca.uhn.fhir.rest.gclient.TokenClientParam MDI_CASE_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_MDI_CASE_NUMBER);
-	
+	public static final ca.uhn.fhir.rest.gclient.TokenClientParam TRACKING_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_TRACKING_NUMBER);	
 
 	public CompositionResourceProvider(FhirContext ctx) {
 		super(ctx);
@@ -302,11 +256,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Composition.SP_TYPE) TokenOrListParam theOrTypes,
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
-			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRESUMED) DateRangeParam theDeathDatePresumed,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED) DateRangeParam theDeathDatePronounced,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE) DateRangeParam theDeathDate,
-			@OptionalParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) TokenOrListParam theEdrsFileNumber,
-			@OptionalParam(name = CompositionResourceProvider.SP_MDI_CASE_NUMBER) TokenOrListParam theMdiCaseNumber,
+			@OptionalParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) TokenOrListParam theTrackingNumber,
 			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", 
 					USCorePatient.SP_ADDRESS_CITY,
 					USCorePatient.SP_ADDRESS_COUNTRY,
@@ -350,7 +302,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 		}
 
-		if (theDeathLocations != null || theDeathDate != null || theDeathDatePronounced != null || theDeathDatePresumed != null) {
+		if (theDeathLocations != null || theDeathDate != null || theDeathDatePronounced != null) {
 			// join observation and composition tables on subject reference
 			fromStatement += " join observation o on comp.resource->'subject'->>'reference' = o.resource->'subject'->>'reference'";
 		}
@@ -430,17 +382,17 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		} else {
 			// If theDeathDate is selected, then presumed and pronunced both will be examined with 'OR'. Thus, presumed
 			// and pronounced will only be examined when deathdate search is not used. 
-			if (theDeathDatePresumed != null) {
-				// add presumed date to path
-				fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
-				addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+			// if (theDeathDatePresumed != null) {
+			// 	// add presumed date to path
+			// 	fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
+			// 	addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
 				
-				// check observation.valueDateTime
-				String deathDateWhere = constructDateRangeWhereParameter(theDeathDate, "o", "valueDateTime");
-				if (deathDateWhere != null && !deathDateWhere.isEmpty()) {
-					whereParameters.add(deathDateWhere);
-				}
-			}
+			// 	// check observation.valueDateTime
+			// 	String deathDateWhere = constructDateRangeWhereParameter(theDeathDate, "o", "valueDateTime");
+			// 	if (deathDateWhere != null && !deathDateWhere.isEmpty()) {
+			// 		whereParameters.add(deathDateWhere);
+			// 	}
+			// }
 	
 			if (theDeathDatePronounced != null) {
 				// check pronounced death tiem component valueDate
@@ -472,20 +424,20 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 
-		if (theEdrsFileNumber != null) {
+		if (theTrackingNumber != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
 
 			String where = "";
-			for (TokenParam edrsFileNumberToken : theEdrsFileNumber.getValuesAsQueryTokens()) {
-				String system = edrsFileNumberToken.getSystem();
-				String value = edrsFileNumberToken.getValue();
+			for (TokenParam trackingNumberToken : theTrackingNumber.getValuesAsQueryTokens()) {
+				String system = trackingNumberToken.getSystem();
+				String value = trackingNumberToken.getValue();
 				String whereItem;
 				if (system == null || system.isBlank()) {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_EDRS_FILE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
 				} else if (value == null || value.isBlank()) {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_EDRS_FILE_NUMBER + "\"}]}, \"system\": \"" + system + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"system\": \"" + system + "\"}}'::jsonb";
 				} else {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_EDRS_FILE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
 				}
 				if (where.isEmpty()) {
 					where = whereItem;
@@ -496,36 +448,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 			whereParameters.add(where);
 			returnAll = false;
-		}
-
-		if (theMdiCaseNumber != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
-
-			String where = "";
-			for (TokenParam mdiCaseNumberToken : theMdiCaseNumber.getValuesAsQueryTokens()) {
-				// TokenParam token = new TokenParam(mdiCaseNumberToken.getValue());
-				
-				// String system = token.getSystem();
-				// String value = token.getValue();
-				String system = mdiCaseNumberToken.getSystem();
-				String value = mdiCaseNumberToken.getValue();
-				String whereItem;
-				if (system == null || system.isBlank()) {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
-				} else if (value == null || value.isBlank()) { 
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"system\": \"" + system + "\"}}'::jsonb";
-				} else {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\", \"code\":\"" + SP_MDI_CASE_NUMBER + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
-				}
-				if (where.isEmpty()) {
-					where = whereItem;
-				} else {
-					where += " or " + whereItem;
-				}
-			}
-
-			whereParameters.add(where);
-			returnAll = false;		
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
@@ -814,16 +736,15 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	// 	}
 	// }
 
-	@Operation(name = "$mdi-documents", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
+	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
 			@IdParam(optional=true) IdType theCompositionId,
 			@OperationParam(name = "id") UriOrListParam theIds, 
 			@OperationParam(name = "persist") BooleanType thePersist,
+			@OperationParam(name = "graph") UriParam theGraph,
 			@OperationParam(name = Composition.SP_PATIENT) List<ParametersParameterComponent> thePatients,
-			@OperationParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) StringOrListParam theEdrsFileNumber,
-			@OperationParam(name = CompositionResourceProvider.SP_MDI_CASE_NUMBER) StringOrListParam theMdiCaseNumber,
+			@OperationParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber,
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
-			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRESUMED, max = 2) DateOrListParam theDeathDatePresumed,  
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED, max = 2) DateOrListParam theDeathDatePronounced,
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE, max = 2) DateOrListParam theProfileDeathDateRange) {
 				
@@ -841,19 +762,16 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 
 		if (theCompositionId != null) {
-			// if we have the composition id, then all search parameters will be ignored.
-			if (thePersist == null) {
-				thePersist = new BooleanType(false);
-			}
+			return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
 
-			return client
-				.operation()
-				.onInstance(theCompositionId)
-				.named("$document")
-				.withParameter(Parameters.class, "persist", thePersist)
-				.useHttpGet()
-				.returnResourceType(Bundle.class)
-				.execute();
+			// return client
+			// 	.operation()
+			// 	.onInstance(theCompositionId)
+			// 	.named("$document")
+			// 	.withParameter(Parameters.class, "persist", thePersist)
+			// 	.useHttpGet()
+			// 	.returnResourceType(Bundle.class)
+			// 	.execute();
 		}
 
 		// We construct where statement...
@@ -867,13 +785,17 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			// Composition ID tokens. This is to retrieve documents for the IDs.
 			// This will ignore other search parameters.
 			for (UriParam theId: theIds.getValuesAsQueryTokens()) {
-				String id = theId.getValue();
-				Bundle compositionBundle = client
-					.operation().onInstance(new IdType("Composition", id))
-					.named("$document")
-					.withNoParameters(Parameters.class)
-					.returnResourceType(Bundle.class)
-					.execute();
+				// String id = theId.getValue();
+				Bundle compositionBundle = 
+					generateDocumentOperation(theRequestDetails, null, theId, thePersist, theGraph);
+				
+				// client
+				// 	.operation().onInstance(new IdType("Composition", id))
+				// 	.named("$document")
+				// 	.withNoParameters(Parameters.class)
+				// 	.returnResourceType(Bundle.class)
+				// 	.execute();
+				
 				BundleEntryComponent entryComponent = new BundleEntryComponent();
 				entryComponent.setFullUrl(compositionBundle.getId());
 				entryComponent.setResource(compositionBundle);
@@ -896,11 +818,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		Bundle compositionsBundle = null;
 		IQuery<IBaseBundle> query = client.search().forResource(Composition.class);
 
-		if (addTokenToIdentifierQuery(query, EDRS_FILE_NUMBER, theEdrsFileNumber) == true) {
-			shouldQuery = true;
-		}
-
- 		if (addTokenToIdentifierQuery(query, MDI_CASE_NUMBER, theMdiCaseNumber) == true) {
+		if (addTokenToIdentifierQuery(query, TRACKING_NUMBER, theTrackingNumber) == true) {
 			shouldQuery = true;
 		}
 
@@ -992,13 +910,13 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 
 		// Death Date Presumed
-		if (theDeathDatePresumed != null) {
-			IQuery<IBaseBundle> queryDates = queryForDates(query, theDeathDatePresumed);
-			if (queryDates != null) {
-				query = queryDates;
-				shouldQuery = true;
-			}
-		}
+		// if (theDeathDatePresumed != null) {
+		// 	IQuery<IBaseBundle> queryDates = queryForDates(query, theDeathDatePresumed);
+		// 	if (queryDates != null) {
+		// 		query = queryDates;
+		// 		shouldQuery = true;
+		// 	}
+		// }
 
 		// Death Date 
 		if (theProfileDeathDateRange != null) {
@@ -1018,12 +936,15 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			for (BundleEntryComponent entry : entries) {
 				String compositionId = entry.getResource().getIdElement().getIdPart();
 
-				Bundle documentBundle = client
-					.operation().onInstance(new IdType("Composition", compositionId))
-					.named("$document")
-					.withNoParameters(Parameters.class)
-					.returnResourceType(Bundle.class)
-					.execute();
+				Bundle documentBundle = 
+					generateDocumentOperation(theRequestDetails, new IdType("Composition", compositionId), null, thePersist, theGraph);
+
+				// client
+				// 	.operation().onInstance(new IdType("Composition", compositionId))
+				// 	.named("$document")
+				// 	.withNoParameters(Parameters.class)
+				// 	.returnResourceType(Bundle.class)
+				// 	.execute();
 				BundleEntryComponent entryComponent = new BundleEntryComponent();
 				entryComponent.setFullUrl(documentBundle.getId());
 				entryComponent.setResource(documentBundle);
@@ -1044,12 +965,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		return retBundle;
 	}
 	
-	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
-	public Bundle generateDocumentOperation(RequestDetails theRequestDetails, 
-			@IdParam IdType theCompositionId,
-			@OperationParam(name = "id") UriParam theIdUri, 
-			@OperationParam(name = "persist") BooleanType thePersist,
-			@OperationParam(name = "graph") UriParam theGraph) {
+	public Bundle generateDocumentOperation(RequestDetails theRequestDetails, IdType theCompositionId, UriParam theIdUri, BooleanType thePersist, UriParam theGraph) {
 
 		OperationOutcome outcome = new OperationOutcome();
 
@@ -1136,7 +1052,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			// This is a death certificate document. We need to add full resources in the
 			// section entries
 			// to the resources.
-			metaProfile = "http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-document-mdi-to-edrs";
+			metaProfile = "http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-document-mdi-and-edrs";
 
 			// The composition section is empty. It means that VRDR has never been
 			// generated. We generate it here and persist it.
@@ -1261,7 +1177,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	// TODO: finish update after update API is developed.
 	@Operation(name = "$update-mdi")
 	public Parameters updateMdiDocumentOperation(RequestDetails theRequestDetails,
-		@OperationParam(name = CompositionResourceProvider.SP_EDRS_FILE_NUMBER) TokenOrListParam theEdrsFileNumbers,
+		@OperationParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) TokenOrListParam theTrackingNumbers,
 		@OperationParam(name = "mdi-document") Bundle theBundle) {
 
 		if (theBundle != null) {
@@ -1271,7 +1187,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			OperationUtil.setupClientForAuth(client);
 
 			// if tracking number is not in the parameter, get it from the bundle.
-			if (theEdrsFileNumbers == null) {
+			if (theTrackingNumbers == null) {
 				BundleEntryComponent firstEntry = theBundle.getEntryFirstRep();
 				Resource resource = firstEntry.getResource();
 				if (resource instanceof Composition) {
@@ -1319,7 +1235,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 								if (tType != null && !tType.isEmpty()) {
 									for (Coding code : tType.getCoding()) {
 										if ("http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes".equals(code.getSystem())
-											&& CompositionResourceProvider.EDRS_FILE_NUMBER.equals(code.getCode())) {
+											&& "edrs-file-number".equals(code.getCode())) {
 											identifierSystem = trackingIdentifier.getSystem();
 											identifierValue = trackingIdentifier.getValue();
 										}
@@ -1338,13 +1254,13 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 						Bundle compositionBundle;
 						if (identifierSystem != null && !identifierSystem.isEmpty()) {
 							compositionBundle = client.search().forResource(Composition.class)
-								.and(CompositionResourceProvider.EDRS_FILE_NUMBER
+								.and(CompositionResourceProvider.TRACKING_NUMBER
 								.exactly()
 								.systemAndCode(identifierSystem, identifierValue)
 							).returnBundle(Bundle.class).execute();
 						} else {
 							compositionBundle = client.search().forResource(Composition.class)
-								.and(CompositionResourceProvider.EDRS_FILE_NUMBER
+								.and(CompositionResourceProvider.TRACKING_NUMBER
 								.exactly()
 								.code(identifierValue)
 							).returnBundle(Bundle.class).execute();
