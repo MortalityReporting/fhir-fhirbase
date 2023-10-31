@@ -736,9 +736,19 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	// 	}
 	// }
 
+	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
+	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
+			@IdParam IdType theCompositionId,
+			@OperationParam(name = "id") UriOrListParam theIds, 
+			@OperationParam(name = "persist") BooleanType thePersist,
+			@OperationParam(name = "graph") UriParam theGraph) {
+
+		return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
+	}
+
 	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
-			@IdParam(optional=true) IdType theCompositionId,
+			// @IdParam(optional=true) IdType theCompositionId,
 			@OperationParam(name = "id") UriOrListParam theIds, 
 			@OperationParam(name = "persist") BooleanType thePersist,
 			@OperationParam(name = "graph") UriParam theGraph,
@@ -761,18 +771,18 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			saveIt = true;
 		}
 
-		if (theCompositionId != null) {
-			return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
+		// if (theCompositionId != null) {
+		// 	return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
 
-			// return client
-			// 	.operation()
-			// 	.onInstance(theCompositionId)
-			// 	.named("$document")
-			// 	.withParameter(Parameters.class, "persist", thePersist)
-			// 	.useHttpGet()
-			// 	.returnResourceType(Bundle.class)
-			// 	.execute();
-		}
+		// 	// return client
+		// 	// 	.operation()
+		// 	// 	.onInstance(theCompositionId)
+		// 	// 	.named("$document")
+		// 	// 	.withParameter(Parameters.class, "persist", thePersist)
+		// 	// 	.useHttpGet()
+		// 	// 	.returnResourceType(Bundle.class)
+		// 	// 	.execute();
+		// }
 
 		// We construct where statement...
 		retBundle.setType(BundleType.SEARCHSET);
