@@ -344,6 +344,11 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			return null;
 		}
 
+		// check if this is empty with data-absent-reason
+		if (reference.getReference() == null) {
+			return null;
+		}
+
 		Resource resource = (Resource) client.read()
 		.resource(reference.getReferenceElement().getResourceType())
 		.withId(reference.getReferenceElement().getIdPart()).encodedJson()
