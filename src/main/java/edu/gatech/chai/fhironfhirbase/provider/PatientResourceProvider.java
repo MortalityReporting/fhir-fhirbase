@@ -46,7 +46,6 @@ import org.hl7.fhir.r4.model.MedicationRequest;
 import org.hl7.fhir.r4.model.MedicationStatement;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.hl7.fhir.r4.model.Organization;
@@ -82,6 +81,7 @@ import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
+import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
@@ -704,7 +704,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			throw new UnprocessableEntityException(getFhirContext(), outcome);
 		}
 		if(results.size() == 0){
-			return new Bundle(); //TODO: make an appropriate IPS empty bundle
+			throw new ResourceNotFoundException(thePatientId);
 		}
 		Bundle returnBundle = (Bundle)results.get(0);
 		return returnBundle;
