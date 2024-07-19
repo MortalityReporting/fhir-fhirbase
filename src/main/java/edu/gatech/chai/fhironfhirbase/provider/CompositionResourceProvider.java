@@ -308,7 +308,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 
 		if (theDeathLocations != null) {
-			fromStatement += " join location l on o.resource->'extension'->0->>'url' = 'http://hl7.org/fhir/us/vrdr/StructureDefinition/Observation-Location' " 
+			fromStatement += " join location l on o.resource->'extension'->0->>'url' = 'http://hl7.org/fhir/us/vrdr/StructureDefinition/vrdr-death-location' " 
 				+ "and o.resource->'extension'->0->'valueReference'->>'reference' = concat('Location/', l.resource->>'id')";
 		}
 
