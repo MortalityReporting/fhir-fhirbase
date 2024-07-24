@@ -271,12 +271,12 @@ public class SpecimenResourceProvider extends BaseResourceProvider {
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
-		String subjectResource = subjectReference.getReferenceElement().getResourceType();
-		if (!subjectResource.contentEquals("Patient")) {
-			detailCode.setText("Subject (" + subjectResource + ") must be Patient");
-			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-		}
+		// String subjectResource = subjectReference.getReferenceElement().getResourceType();
+		// if (!subjectResource.contentEquals("Patient")) {
+		// 	detailCode.setText("Subject (" + subjectResource + ") must be Patient");
+		// 	outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+		// 	throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+		// }
 	}
 
 	class MyBundleProvider extends FhirbaseBundleProvider {
