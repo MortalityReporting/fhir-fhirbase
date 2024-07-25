@@ -1,6 +1,6 @@
 package edu.gatech.chai.fhironfhirbase.provider;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Parameters;
