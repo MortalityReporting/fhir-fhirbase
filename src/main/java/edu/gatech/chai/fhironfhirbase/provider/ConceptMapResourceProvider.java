@@ -45,11 +45,13 @@ public class ConceptMapResourceProvider extends BaseResourceProvider {
 
 	public ConceptMapResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(ConceptMapResourceProvider.getType().toLowerCase());
+		setMyResourceType(ConceptMapResourceProvider.getType());
 	}
 
 	@PostConstruct
     private void postConstruct() {
-		setMyResourceType(ConceptMapResourceProvider.getType());
 		int totalSize = getTotalSize("SELECT count(*) FROM "+ConceptMapResourceProvider.getType().toLowerCase()+";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

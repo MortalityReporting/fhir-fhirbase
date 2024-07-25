@@ -37,16 +37,15 @@ public class LocationResourceProvider extends BaseResourceProvider {
 
 	public LocationResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(LocationResourceProvider.getType().toLowerCase());
+		setMyResourceType(LocationResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(LocationResourceProvider.getType().toLowerCase());
-		setMyResourceType(LocationResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

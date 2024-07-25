@@ -69,13 +69,13 @@ public class BundleResourceProvider extends BaseResourceProvider {
 
 	public BundleResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(BundleResourceProvider.getType().toLowerCase());
+		setMyResourceType(BundleResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(BundleResourceProvider.getType().toLowerCase());
-		setMyResourceType(BundleResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

@@ -51,16 +51,15 @@ public class BinaryResourceProvider extends BaseResourceProvider {
 
 	public BinaryResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(BinaryResourceProvider.getType().toLowerCase());
+		setMyResourceType(BinaryResourceProvider.getType().replace("\"", ""));
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(BinaryResourceProvider.getType().toLowerCase());
-		setMyResourceType(BinaryResourceProvider.getType().replace("\"", ""));
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

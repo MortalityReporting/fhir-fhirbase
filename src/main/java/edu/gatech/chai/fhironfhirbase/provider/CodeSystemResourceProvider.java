@@ -60,16 +60,15 @@ public class CodeSystemResourceProvider extends BaseResourceProvider {
 
 	public CodeSystemResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(CodeSystemResourceProvider.getType().toLowerCase());
+		setMyResourceType(CodeSystemResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(CodeSystemResourceProvider.getType().toLowerCase());
-		setMyResourceType(CodeSystemResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

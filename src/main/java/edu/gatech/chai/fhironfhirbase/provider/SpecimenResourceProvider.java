@@ -60,16 +60,15 @@ public class SpecimenResourceProvider extends BaseResourceProvider {
 
 	public SpecimenResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(SpecimenResourceProvider.getType().toLowerCase());
+		setMyResourceType(SpecimenResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(SpecimenResourceProvider.getType().toLowerCase());
-		setMyResourceType(SpecimenResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

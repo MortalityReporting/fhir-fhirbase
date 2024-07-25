@@ -61,13 +61,13 @@ import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 public class OrganizationResourceProvider extends BaseResourceProvider {
 	public OrganizationResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(OrganizationResourceProvider.getType().toLowerCase());
+		setMyResourceType(OrganizationResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(OrganizationResourceProvider.getType().toLowerCase());
-		setMyResourceType(OrganizationResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

@@ -60,16 +60,15 @@ public class ValueSetResourceProvider extends BaseResourceProvider {
 
 	public ValueSetResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(ValueSetResourceProvider.getType().toLowerCase());
+		setMyResourceType(ValueSetResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(ValueSetResourceProvider.getType().toLowerCase());
-		setMyResourceType(ValueSetResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

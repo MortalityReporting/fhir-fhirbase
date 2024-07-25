@@ -42,13 +42,13 @@ public class RelatedPersonResourceProvider extends BaseResourceProvider {
 
 	public RelatedPersonResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(RelatedPersonResourceProvider.getType().toLowerCase());
+		setMyResourceType(RelatedPersonResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(RelatedPersonResourceProvider.getType().toLowerCase());
-		setMyResourceType(RelatedPersonResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

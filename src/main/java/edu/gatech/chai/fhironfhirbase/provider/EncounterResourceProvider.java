@@ -58,12 +58,13 @@ public class EncounterResourceProvider extends BaseResourceProvider {
 
 	public EncounterResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(EncounterResourceProvider.getType().toLowerCase());
+		setMyResourceType(EncounterResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(EncounterResourceProvider.getType().toLowerCase());
-		setMyResourceType(EncounterResourceProvider.getType());
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

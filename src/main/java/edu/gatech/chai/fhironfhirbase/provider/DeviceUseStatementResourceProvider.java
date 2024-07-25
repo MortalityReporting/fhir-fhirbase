@@ -63,15 +63,15 @@ public class DeviceUseStatementResourceProvider extends BaseResourceProvider {
 
 	public DeviceUseStatementResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(DeviceUseStatementResourceProvider.getType().toLowerCase());
+		setMyResourceType(DeviceUseStatementResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(DeviceUseStatementResourceProvider.getType().toLowerCase());
-		setMyResourceType(DeviceUseStatementResourceProvider.getType());
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	@Override

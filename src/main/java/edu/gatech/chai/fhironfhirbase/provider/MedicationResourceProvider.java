@@ -50,13 +50,13 @@ public class MedicationResourceProvider extends BaseResourceProvider {
 
 	public MedicationResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(MedicationResourceProvider.getType().toLowerCase());
+		setMyResourceType(MedicationResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(MedicationResourceProvider.getType().toLowerCase());
-		setMyResourceType(MedicationResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

@@ -48,13 +48,13 @@ public class MessageHeaderResourceProvider extends BaseResourceProvider {
 
 	public MessageHeaderResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(MessageHeaderResourceProvider.getType().toLowerCase());
+		setMyResourceType(MessageHeaderResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(MessageHeaderResourceProvider.getType().toLowerCase());
-		setMyResourceType(MessageHeaderResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

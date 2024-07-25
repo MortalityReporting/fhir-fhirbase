@@ -62,16 +62,15 @@ public class ObservationResourceProvider extends BaseResourceProvider {
 
 	public ObservationResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(ObservationResourceProvider.getType().toLowerCase());
+		setMyResourceType(ObservationResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(ObservationResourceProvider.getType().toLowerCase());
-		setMyResourceType(ObservationResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

@@ -175,12 +175,13 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 	public CompositionResourceProvider(FhirContext ctx) {
 		super(ctx);
+		
+		setTableName(CompositionResourceProvider.getType().toLowerCase());
+		setMyResourceType(CompositionResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(CompositionResourceProvider.getType().toLowerCase());
-		setMyResourceType(CompositionResourceProvider.getType());
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
@@ -532,12 +533,12 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
-		String subjectResource = subjectReference.getReferenceElement().getResourceType();
-		if (subjectResource != null && !subjectResource.contentEquals("Patient")) {
-			detailCode.setText("Subject (" + subjectResource + ") must be Patient");
-			outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
-			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
-		}
+		// String subjectResource = subjectReference.getReferenceElement().getResourceType();
+		// if (subjectResource != null && !subjectResource.contentEquals("Patient")) {
+		// 	detailCode.setText("Subject (" + subjectResource + ") must be Patient");
+		// 	outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
+		// 	throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+		// }
 	}
 
 	private BundleEntryComponent addToSectAndEntryofDoc(Composition composition, String referenceUrl,

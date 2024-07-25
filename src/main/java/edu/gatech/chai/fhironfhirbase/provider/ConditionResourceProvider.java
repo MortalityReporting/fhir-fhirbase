@@ -65,12 +65,13 @@ public class ConditionResourceProvider extends BaseResourceProvider {
 
 	public ConditionResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setMyResourceType(ConditionResourceProvider.getType());
+		setTableName(ConditionResourceProvider.getType().toLowerCase());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setMyResourceType(ConditionResourceProvider.getType());
-		setTableName(ConditionResourceProvider.getType().toLowerCase());
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

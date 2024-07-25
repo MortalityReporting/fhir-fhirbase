@@ -63,13 +63,13 @@ public class PractitionerResourceProvider extends BaseResourceProvider {
 
 	public PractitionerResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(PractitionerResourceProvider.getType().toLowerCase());
+		setMyResourceType(PractitionerResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(PractitionerResourceProvider.getType().toLowerCase());
-		setMyResourceType(PractitionerResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

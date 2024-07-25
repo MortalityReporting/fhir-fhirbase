@@ -58,13 +58,13 @@ public class ProcedureResourceProvider extends BaseResourceProvider {
 
 	public ProcedureResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(ProcedureResourceProvider.getType().toLowerCase());
+		setMyResourceType(ProcedureResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(ProcedureResourceProvider.getType().toLowerCase());
-		setMyResourceType(ProcedureResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

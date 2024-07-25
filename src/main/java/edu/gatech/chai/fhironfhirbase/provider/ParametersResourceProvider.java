@@ -21,11 +21,13 @@ public class ParametersResourceProvider extends BaseResourceProvider {
 
 	public ParametersResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(ParametersResourceProvider.getType().toLowerCase());
+		setMyResourceType(ParametersResourceProvider.getType());
 	}
 
 	@PostConstruct
     private void postConstruct() {
-		setMyResourceType(ParametersResourceProvider.getType());
 		int totalSize = getTotalSize("SELECT count(*) FROM "+ParametersResourceProvider.getType().toLowerCase()+";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

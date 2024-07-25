@@ -43,12 +43,13 @@ public class ListResourceProvider extends BaseResourceProvider {
 
 	public ListResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(ListResourceProvider.getType().toLowerCase());
+		setMyResourceType(ListResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(ListResourceProvider.getType().toLowerCase());
-		setMyResourceType(ListResourceProvider.getType());
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

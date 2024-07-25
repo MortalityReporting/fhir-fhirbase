@@ -10,7 +10,6 @@ import javax.annotation.PostConstruct;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.PractitionerRole;
-import org.hl7.fhir.r4.model.ValueSet;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
@@ -42,13 +41,13 @@ public class PractitionerRoleResourceProvider extends BaseResourceProvider {
 
 	public PractitionerRoleResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(PractitionerRoleResourceProvider.getType().toLowerCase());
+		setMyResourceType(PractitionerRoleResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(PractitionerRoleResourceProvider.getType().toLowerCase());
-		setMyResourceType(PractitionerRoleResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}

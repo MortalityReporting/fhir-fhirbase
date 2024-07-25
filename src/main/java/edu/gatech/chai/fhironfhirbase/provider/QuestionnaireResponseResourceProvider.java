@@ -65,16 +65,15 @@ public class QuestionnaireResponseResourceProvider extends BaseResourceProvider 
 
 	public QuestionnaireResponseResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(QuestionnaireResponseResourceProvider.getType().toLowerCase());
+		setMyResourceType(QuestionnaireResponseResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(QuestionnaireResponseResourceProvider.getType().toLowerCase());
-		setMyResourceType(QuestionnaireResponseResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

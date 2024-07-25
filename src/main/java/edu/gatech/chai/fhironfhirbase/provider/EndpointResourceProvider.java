@@ -45,16 +45,15 @@ public class EndpointResourceProvider extends BaseResourceProvider {
 
 	public EndpointResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(EndpointResourceProvider.getType().toLowerCase());
+		setMyResourceType(EndpointResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(EndpointResourceProvider.getType().toLowerCase());
-		setMyResourceType(EndpointResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

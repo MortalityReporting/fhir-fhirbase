@@ -58,16 +58,15 @@ public class DocumentReferenceResourceProvider extends BaseResourceProvider {
 
 	public DocumentReferenceResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(DocumentReferenceResourceProvider.getType().toLowerCase());
+		setMyResourceType(DocumentReferenceResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(DocumentReferenceResourceProvider.getType().toLowerCase());
-		setMyResourceType(DocumentReferenceResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

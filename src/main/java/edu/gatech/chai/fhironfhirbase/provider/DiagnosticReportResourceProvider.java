@@ -124,16 +124,15 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 
 	public DiagnosticReportResourceProvider(FhirContext ctx) {
 		super(ctx);
+
+		setTableName(DiagnosticReportResourceProvider.getType().toLowerCase());
+		setMyResourceType(DiagnosticReportResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(DiagnosticReportResourceProvider.getType().toLowerCase());
-		setMyResourceType(DiagnosticReportResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
-
 	}
 
 	public static String getType() {

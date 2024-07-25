@@ -89,13 +89,13 @@ public class PatientResourceProvider extends BaseResourceProvider {
 
 	public PatientResourceProvider(FhirContext ctx) {
 		super(ctx);
+		
+		setTableName(PatientResourceProvider.getType().toLowerCase());
+		setMyResourceType(PatientResourceProvider.getType());
 	}
 
 	@PostConstruct
 	private void postConstruct() {
-		setTableName(PatientResourceProvider.getType().toLowerCase());
-		setMyResourceType(PatientResourceProvider.getType());
-
 		int totalSize = getTotalSize("SELECT count(*) FROM " + getTableName() + ";");
 		ExtensionUtil.addResourceCount(getMyResourceType(), (long) totalSize);
 	}
