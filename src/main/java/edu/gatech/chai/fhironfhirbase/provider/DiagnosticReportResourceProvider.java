@@ -308,9 +308,9 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 				String value = toxLabCaseNumberToken.getValue();
 				String whereItem;
 				if (system == null || system.isEmpty()) {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-vr-codes\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
 				} else {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-vr-codes\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
 				}
 				if (where.isEmpty()) {
 					where = whereItem;
