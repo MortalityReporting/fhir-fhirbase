@@ -236,12 +236,15 @@ public class BundleResourceProvider extends BaseResourceProvider {
 				if (!documentEntries.isEmpty()) {
 					documentEntries += " OR ";
 				}
-				String documentId = documentReference.getResourceType() + "/" + documentReference.getIdPart();
 
-				documentEntries += "b.resource->'entry'->0->>'fullUrl' like '%" + documentId + "%'";
+				String documentId = documentReference.getIdPart();
+
+				// documentEntries += "b.resource->'entry'->0->>'fullUrl' like '%" + documentId + "%'";
+				documentEntries += "b.resource->'entry'->0->'resource'->>'id' = '" + documentId + "'";
 			}
 
 			if (!documentEntries.isEmpty()) {
+				whereParameters.add("b.resource->'entry'->0->'resource'->>'resourceType' = 'Composition'");
 				whereParameters.add("b.resource->>'type' = 'document'");
 				whereParameters.add(documentEntries);
 
@@ -255,12 +258,14 @@ public class BundleResourceProvider extends BaseResourceProvider {
 				if (!messageEntries.isEmpty()) {
 					messageEntries += " OR ";
 				}
-				String messageId = messageReference.getResourceType() + "/" + messageReference.getIdPart();
 
-				messageEntries += "b.resource->'entry'->0->>'fullUrl' like '%" + messageId + "%'";
+				String messageId = messageReference.getIdPart();
+
+				messageEntries += "b.resource->'entry'->0->'resource'->>'id' = '" + messageId + "'";
 			}
 
 			if (!messageEntries.isEmpty()) {
+				whereParameters.add("b.resource->'entry'->0->'resource'->>'resourceType' = 'MessageHeader'");
 				whereParameters.add("b.resource->>'type' = 'message'");
 				whereParameters.add(messageEntries);
 

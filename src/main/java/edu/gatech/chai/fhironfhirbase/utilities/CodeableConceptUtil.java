@@ -15,7 +15,11 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.utilities;
 
+import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.validation.cli.utils.Common;
+
+import edu.gatech.chai.MDI.model.resource.util.CommonUtil;
 
 public class CodeableConceptUtil {
 	/**
@@ -48,4 +52,63 @@ public class CodeableConceptUtil {
 		return -1;
 	}
 
+	public static Coding usCoreRaceConceptFromCode(String code) {
+		// set up US core race coding.
+
+		if ("1002-5".equals(code)) {
+			return new Coding("urn:oid:2.16.840.1.113883.6.238", code, "American Indian or Alaska Native");
+		}
+		
+		if ("2028-9".equals(code)) {
+			return new Coding("urn:oid:2.16.840.1.113883.6.238", code, "Asian");
+		}
+
+		if ("2054-5".equals(code)) {
+			return new Coding("urn:oid:2.16.840.1.113883.6.238", code, "Black or African American");
+		}
+
+		if ("2076-8".equals(code)) {
+			return new Coding("urn:oid:2.16.840.1.113883.6.238", code, "Native Hawaiian or Other Pacific Islander");
+		}
+
+		if ("2106-3".equals(code)) {
+			return new Coding("urn:oid:2.16.840.1.113883.6.238", code, "White");
+		}
+
+		if ("2131-1".equals(code)) {
+			return new Coding("urn:oid:2.16.840.1.113883.6.238", code, "Other Race");
+		}
+
+		if ("ASKU".equalsIgnoreCase(code)) {
+			return CommonUtil.askedButUnknownCode.getCodingFirstRep();
+		}
+
+		if ("UNK".equalsIgnoreCase(code)) {
+			return CommonUtil.unknownCode.getCodingFirstRep();
+		}
+
+		return null;
+	}
+
+	public static Coding usCoreEthnicityConceptFromCode(String code) {
+		// set up US core race coding.
+
+		if ("2135-2".equals(code)) {
+			return new Coding("urn:oid:2.16.840.1.113883.6.238", code, "Hispanic or Latino");
+		}
+		
+		if ("2186-5".equals(code)) {
+			return new Coding("urn:oid:2.16.840.1.113883.6.238", code, "Not Hispanic or Latino");
+		}
+
+		if ("ASKU".equalsIgnoreCase(code)) {
+			return CommonUtil.askedButUnknownCode.getCodingFirstRep();
+		}
+
+		if ("UNK".equalsIgnoreCase(code)) {
+			return CommonUtil.unknownCode.getCodingFirstRep();
+		}
+
+		return null;
+	}
 }

@@ -15,12 +15,24 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.provider;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import org.hl7.fhir.r4.model.HumanName;
+import org.apache.commons.text.WordUtils;
+import org.hibernate.hql.internal.ast.tree.IdentNode;
+import org.hl7.fhir.r4.model.ContactPoint;
+import org.hl7.fhir.exceptions.FHIRException;
+import org.hl7.fhir.r4.model.Address;
 import org.hl7.fhir.r4.model.Attachment;
 import org.hl7.fhir.r4.model.BooleanType;
 import org.hl7.fhir.r4.model.Bundle;
@@ -30,7 +42,10 @@ import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.Composition.SectionComponent;
+import org.hl7.fhir.r4.model.ContactPoint.ContactPointSystem;
 import org.hl7.fhir.r4.model.DocumentReference.DocumentReferenceContentComponent;
+import org.hl7.fhir.r4.model.MessageHeader.MessageDestinationComponent;
+import org.hl7.fhir.r4.model.MessageHeader.MessageSourceComponent;
 import org.hl7.fhir.r4.model.MessageHeader.ResponseType;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueType;
@@ -39,6 +54,7 @@ import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.Identifier;
 import org.hl7.fhir.r4.model.MessageHeader;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
@@ -55,13 +71,30 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.model.primitive.DateDt;
+import ca.uhn.fhir.model.primitive.DateTimeDt;
+import ca.uhn.fhir.model.primitive.StringDt;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
+import ca.uhn.fhir.rest.param.DateParam;
+import ca.uhn.fhir.rest.param.StringAndListParam;
+import ca.uhn.fhir.rest.param.StringOrListParam;
+import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import edu.gatech.chai.MDI.model.resource.BundleDocumentMDIDCR;
+import edu.gatech.chai.MDI.model.resource.BundleMessageDeathCertificateReview;
+import edu.gatech.chai.MDI.model.resource.CompositionMDIDCR;
+import edu.gatech.chai.MDI.model.resource.MessageHeaderDCR;
+import edu.gatech.chai.MDI.model.resource.util.CommonUtil;
+import edu.gatech.chai.VRDR.model.DeathDate;
+import edu.gatech.chai.VRDR.model.DeathLocation;
+import edu.gatech.chai.VRDR.model.Decedent;
+import edu.gatech.chai.VRDR.model.FuneralHome;
+import edu.gatech.chai.fhironfhirbase.utilities.CodeableConceptUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.OperationUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
@@ -503,5 +536,291 @@ public class ServerOperations {
 		responseBundle.getEntryFirstRep().setResource(responseMessageHeader);
 		
 		return responseBundle;
+	}
+
+	@Operation(name = "$ccr-funeralhome")
+	public Bundle dcrConstructOperation(
+		@OperationParam(name = "submitterFirstName", min = 1, max = 1, type = StringDt.class) StringParam theSubmitterFirstName,
+		@OperationParam(name = "submitterLastName", min = 1, max = 1, type = StringDt.class) StringParam theSubmitterLastName,
+		@OperationParam(name = "submitterEmail", min = 1, max = 1, type = StringDt.class) StringParam theSubmitterEmail,
+		@OperationParam(name = "targetUrl", min = 0, max = 1, type = StringDt.class) StringParam theTargetUrl,
+		@OperationParam(name = "funeralHomeName", min = 1, max = 1, type = StringDt.class) StringParam theFuneralHomeName,
+		@OperationParam(name = "funeralHomeAddrLine1", min = 1, max = 1, type = StringDt.class) StringParam theFuneralHomeAddrLine1,
+		@OperationParam(name = "funeralHomeAddrLine2", min = 0, max = 1, type = StringDt.class) StringParam theFuneralHomeAddrLine2,
+		@OperationParam(name = "funeralHomeAddrCity", min = 1, max = 1, type = StringDt.class) StringParam theFuneralHomeAddrCity,
+		@OperationParam(name = "funeralHomeAddrState", min = 1, max = 1, type = StringDt.class) StringParam theFuneralHomeAddrState,
+		@OperationParam(name = "funeralHomeAddrZip", min = 1, max = 1, type = StringDt.class) StringParam theFuneralHomeAddrZip,
+		@OperationParam(name = "funeralHomeAddrCountry", min = 1, max = 1, type = StringDt.class) StringParam theFuneralHomeAddrCountry,
+		@OperationParam(name = "funeralHomeAddrPhone", min = 1, max = 1, type = StringDt.class) StringParam theFuneralHomeAddrPhone,
+		@OperationParam(name = "funeralHomeAddrFax", min = 0, max = 1, type = StringDt.class) StringParam theFuneralHomeAddrFax,
+		@OperationParam(name = "dateOfDeath", min = 1, max = 1, type = DateDt.class) DateParam theDateOfDeath,
+		@OperationParam(name = "placeOfDeath", min = 1, max = 1, type = StringDt.class) StringParam thePlaceOfDeath,
+		@OperationParam(name = "placeOfDeathOther", min = 0, max = 1, type = StringDt.class) StringParam thePlaceOfDeathOther,
+		@OperationParam(name = "placeOfDeathFacilityName", min = 1, max = 1, type = StringDt.class) StringParam thePlaceOfDeathFacilityName,
+		@OperationParam(name = "placeOfDeathAddrLine1", min = 0, max = 1, type = StringDt.class) StringParam thePlaceOfDeathAddrLine1,
+		@OperationParam(name = "placeOfDeathAddrLine2", min = 0, max = 1, type = StringDt.class) StringParam thePlaceOfDeathAddrLine2,
+		@OperationParam(name = "placeOfDeathAddrCity", min = 0, max = 1, type = StringDt.class) StringParam thePlaceOfDeathAddrCity,
+		@OperationParam(name = "placeOfDeathAddrState", min = 0, max = 1, type = StringDt.class) StringParam thePlaceOfDeathAddrState,
+		@OperationParam(name = "placeOfDeathAddrZip", min = 0, max = 1, type = StringDt.class) StringParam thePlaceOfDeathAddrZip,
+		@OperationParam(name = "placeOfDeathAddrCountry", min = 0, max = 1, type = StringDt.class) StringParam thePlaceOfDeathAddrCountry,
+		@OperationParam(name = "decedentFirstName", min = 1, max = 1) StringParam theDecedentFirstName,
+		@OperationParam(name = "decedentMiddleName", min = 0, max = 1, type = StringDt.class) StringParam theDecedentMiddleName,
+		@OperationParam(name = "decedentLastName", min = 1, max = 1, type = StringDt.class) StringParam theDecedentLastName,
+		@OperationParam(name = "decedentDateOfBirth", min = 1, max = 1, type = DateTimeDt.class) DateParam theDecedentDateOfBirth,
+		@OperationParam(name = "decedentSex", min = 0, max = 1, type = StringDt.class) StringParam theDecedentSex,
+		@OperationParam(name = "decedentRace", min = 1, max = 5, type = StringDt.class) StringAndListParam theDecedentRaces,
+		@OperationParam(name = "decedentEthnicity", min = 0, max = 1, type = StringDt.class) StringParam theDecedentEthnicity) {
+
+		// construct dcr-message bundle
+		// construct Decedent
+		Decedent decedent = new Decedent();
+		HumanName name = new HumanName();
+
+		if (theDecedentLastName == null) { // required
+			throw new FHIRException("decedentLastName must exist");
+		}
+		name.setFamily(theDecedentLastName.getValue());
+
+		if (theDecedentFirstName == null) { // required
+			throw new FHIRException("decedentFirstName must exist");
+		}
+		name.addGiven(theDecedentFirstName.getValue());
+
+		if (theDecedentMiddleName != null) { // 0..*
+			name.addGiven(theDecedentMiddleName.getValue());
+			decedent.addName(name);
+		}
+
+		if (theDecedentDateOfBirth == null) { // required
+			throw new FHIRException("decedentDateOfBirth must exist");
+		}
+
+		Date decedentDob = theDecedentDateOfBirth.getValue();
+		decedent.setBirthDate(decedentDob);
+
+		if (theDecedentSex != null) {
+			String decedentSex = theDecedentSex.getValue();
+			String decedentSexDisplay = WordUtils.capitalizeFully(decedentSex);
+			Extension ext = new Extension();
+			ext.setUrl("http://hl7.org/fhir/us/vrdr/StructureDefinition/NVSS-SexAtDeath");
+			ext.setValue(new CodeableConcept(new Coding("http://hl7.org/fhir/administrative-gender", decedentSex, decedentSexDisplay)));
+			decedent.addExtension(ext);
+		}
+
+		if (theDecedentRaces == null || theDecedentRaces.getValuesAsQueryTokens().size() > 5) {
+			throw new FHIRException("decedentRaces must have cardinality of 1..5");
+		}
+
+		List<StringOrListParam> theDecedentAndRaces = theDecedentRaces.getValuesAsQueryTokens();
+		for (StringOrListParam theDecedentOrRace : theDecedentAndRaces) {
+			for (StringParam theDecedentRace : theDecedentOrRace.getValuesAsQueryTokens()) {
+				Extension ext = new Extension("http://hl7.org/fhir/us/core/StructureDefinition/us-core-race");
+				String raceCode = theDecedentRace.getValue();
+				ext.addExtension("ombCategory", CodeableConceptUtil.usCoreRaceConceptFromCode(raceCode));
+
+				decedent.addExtension(ext);
+			}
+		}
+		
+
+		if (theDecedentEthnicity != null) {
+			String ethnicityCode = theDecedentEthnicity.getValue();
+			Extension ext = new Extension("http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity");
+			ext.addExtension("ombCategory", CodeableConceptUtil.usCoreEthnicityConceptFromCode(ethnicityCode));
+
+			decedent.addExtension(ext);
+		}
+
+		// construct Funeral Home
+		if (theFuneralHomeName == null || theFuneralHomeAddrLine1 == null || theFuneralHomeAddrCity == null || 
+			theFuneralHomeAddrState == null || theFuneralHomeAddrZip == null || theFuneralHomeAddrCountry == null) {
+			throw new FHIRException("funeralHomeName, funeralHomeAddrLine1, funeralHomeAddrCity, funeralHomeAddrState, funeralHomeAddrZip, funeralHomeAddrCountry must exist");
+		}
+
+		FuneralHome fh = new FuneralHome();
+		fh.setName(theFuneralHomeName.getValue());
+
+		Address funeralAddress = new Address();
+		funeralAddress.addLine(theFuneralHomeAddrLine1.getValue());
+
+		if (theFuneralHomeAddrLine2 != null) {
+			funeralAddress.addLine(theFuneralHomeAddrLine2.getValue());
+		}
+
+		funeralAddress.setCity(theFuneralHomeAddrCity.getValue());
+		funeralAddress.setState(theFuneralHomeAddrState.getValue());
+		funeralAddress.setPostalCode(theFuneralHomeAddrZip.getValue());
+		funeralAddress.setCountry(theFuneralHomeAddrCountry.getValue());
+
+		fh.addAddress(funeralAddress);
+
+		if (theFuneralHomeAddrPhone == null) {
+			throw new FHIRException("funeralHomeAddrPhone must exist");
+		}
+		ContactPoint cp = new ContactPoint();
+		cp.setSystem(ContactPointSystem.PHONE);
+		cp.setValue(theFuneralHomeAddrPhone.getValue());
+		fh.addTelecom(cp);
+
+		if (theFuneralHomeAddrFax != null) {
+			cp = new ContactPoint();
+			cp.setSystem(ContactPointSystem.FAX);
+			cp.setValue(theFuneralHomeAddrFax.getValue());
+			fh.addTelecom(cp);
+		}
+
+		// Funeral Director (or staff) Info
+		Practitioner funeralDirector = new Practitioner();
+		HumanName fdName = new HumanName();
+
+		if (theSubmitterLastName == null) {
+			throw new FHIRException("submitterLastName must exist");
+		}
+		fdName.setFamily(theSubmitterLastName.getValue());
+
+		if (theSubmitterFirstName == null) {
+			throw new FHIRException("submitterFirstName must exist");
+		}
+		fdName.addGiven(theSubmitterFirstName.getValue());
+		
+		funeralDirector.addName(fdName);
+
+		if (theSubmitterEmail == null) {
+			throw new FHIRException("submitterEmail must exist");
+		}
+		funeralDirector.addTelecom((new ContactPoint()).setSystem(ContactPointSystem.EMAIL).setValue(theSubmitterEmail.getValue()));
+
+		// Date of death with Place of Death
+		if (theDateOfDeath == null) {
+			throw new FHIRException("dateOfDeath must exist");
+		}
+
+		if (thePlaceOfDeath == null) {
+			throw new FHIRException("placeOfDeath must exist");
+		}
+
+		Date dateOfDeath = theDateOfDeath.getValue();
+		DeathDate deathDate = new DeathDate(new Date(), dateOfDeath, thePlaceOfDeath.getValue());
+
+		if ("OTH".equals(thePlaceOfDeath.getValue()) && thePlaceOfDeathOther != null) {
+			CodeableConcept pDvalue = deathDate.getPlaceOfDeathComponentValue();
+			pDvalue.setText(thePlaceOfDeathOther.getValue());
+		}
+
+		// Death Location
+		DeathLocation deathLocation = new DeathLocation();
+
+		if (thePlaceOfDeathFacilityName == null) {
+			throw new FHIRException("placeOfDeathFacilityName must exist");
+		}
+
+		deathLocation.setName(thePlaceOfDeathFacilityName.getValue());
+		Address deathLocationAddress = new Address();
+		if (thePlaceOfDeathAddrLine1 != null) {
+			deathLocationAddress.addLine(thePlaceOfDeathAddrLine1.getValue());
+		}
+
+		if (thePlaceOfDeathAddrLine2 != null) {
+			deathLocationAddress.addLine(thePlaceOfDeathAddrLine2.getValue());
+		}
+
+		if (thePlaceOfDeathAddrCity != null) {
+			deathLocationAddress.setCity(thePlaceOfDeathAddrCity.getValue());
+		}
+
+		if (thePlaceOfDeathAddrState != null) {
+			deathLocationAddress.setState(thePlaceOfDeathAddrState.getValue());
+		}
+
+		if (thePlaceOfDeathAddrZip != null) {
+			deathLocationAddress.setPostalCode(thePlaceOfDeathAddrZip.getValue());
+		}
+
+		if (thePlaceOfDeathAddrCountry != null) {
+			deathLocationAddress.setCountry(thePlaceOfDeathAddrCountry.getValue());
+		}
+
+		if (!deathLocationAddress.isEmpty()) {
+			deathLocation.setAddress(deathLocationAddress);
+		}
+
+		// construct DCR composition
+		CompositionMDIDCR compositionMdiDcr = new CompositionMDIDCR();
+
+		// DCR Document Bundle
+		Identifier dcrIdentifier = new Identifier();
+		dcrIdentifier.setSystem("urn:raven:dcr");
+		dcrIdentifier.setValue(UUID.randomUUID().toString());
+
+		BundleDocumentMDIDCR dcrBundle = new BundleDocumentMDIDCR(dcrIdentifier, compositionMdiDcr);
+
+		// Add resources to the bundle and add any references here
+		// DCR Decedent Domgraphic Sectin
+		String decedentRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+		BundleEntryComponent decentEntry = new BundleEntryComponent();
+		decentEntry.setResource(decedent);
+		decentEntry.setFullUrl(decedentRefUrl);
+		dcrBundle.addEntry(decentEntry);
+
+		// This is a decedent resource, which we also need to set to composition.subject
+		compositionMdiDcr.setSubject(new Reference(decedentRefUrl));
+		SectionComponent demographicSection = compositionMdiDcr.createDecedentDemographicsSection();
+		demographicSection.addEntry(new Reference(decedentRefUrl));
+
+		// DCR Death Investigateion Section
+		String deathDateRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+		BundleEntryComponent deathDateEntry = new BundleEntryComponent();
+		deathDateEntry.setResource(deathDate);
+		deathDateEntry.setFullUrl(deathDateRefUrl);
+		dcrBundle.addEntry(deathDateEntry);
+
+		String deathLocationUrl = null;
+		if (!deathLocation.isEmpty()) {
+			deathLocationUrl = "urn:uuid:" + UUID.randomUUID().toString();
+			BundleEntryComponent deathLocationEntry = new BundleEntryComponent();
+			deathLocationEntry.setResource(deathLocation);
+			deathLocationEntry.setFullUrl(deathLocationUrl);
+			dcrBundle.addEntry(deathLocationEntry);		
+		}
+
+		SectionComponent deathInvestigationSection = compositionMdiDcr.createDeathInvestigationSection();
+		deathInvestigationSection.addEntry(new Reference(deathDateRefUrl));
+		if (deathLocationUrl != null) {
+			deathInvestigationSection.addEntry(new Reference(deathLocationUrl));
+		}
+
+		// DCR Cremation Clearance Info section
+		String ccrRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+		BundleEntryComponent ccrInfoEntry = new BundleEntryComponent();
+		ccrInfoEntry.setResource(fh);
+		ccrInfoEntry.setFullUrl(ccrRefUrl);
+		dcrBundle.addEntry(ccrInfoEntry);
+
+		SectionComponent cremationClearanceInfoSection = compositionMdiDcr.createCreamationClearanceInfoSection();
+		cremationClearanceInfoSection.addEntry(new Reference(ccrRefUrl));
+
+		// Any other stuff.
+		String submitterUrl = "urn:uudi:" + UUID.randomUUID().toString();
+		BundleEntryComponent submitterEntry = new BundleEntryComponent();
+		submitterEntry.setResource(funeralDirector);
+		submitterEntry.setFullUrl(submitterUrl);
+		dcrBundle.addEntry(submitterEntry);
+		compositionMdiDcr.addAuthor(new Reference(submitterUrl));
+
+		// First create a message header
+		MessageHeaderDCR mhDcr = new MessageHeaderDCR();
+		mhDcr.setReason(new CodeableConcept(new Coding(CommonUtil.deathCertificateReviewValuesetURL, "CREM_C_REQ", "Cremation Clearance Request")));
+
+		if (theTargetUrl != null) {
+			mhDcr.addDestination(new MessageDestinationComponent().setEndpoint(theTargetUrl.getValue()));
+		}
+		mhDcr.setSource(new MessageSourceComponent().setEndpoint("http://raven.icl.gtri.org/mdi-fhir-server/fhir"));
+		// String dcrBundleRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+		// mhDcr.addFocus(new Reference(dcrBundleRefUrl));
+
+		// Create Message Bundle for DCR Document Bundle
+		BundleMessageDeathCertificateReview dcrMessageBundle = new BundleMessageDeathCertificateReview(BundleType.MESSAGE, mhDcr, dcrBundle);
+
+		return dcrMessageBundle;
 	}
 }

@@ -39,7 +39,7 @@ public class OperationUtil {
 	}
 
 	public static String myHostUrl() {
-		String myUrl = System.getenv("INTERNAL_FHIR_REQUEST_URL");
+		String myUrl = System.getenv("SERVERBASE_URL");
 		if (myUrl == null || myUrl.isEmpty()) {
 			myUrl = "http://localhost:8080/fhir";
 		}
@@ -47,8 +47,7 @@ public class OperationUtil {
 		return myUrl;
 	}
 
-	public static String RAVEN_TOX_SYSTEM = "urn:cms:toxicology:raven";
-	public static String RAVEN_DEATH_REPORTING_SYSTEM = "urn:cms:death-reporting:raven";
+	public static String RAVEN_SYSTEM = "urn:mdi:raven";
 
 	public static Identifier generateIdentifier(String system) {
 		Identifier identifier = new Identifier();

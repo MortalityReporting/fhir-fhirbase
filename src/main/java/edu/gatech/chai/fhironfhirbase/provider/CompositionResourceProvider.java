@@ -17,6 +17,7 @@ import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleLinkComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleType;
+import org.hl7.fhir.r4.model.CanonicalType;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
@@ -27,6 +28,8 @@ import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Identifier;
+import org.hl7.fhir.r4.model.MessageHeader;
+import org.hl7.fhir.r4.model.MessageHeader.MessageSourceComponent;
 import org.hl7.fhir.r4.model.Meta;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Parameters;
@@ -35,6 +38,7 @@ import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.UriType;
+import org.hl7.fhir.r4.model.UrlType;
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity;
 import org.hl7.fhir.r4.model.Parameters.ParametersParameterComponent;
 import org.hl7.fhir.r4.model.Patient;
@@ -45,12 +49,8 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.model.api.IElement;
 import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.model.api.annotation.SearchParamDefinition;
-import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
-import ca.uhn.fhir.model.primitive.StringDt;
-import ca.uhn.fhir.model.primitive.UriDt;
 import ca.uhn.fhir.model.valueset.BundleTypeEnum;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
@@ -85,7 +85,9 @@ import ca.uhn.fhir.rest.param.UriParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
+import edu.gatech.chai.fhironfhirbase.utilities.MdiProfileUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.OperationUtil;
+import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
 @Service
 @Scope("prototype")
@@ -97,80 +99,80 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	 * Search parameter: <b>death-date-pronounced</b>
 	 * <p>
 	 * Description: <b>Actual Date of Pronounced Death</b><br>
-   	 * Type: <b>date</b><br>
+	 * Type: <b>date</b><br>
 	 * Path: <b>Observation.component</b><br>
 	 * </p>
 	 */
 	@SearchParamDefinition(name="death-date-pronounced", path="Observation.valueDateTime", description="Date of Pronounced Death", type="date" )
 	public static final String SP_DEATH_DATE_PRONOUNCED = "death-date-pronounced";
 	/**
-   	 * <b>Fluent Client</b> search parameter constant for <b>death-date-pronounced</b>
+	 * <b>Fluent Client</b> search parameter constant for <b>death-date-pronounced</b>
 	 * <p>
 	 * Description: <b>Actual Date of Pronounced Death</b><br>
-   	 * Type: <b>date</b><br>
+	 * Type: <b>date</b><br>
 	 * Path: <b>Observation.component</b><br>
 	 * </p>
-   	 */
+	 */
 	public static final ca.uhn.fhir.rest.gclient.DateClientParam DEATH_DATE_PRONOUNCED = new ca.uhn.fhir.rest.gclient.DateClientParam(SP_DEATH_DATE_PRONOUNCED);
 
 	/**
 	 * Search parameter: <b>death-date</b>
 	 * <p>
 	 * Description: <b>Date of Death</b><br>
-   	 * Type: <b>date</b><br>
+	 * Type: <b>date</b><br>
 	 * Path: <b>Observation.valueDateTime or Observation.component</b><br>
 	 * </p>
 	 */
 	@SearchParamDefinition(name="death-date", path="Observation.component", description="Date of Death", type="date" )
 	public static final String SP_DEATH_DATE = "death-date";
 	/**
-   	 * <b>Fluent Client</b> search parameter constant for <b>death-date-pronounced</b>
+	 * <b>Fluent Client</b> search parameter constant for <b>death-date-pronounced</b>
 	 * <p>
 	 * Description: <b>Date of Death</b><br>
-   	 * Type: <b>date</b><br>
+	 * Type: <b>date</b><br>
 	 * Path: <b>Observation.valueDateTime or Observation.component</b><br>
 	 * </p>
-   	 */
+	 */
 	public static final ca.uhn.fhir.rest.gclient.DateClientParam DEATH_DATE = new ca.uhn.fhir.rest.gclient.DateClientParam(SP_DEATH_DATE);
 
 	/**
 	 * Search parameter: <b>death-location</b>
 	 * <p>
 	 * Description: <b>District of death location</b><br>
-   	 * Type: <b>string</b><br>
+	 * Type: <b>string</b><br>
 	 * Path: <b>Composition.death-location</b><br>
 	 * </p>
 	 */
 	@SearchParamDefinition(name="death-location", path="Location.name", description="District of death location", type="string" )
 	public static final String SP_DEATH_LOCATION = "death-location";
 	/**
-   	 * <b>Fluent Client</b> search parameter constant for <b>edrs-file-number</b>
+	 * <b>Fluent Client</b> search parameter constant for <b>edrs-file-number</b>
 	 * <p>
 	 * Description: <b>District of death location</b><br>
-   	 * Type: <b>string</b><br>
+	 * Type: <b>string</b><br>
 	 * Path: <b>Composition.death-location</b><br>
 	 * </p>
-   	 */
+	 */
 	public static final ca.uhn.fhir.rest.gclient.StringClientParam DEATH_LOCATION = new ca.uhn.fhir.rest.gclient.StringClientParam(SP_DEATH_LOCATION);
 
 	/**
 	 * Search parameter: <b>tracking-number</b>
 	 * <p>
 	 * Description: <b>A composition extension identifier for tracking-number</b><br>
-   	 * Type: <b>token</b><br>
+	 * Type: <b>token</b><br>
 	 * Path: <b>Composition.tracking-number</b><br>
 	 * </p>
 	 */
 	@SearchParamDefinition(name="tracking-number", path="Composition.extension-tracking-numbers", description="Extension Trakcing Number for Case File", type="token" )
 	public static final String SP_TRACKING_NUMBER = "tracking-number";
 	/**
-   	 * <b>Fluent Client</b> search parameter constant for <b>tracking-number</b>
+	 * <b>Fluent Client</b> search parameter constant for <b>tracking-number</b>
 	 * <p>
 	 * Description: <b>A composition extension identifier for tracking-number</b><br>
-   	 * Type: <b>token</b><br>
+	 * Type: <b>token</b><br>
 	 * Path: <b>Composition.tracking-number</b><br>
 	 * </p>
-   	 */
+	 */
 	public static final ca.uhn.fhir.rest.gclient.TokenClientParam TRACKING_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_TRACKING_NUMBER);	
 
 	public CompositionResourceProvider(FhirContext ctx) {
@@ -434,11 +436,11 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				String value = trackingNumberToken.getValue();
 				String whereItem;
 				if (system == null || system.isBlank()) {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
 				} else if (value == null || value.isBlank()) {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"system\": \"" + system + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"system\": \"" + system + "\"}}'::jsonb";
 				} else {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
 				}
 				if (where.isEmpty()) {
 					where = whereItem;
@@ -737,19 +739,19 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	// 	}
 	// }
 
-	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
-	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
-			@IdParam IdType theCompositionId,
-			@OperationParam(name = "id") UriOrListParam theIds, 
-			@OperationParam(name = "persist") BooleanType thePersist,
-			@OperationParam(name = "graph") UriParam theGraph) {
+	// @Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.DOCUMENT)
+	// public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
+	// 		@IdParam IdType theCompositionId,
+	// 		@OperationParam(name = "id") UriOrListParam theIds, 
+	// 		@OperationParam(name = "persist") BooleanType thePersist,
+	// 		@OperationParam(name = "graph") UriParam theGraph) {
 
-		return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
-	}
+	// 	return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
+	// }
 
 	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
-			// @IdParam(optional=true) IdType theCompositionId,
+			@IdParam(optional=true) IdType theCompositionId,
 			@OperationParam(name = "id") UriOrListParam theIds, 
 			@OperationParam(name = "persist") BooleanType thePersist,
 			@OperationParam(name = "graph") UriParam theGraph,
@@ -758,7 +760,102 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED, max = 2) DateOrListParam theDeathDatePronounced,
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE, max = 2) DateOrListParam theProfileDeathDateRange) {
-				
+
+		if (theCompositionId != null) {
+			return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
+		}
+
+		// We want DCR Type document.
+		TokenOrListParam theTypes = new TokenOrListParam(MdiProfileUtil.MDI_EDRS_DC.getSystem(), MdiProfileUtil.MDI_EDRS_DC.getCode());
+
+		return addMessageWrapperToBundleDocument(false, 
+			theRequestDetails, 
+			theCompositionId, 
+			theIds, 
+			thePersist, 
+			theGraph, 
+			thePatients, 
+			theTrackingNumber, 
+			theDeathLocations, 
+			theDeathDatePronounced, 
+			theProfileDeathDateRange,
+			theTypes);
+	}
+
+	private Bundle addMessageWrapper (IGenericClient client, Bundle compositionBundle) {
+		// the bundle inside of the message Bundle.
+		String focusId = BundleResourceProvider.getType() + "/" + compositionBundle.getIdElement().getIdPart();
+		Bundle messageHeaders = client.search().forResource(MessageHeader.class)
+			.where(MessageHeader.FOCUS.hasId(focusId)).returnBundle(Bundle.class).execute();
+
+		Bundle retMessageBundle = new Bundle();
+		MessageHeader messageHeader;
+		Bundle originalMessageBundle = null;
+		if (messageHeaders != null && !messageHeaders.isEmpty() && messageHeaders.getTotal() > 0) {
+			// We may have multiple messageheaders that focus on the same diagnosticreport. We choose the first one.
+			messageHeader = (MessageHeader) messageHeaders.getEntryFirstRep().getResource();
+
+			// Now, we find a bundle message that has this messageheader.
+			String mhId = MessageHeaderResourceProvider.getType() + "/" + messageHeader.getIdElement().getIdPart();
+			Bundle respMessageBundle = client.search().forResource(Bundle.class)
+				.where(Bundle.MESSAGE.hasId(mhId)).returnBundle(Bundle.class).execute();
+			if (respMessageBundle != null) {
+				// We have the search bundle that contains message bundle. Since we are searching
+				// one message bundle, just send the first one. 
+				if (respMessageBundle.getTotal() > 0) {
+					originalMessageBundle = (Bundle) respMessageBundle.getEntryFirstRep().getResource();
+				}
+			}
+		} else {
+			// Ceate MessageHeader
+			UrlType endpoint = new UrlType(OperationUtil.myHostUrl());
+			MessageSourceComponent source = new MessageSourceComponent(endpoint);
+			messageHeader = new MessageHeader(MdiProfileUtil.DCR_REPORT_EVENT, source);
+			messageHeader.setId(new IdType(MessageHeaderResourceProvider.getType(), UUID.randomUUID().toString()));
+			messageHeader.addFocus(new Reference(focusId));
+		}
+
+		// Add profile to Message Bundle
+		retMessageBundle.getMeta().addProfile("http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-message-death-certificate-review");
+
+		// Create a message bundle and add to messageheader to the entry
+		String messageHeaderLocalUrl = MessageHeaderResourceProvider.getType() + "/" + messageHeader.getIdElement().getIdPart();
+		BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(messageHeaderLocalUrl).setResource(messageHeader);
+		retMessageBundle.addEntry(bundleEntryComponent); 
+
+		// fill out other required fields
+		retMessageBundle.setType(BundleType.MESSAGE);
+
+		// Add diagnosticreport to Bundle.entry
+		String dcrReportLocalUrl = BundleResourceProvider.getType() + "/" + compositionBundle.getIdElement().getIdPart();
+		bundleEntryComponent = new BundleEntryComponent().setFullUrl(dcrReportLocalUrl).setResource(compositionBundle);
+		retMessageBundle.addEntry(bundleEntryComponent);
+
+		if (originalMessageBundle != null) {
+			retMessageBundle.setId(originalMessageBundle.getIdElement());
+			retMessageBundle.setIdentifier(originalMessageBundle.getIdentifier());
+			client.update().resource(retMessageBundle).prettyPrint().encodedJson().execute();
+		} else {
+			retMessageBundle.setId(new IdType("Bundle", UUID.randomUUID().toString()));
+			retMessageBundle.setIdentifier(OperationUtil.generateIdentifier(OperationUtil.RAVEN_SYSTEM));	
+			client.create().resource(retMessageBundle).prettyPrint().encodedJson().execute();
+		}
+
+		return retMessageBundle;
+	}
+
+	private Bundle addMessageWrapperToBundleDocument(boolean addMessageWrapper, 
+			RequestDetails theRequestDetails, IdType theCompositionId,
+			UriOrListParam theIds,
+			BooleanType thePersist,
+			UriParam theGraph,
+			List<ParametersParameterComponent> thePatients,
+			StringOrListParam theTrackingNumber,
+			StringOrListParam theDeathLocations,
+			DateOrListParam theDeathDatePronounced,
+			DateOrListParam theProfileDeathDateRange,
+			TokenOrListParam theOrTypes) {
+
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
 		OperationUtil.setupClientForAuth(client);
@@ -778,7 +875,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		// 	// return client
 		// 	// 	.operation()
 		// 	// 	.onInstance(theCompositionId)
-		// 	// 	.named("$document")
+		// 	// 	.named("")
 		// 	// 	.withParameter(Parameters.class, "persist", thePersist)
 		// 	// 	.useHttpGet()
 		// 	// 	.returnResourceType(Bundle.class)
@@ -797,22 +894,29 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			// This will ignore other search parameters.
 			for (UriParam theId: theIds.getValuesAsQueryTokens()) {
 				// String id = theId.getValue();
-				Bundle compositionBundle = 
-					generateDocumentOperation(theRequestDetails, null, theId, thePersist, theGraph);
-				
-				// client
-				// 	.operation().onInstance(new IdType("Composition", id))
-				// 	.named("$document")
-				// 	.withNoParameters(Parameters.class)
-				// 	.returnResourceType(Bundle.class)
-				// 	.execute();
+				Bundle compositionBundle = generateDocumentOperation(theRequestDetails, null, theId, thePersist, theGraph);
 				
 				BundleEntryComponent entryComponent = new BundleEntryComponent();
-				entryComponent.setFullUrl(compositionBundle.getId());
-				entryComponent.setResource(compositionBundle);
-				retBundle.addEntry(entryComponent);
+				if (addMessageWrapper) {
+					Bundle retMessageBundle = addMessageWrapper(client, compositionBundle);
+			
+					entryComponent.setFullUrl(retMessageBundle.getId());
+					entryComponent.setResource(retMessageBundle);
+				} else {
+					// client
+					// 	.operation().onInstance(new IdType("Composition", id))
+					// 	.named("")
+					// 	.withNoParameters(Parameters.class)
+					// 	.returnResourceType(Bundle.class)
+					// 	.execute();
+					
+					entryComponent.setFullUrl(compositionBundle.getId());
+					entryComponent.setResource(compositionBundle);
+				}
 
+				retBundle.addEntry(entryComponent);
 				totalSize++;
+
 			}
 
 			retBundle.setTotal(totalSize);
@@ -824,13 +928,27 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			return retBundle;
 		}
 		
-		boolean shouldQuery = false;
+		// boolean shouldQuery = true;
 
 		Bundle compositionsBundle = null;
 		IQuery<IBaseBundle> query = client.search().forResource(Composition.class);
 
-		if (addTokenToIdentifierQuery(query, TRACKING_NUMBER, theTrackingNumber) == true) {
-			shouldQuery = true;
+		addTokenToIdentifierQuery(query, TRACKING_NUMBER, theTrackingNumber);
+
+		if (theOrTypes != null) {
+			List<TokenParam> types = theOrTypes.getValuesAsQueryTokens();
+			// ICriterion<TokenClientParam> subQuery = null;
+			List<Coding> codings = new ArrayList<Coding>();
+			for (TokenParam type : types) {
+				String system = type.getSystem();
+				String value = type.getValue();
+				Coding newCoding = new Coding();
+				newCoding.setSystem(system);
+				newCoding.setCode(value);
+				codings.add(newCoding);
+			}
+
+			query = query.and(Composition.TYPE.exactly().codings(codings.toArray(new Coding[0])));
 		}
 
 		if (thePatients != null) {
@@ -845,7 +963,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 								familySearchParams.add(family);
 							}
 							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
-							shouldQuery = true;
 						}		
 					} else if (Patient.SP_GIVEN.equals(patientParam.getName())) {
 						StringType theGivens = (StringType) patientParam.getValue();
@@ -855,8 +972,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 							for (String given : givenStrings) {
 								givenSearchParams.add(given);
 							}
-							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));
-							shouldQuery = true;		
+							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));	
 						}
 					} else if (Patient.SP_GENDER.equals(patientParam.getName())) {
 						StringType theGenders = (StringType) patientParam.getValue();
@@ -867,7 +983,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 								genderSearchParams.add(gender);
 							}
 							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
-							shouldQuery = true;
 						}
 					} else if (Patient.SP_BIRTHDATE.equals(patientParam.getName())) {
 						StringType birthDate = (StringType) patientParam.getValue();
@@ -888,8 +1003,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
 							}						
 						}
-
-						shouldQuery = true;
 					}
 				}
 			}
@@ -907,8 +1020,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					.matches()
 					.values(deathLocationSearchParams)
 				);
-
-			shouldQuery = true;
 		}
 
 		// Death Date Pronounced
@@ -916,7 +1027,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			IQuery<IBaseBundle> queryDates = queryForDates(query, theDeathDatePronounced);
 			if (queryDates != null) {
 				query = queryDates;
-				shouldQuery = true;
 			}
 		}
 
@@ -934,31 +1044,34 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			IQuery<IBaseBundle> queryDates = queryForDates(query, theProfileDeathDateRange);
 			if (queryDates != null) {
 				query = queryDates;
-				shouldQuery = true;
 			}
 		}
 
-		if (shouldQuery) {
-			compositionsBundle = query.returnBundle(Bundle.class).execute();
-		}
+		compositionsBundle = query.returnBundle(Bundle.class).execute();
 
 		if (compositionsBundle != null && !compositionsBundle.isEmpty()) {
 			List<BundleEntryComponent> entries = compositionsBundle.getEntry();
 			for (BundleEntryComponent entry : entries) {
 				String compositionId = entry.getResource().getIdElement().getIdPart();
 
-				Bundle documentBundle = 
-					generateDocumentOperation(theRequestDetails, new IdType("Composition", compositionId), null, thePersist, theGraph);
+				Bundle documentBundle = generateDocumentOperation(theRequestDetails, new IdType(BundleResourceProvider.getType(), compositionId), null, thePersist, theGraph);
 
-				// client
-				// 	.operation().onInstance(new IdType("Composition", compositionId))
-				// 	.named("$document")
-				// 	.withNoParameters(Parameters.class)
-				// 	.returnResourceType(Bundle.class)
-				// 	.execute();
 				BundleEntryComponent entryComponent = new BundleEntryComponent();
-				entryComponent.setFullUrl(documentBundle.getId());
-				entryComponent.setResource(documentBundle);
+				if (addMessageWrapper) {
+					Bundle retMessageBundle = addMessageWrapper(client, documentBundle);
+			
+					entryComponent.setFullUrl(retMessageBundle.getId());
+					entryComponent.setResource(retMessageBundle);
+				} else {
+					// client
+					// 	.operation().onInstance(new IdType("Composition", compositionId))
+					// 	.named("$document")
+					// 	.withNoParameters(Parameters.class)
+					// 	.returnResourceType(Bundle.class)
+					// 	.execute();
+					entryComponent.setFullUrl(documentBundle.getId());
+					entryComponent.setResource(documentBundle);
+				}
 				retBundle.addEntry(entryComponent);
 
 				totalSize++;
@@ -970,12 +1083,53 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	
 			retBundle.setTotal(totalSize);
 		} else {
-			throwSimulatedOO("No or No Known Parameters are received.");
+			throwSimulatedOO("Invalid null bundle received from server. Contact developer.");
 		}
 
 		return retBundle;
 	}
 	
+	@Operation(name = "$dcr-message", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
+	public Bundle generateDcrMessageOperation(RequestDetails theRequestDetails, 
+			@IdParam(optional=true) IdType theCompositionId,
+			@OperationParam(name = "id") UriOrListParam theIds, 
+			@OperationParam(name = Composition.SP_PATIENT) List<ParametersParameterComponent> thePatients,
+			@OperationParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber) {
+			
+		if (theCompositionId != null) {
+			// this is read by the id. Get the diagnostic report and construct message bundle.
+			Composition dcrReport = (Composition) readComposition(theCompositionId);
+			if (dcrReport == null) {
+				ThrowFHIRExceptions.unprocessableEntityException("DiagnosticReport.id, " + theCompositionId.asStringValue() + " does not exist");
+			}
+
+			String myFhirServerBase = theRequestDetails.getFhirServerBase();
+			IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
+			OperationUtil.setupClientForAuth(client);
+	
+			Bundle dcrReportDocument = constructDocumentBundleFromComposition(client, dcrReport);
+
+			// return message bundle
+			return addMessageWrapper(client, dcrReportDocument);
+		}
+
+		// We want DCR Type document.
+		TokenOrListParam theTypes = new TokenOrListParam(MdiProfileUtil.DCR_REPORT.getSystem(), MdiProfileUtil.DCR_REPORT.getCode());
+
+		return addMessageWrapperToBundleDocument(true, 
+			theRequestDetails, 
+			null, 
+			theIds, 
+			null, 
+			null, 
+			thePatients, 
+			theTrackingNumber, 
+			null, 
+			null, 
+			null,
+			theTypes);
+	}
+
 	public Bundle generateDocumentOperation(RequestDetails theRequestDetails, IdType theCompositionId, UriParam theIdUri, BooleanType thePersist, UriParam theGraph) {
 
 		OperationOutcome outcome = new OperationOutcome();
@@ -1013,6 +1167,23 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			return null;
 		}
 
+
+		String myFhirServerBase = theRequestDetails.getFhirServerBase();
+		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
+		OperationUtil.setupClientForAuth(client);
+
+		Bundle retBundle = constructDocumentBundleFromComposition(client, composition);
+
+		if (saveIt) {
+			client.create().resource(retBundle).encodedJson().prettyPrint().execute();
+		}
+
+		return retBundle;
+	}
+	
+	private Bundle constructDocumentBundleFromComposition (IGenericClient client, Composition composition) {
+		OperationOutcome outcome = new OperationOutcome();
+
 		CodeableConcept myType = composition.getType();
 
 		if (myType.isEmpty()) {
@@ -1032,9 +1203,13 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				typeCoding = coding;
 				typeSystem = coding.getSystem();
 				typeCode = coding.getCode(); 
-				if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "86807-5".equalsIgnoreCase(typeCode)) {
+				if (MdiProfileUtil.MDI_EDRS_DC.getSystem().equalsIgnoreCase(typeSystem) && MdiProfileUtil.MDI_EDRS_DC.getCode().equalsIgnoreCase(typeCode)) {
 					documentType = "MDI-DOCUMENT";
 					break;
+				}
+
+				if (MdiProfileUtil.DCR_REPORT.getSystem().equalsIgnoreCase(typeSystem) && MdiProfileUtil.DCR_REPORT.getCode().equalsIgnoreCase(typeCode)) {
+					documentType = "DCR-REPORT";
 				}
 			}
 		}
@@ -1054,16 +1229,16 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		bundleEntry.setResource(composition);
 		bundleEntries.add(bundleEntry);
 
-		String myFhirServerBase = theRequestDetails.getFhirServerBase();
-		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
-		OperationUtil.setupClientForAuth(client);
-
 		String metaProfile = "";
-		if ("MDI-DOCUMENT".equalsIgnoreCase(documentType)) {
-			// This is a death certificate document. We need to add full resources in the
+		if ("MDI-DOCUMENT".equalsIgnoreCase(documentType) || "DCR-REPORT".equalsIgnoreCase(documentType)) {
+			// This is a death certificate document or dcr report. We need to add full resources in the
 			// section entries
 			// to the resources.
-			metaProfile = "http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-document-mdi-and-edrs";
+			if ("MDI-DOCUMENT".equalsIgnoreCase(documentType)) {
+				metaProfile = "http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-document-mdi-and-edrs";
+			} else if ("DCR-REPORT".equalsIgnoreCase(documentType)) {
+				metaProfile = "http://hl7.org/fhir/us/mdi/StructureDefinition/Bundle-document-mdi-dcr";
+			}
 
 			// The composition section is empty. It means that VRDR has never been
 			// generated. We generate it here and persist it.
@@ -1132,15 +1307,40 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 		}
 
-		Bundle retBundle = new Bundle();
+		Bundle retBundle = null; 
+		// grab some from original bundle.
+
+		// lastly check if the original bundle had a signature.
+		Bundle origBundle = client.search().forResource(Bundle.class)
+				.where(Bundle.COMPOSITION.hasId(new IdType(CompositionResourceProvider.getType(), composition.getIdElement().getIdPart()))).returnBundle(Bundle.class).execute();
+		if (origBundle != null) {
+			if (origBundle.getTotal() > 0) {
+				// we use the first bundle returned as our returning bundle.
+				retBundle = (Bundle) origBundle.getEntryFirstRep().getResource();
+			}
+		}
+
+		if (retBundle == null) {
+			retBundle = new Bundle();
+		}
 
 		// This is generate Document operation. Thus, type must be Document.
 		retBundle.setType(Bundle.BundleType.DOCUMENT);
 
 		if (!metaProfile.isEmpty()) {
 			Meta meta = retBundle.getMeta();
-			meta.addProfile(metaProfile);
-			retBundle.setMeta(meta);
+			boolean addProfile = true;
+			for (CanonicalType profiles : meta.getProfile()) {
+				if (profiles.equals(metaProfile)) {
+					addProfile = false;
+					break;
+				}
+			}
+
+			if (addProfile) {
+				meta.addProfile(metaProfile);
+				retBundle.setMeta(meta);
+			}
 		}
 
 		retBundle.setEntry(bundleEntries);
@@ -1177,10 +1377,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		retBundle.setIdentifier(bundleIdentifier);
 
 		retBundle.setTimestamp(new Date());
-
-		if (saveIt) {
-			client.create().resource(retBundle).encodedJson().prettyPrint().execute();
-		}
 
 		return retBundle;
 	}
@@ -1226,6 +1422,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 								documentType = "MDI-DOCUMENT";
 							} else if ("http://loinc.org".equalsIgnoreCase(typeSystem) && "11502-2".equalsIgnoreCase(typeCode)) {
 								documentType = "LAB-DOCUMENT";
+							} else if (ExtensionUtil.extTrackingNumberTypeSystem.equalsIgnoreCase(typeSystem) && "death-certificate-data-review-doc".equalsIgnoreCase(typeCode)) {
+								documentType = "DCR-DOCUMENT";
 							}
 						}
 					}
@@ -1240,13 +1438,13 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					if ("MDI-DOCUMENT".equals(documentType)) {
 						// get case number.
 						for (Extension ext : composition.getExtension()) {
-							if ("http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number".equals(ext.getUrl())) {
+							if (ExtensionUtil.extTrackingNumberUrl.equals(ext.getUrl())) {
 								Identifier trackingIdentifier = (Identifier) ext.getValue();
 								CodeableConcept tType = trackingIdentifier.getType();
 								if (tType != null && !tType.isEmpty()) {
 									for (Coding code : tType.getCoding()) {
-										if ("http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes".equals(code.getSystem())
-											&& "edrs-file-number".equals(code.getCode())) {
+										if (ExtensionUtil.extTrackingNumberTypeSystem.equals(code.getSystem())
+											&& ExtensionUtil.edrsFileNumber.getCode().equals(code.getCode())) {
 											identifierSystem = trackingIdentifier.getSystem();
 											identifierValue = trackingIdentifier.getValue();
 										}
@@ -1283,6 +1481,51 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 							throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
 						}
 						
+					} else if ("DCR-DOCUMENT".equals(documentType)) {
+						// get case number.
+						for (Extension ext : composition.getExtension()) {
+							if (ExtensionUtil.extTrackingNumberUrl.equals(ext.getUrl())) {
+								Identifier trackingIdentifier = (Identifier) ext.getValue();
+								CodeableConcept tType = trackingIdentifier.getType();
+								if (tType != null && !tType.isEmpty()) {
+									for (Coding code : tType.getCoding()) {
+										if (ExtensionUtil.extTrackingNumberTypeSystem.equals(code.getSystem())
+											&& ExtensionUtil.funeralHomeCaseNumber.getCode().equals(code.getCode())) {
+											identifierSystem = trackingIdentifier.getSystem();
+											identifierValue = trackingIdentifier.getValue();
+										}
+									}
+								}
+							}
+						}
+
+						if (identifierValue == null) {
+							outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+								.setDetails((new CodeableConcept()).setText("Tracking number for Funeral Home not found in the bundle"));
+							throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+						}
+
+						// Search the composition that has this tracking number.
+						Bundle compositionBundle;
+						if (identifierSystem != null && !identifierSystem.isEmpty()) {
+							compositionBundle = client.search().forResource(Composition.class)
+								.and(CompositionResourceProvider.TRACKING_NUMBER
+								.exactly()
+								.systemAndCode(identifierSystem, identifierValue)
+							).returnBundle(Bundle.class).execute();
+						} else {
+							compositionBundle = client.search().forResource(Composition.class)
+								.and(CompositionResourceProvider.TRACKING_NUMBER
+								.exactly()
+								.code(identifierValue)
+							).returnBundle(Bundle.class).execute();
+						}
+						BundleEntryComponent entry = compositionBundle.getEntryFirstRep();
+						if (entry.isEmpty()) {
+							outcome.addIssue().setSeverity(IssueSeverity.ERROR)
+									.setDetails((new CodeableConcept()).setText("Funeral Home Case Number (" + identifierSystem + "|" + identifierValue + ") is not found"));
+							throw new UnprocessableEntityException(FhirContext.forR4(), outcome);
+						}
 					} else {
 						outcome.addIssue().setSeverity(IssueSeverity.ERROR)
 								.setDetails((new CodeableConcept()).setText("This is not a MDI document"));

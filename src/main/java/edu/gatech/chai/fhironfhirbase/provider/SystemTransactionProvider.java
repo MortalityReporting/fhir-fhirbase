@@ -565,7 +565,7 @@ public class SystemTransactionProvider {
 			String code = trackingNumIdentifier.getType().getCodingFirstRep().getCode();
 			String system = StringUtils.defaultString(trackingNumIdentifier.getSystem());
 			String value = StringUtils.defaultString(trackingNumIdentifier.getValue());
-			if ("mdi-case-number".equals(code) || "edrs-file-number".equals(code)) {	
+			if ("mdi-case-number".equals(code) || "edrs-file-number".equals(code) || "funeral-home-case-number".equals(code)) {	
 				return searchComposition(client, CompositionResourceProvider.TRACKING_NUMBER, system, value);
 			} else if ("tox-lab-case-number".equals(code)) {
 				return searchComposition(client, DiagnosticReportResourceProvider.TRACKING_NUMBER, system, value);
@@ -1063,7 +1063,7 @@ public class SystemTransactionProvider {
 			client.registerInterceptor(new BearerTokenAuthInterceptor(authBearer));
 		}
 
-				// Duplication is not allowed. Check if this will cause the duplication. If it does,
+		// Duplication is not allowed. Check if this will cause the duplication. If it does,
 		// we send OO to avoid that.
 
 		// Check the first resource in the entry. We only worry about Composition and MessageHeader

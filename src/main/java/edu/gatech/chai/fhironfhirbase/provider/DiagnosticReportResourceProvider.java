@@ -308,9 +308,9 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 				String value = toxLabCaseNumberToken.getValue();
 				String whereItem;
 				if (system == null || system.isEmpty()) {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-vr-codes\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
 				} else {
-					whereItem = "extensions @> '{\"url\": \"http://hl7.org/fhir/us/mdi/StructureDefinition/Extension-tracking-number\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-vr-codes\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
 				}
 				if (where.isEmpty()) {
 					where = whereItem;
@@ -563,7 +563,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			client.update().resource(retMessageBundle).prettyPrint().encodedJson().execute();
 		} else {
 			retMessageBundle.setId(new IdType("Bundle", UUID.randomUUID().toString()));
-			retMessageBundle.setIdentifier(OperationUtil.generateIdentifier(OperationUtil.RAVEN_TOX_SYSTEM));	
+			retMessageBundle.setIdentifier(OperationUtil.generateIdentifier(OperationUtil.RAVEN_SYSTEM));	
 			client.create().resource(retMessageBundle).prettyPrint().encodedJson().execute();
 		}
 
