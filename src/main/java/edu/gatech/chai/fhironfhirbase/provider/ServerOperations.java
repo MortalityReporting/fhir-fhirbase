@@ -819,7 +819,19 @@ public class ServerOperations {
 		// mhDcr.addFocus(new Reference(dcrBundleRefUrl));
 
 		// Create Message Bundle for DCR Document Bundle
-		BundleMessageDeathCertificateReview dcrMessageBundle = new BundleMessageDeathCertificateReview(BundleType.MESSAGE, mhDcr, dcrBundle);
+		BundleMessageDeathCertificateReview dcrMessageBundle = new BundleMessageDeathCertificateReview(BundleType.MESSAGE, mhDcr);
+		String mhRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+		BundleEntryComponent mhDcrEntry = dcrMessageBundle.getEntryFirstRep();
+        mhDcrEntry.setFullUrl(mhRefUrl);
+
+		// Add DCR bundle to focus and add to the entry
+		BundleEntryComponent bDcrEntry = new BundleEntryComponent();
+        String bDcrRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+        bDcrEntry.setFullUrl(bDcrRefUrl);
+        bDcrEntry.setResource(dcrBundle);
+        dcrMessageBundle.addEntry(bDcrEntry);
+		
+        mhDcr.addFocus(new Reference(bDcrRefUrl));
 
 		return dcrMessageBundle;
 	}
