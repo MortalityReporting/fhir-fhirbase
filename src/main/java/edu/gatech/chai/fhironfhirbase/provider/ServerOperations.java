@@ -588,8 +588,8 @@ public class ServerOperations {
 
 		if (theDecedentMiddleName != null) { // 0..*
 			name.addGiven(theDecedentMiddleName.getValue());
-			decedent.addName(name);
 		}
+		decedent.addName(name);
 
 		if (theDecedentDateOfBirth == null) { // required
 			throw new FHIRException("decedentDateOfBirth must exist");
@@ -830,7 +830,7 @@ public class ServerOperations {
         bDcrEntry.setFullUrl(bDcrRefUrl);
         bDcrEntry.setResource(dcrBundle);
         dcrMessageBundle.addEntry(bDcrEntry);
-		
+
         mhDcr.addFocus(new Reference(bDcrRefUrl));
 
 		return dcrMessageBundle;
