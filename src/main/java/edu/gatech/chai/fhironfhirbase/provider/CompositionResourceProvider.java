@@ -1100,7 +1100,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			// this is read by the id. Get the diagnostic report and construct message bundle.
 			Composition dcrReport = (Composition) readComposition(theCompositionId);
 			if (dcrReport == null) {
-				ThrowFHIRExceptions.unprocessableEntityException("DiagnosticReport.id, " + theCompositionId.asStringValue() + " does not exist");
+				ThrowFHIRExceptions.unprocessableEntityException("Bundle.id, " + theCompositionId.asStringValue() + " does not exist");
 			}
 
 			String myFhirServerBase = theRequestDetails.getFhirServerBase();
