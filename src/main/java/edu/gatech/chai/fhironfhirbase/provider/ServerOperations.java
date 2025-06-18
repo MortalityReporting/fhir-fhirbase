@@ -538,6 +538,18 @@ public class ServerOperations {
 		return responseBundle;
 	}
 
+	private String makeFullUrl(Resource resource) {
+		String fullUrl = resource.getIdPart();
+		if (fullUrl == null || fullUrl.isEmpty()) {
+			fullUrl = "urn:uuid:" + UUID.randomUUID().toString();
+			resource.setId(fullUrl);
+		} else {
+			fullUrl = "urn:uuid:" + fullUrl;
+		}
+
+		return fullUrl;
+	}
+
 	@Operation(name = "$ccr-funeralhome")
 	public Bundle dcrConstructOperation(
 		@OperationParam(name = "submitterFirstName", min = 1, max = 1, type = StringDt.class) StringParam theSubmitterFirstName,
@@ -746,6 +758,7 @@ public class ServerOperations {
 
 		// construct DCR composition
 		CompositionMDIDCR compositionMdiDcr = new CompositionMDIDCR();
+		CommonUtil.setUUID(compositionMdiDcr);
 
 		// DCR Document Bundle
 		Identifier dcrIdentifier = new Identifier();
@@ -753,14 +766,15 @@ public class ServerOperations {
 		dcrIdentifier.setValue(UUID.randomUUID().toString());
 
 		BundleDocumentMDIDCR dcrBundle = new BundleDocumentMDIDCR(dcrIdentifier, compositionMdiDcr);
+		dcrBundle.getEntryFirstRep().setFullUrl("urn:uuid:" + compositionMdiDcr.getIdPart());
 
 		// Add resources to the bundle and add any references here
 		// DCR Decedent Domgraphic Sectin
-		String decedentRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
-		BundleEntryComponent decentEntry = new BundleEntryComponent();
-		decentEntry.setResource(decedent);
-		decentEntry.setFullUrl(decedentRefUrl);
-		dcrBundle.addEntry(decentEntry);
+		String decedentRefUrl = makeFullUrl(decedent);
+		BundleEntryComponent decedentEntry = new BundleEntryComponent();
+		decedentEntry.setResource(decedent);
+		decedentEntry.setFullUrl(decedentRefUrl);
+		dcrBundle.addEntry(decedentEntry);
 
 		// This is a decedent resource, which we also need to set to composition.subject
 		compositionMdiDcr.setSubject(new Reference(decedentRefUrl));
@@ -768,7 +782,7 @@ public class ServerOperations {
 		demographicSection.addEntry(new Reference(decedentRefUrl));
 
 		// DCR Death Investigateion Section
-		String deathDateRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+		String deathDateRefUrl = makeFullUrl(deathDate);
 		BundleEntryComponent deathDateEntry = new BundleEntryComponent();
 		deathDateEntry.setResource(deathDate);
 		deathDateEntry.setFullUrl(deathDateRefUrl);
@@ -776,7 +790,7 @@ public class ServerOperations {
 
 		String deathLocationUrl = null;
 		if (!deathLocation.isEmpty()) {
-			deathLocationUrl = "urn:uuid:" + UUID.randomUUID().toString();
+			deathLocationUrl = makeFullUrl(deathLocation);
 			BundleEntryComponent deathLocationEntry = new BundleEntryComponent();
 			deathLocationEntry.setResource(deathLocation);
 			deathLocationEntry.setFullUrl(deathLocationUrl);
@@ -790,7 +804,7 @@ public class ServerOperations {
 		}
 
 		// DCR Cremation Clearance Info section
-		String ccrRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+		String ccrRefUrl = makeFullUrl(fh);
 		BundleEntryComponent ccrInfoEntry = new BundleEntryComponent();
 		ccrInfoEntry.setResource(fh);
 		ccrInfoEntry.setFullUrl(ccrRefUrl);
@@ -800,7 +814,7 @@ public class ServerOperations {
 		cremationClearanceInfoSection.addEntry(new Reference(ccrRefUrl));
 
 		// Any other stuff.
-		String submitterUrl = "urn:uudi:" + UUID.randomUUID().toString();
+		String submitterUrl = makeFullUrl(funeralDirector);
 		BundleEntryComponent submitterEntry = new BundleEntryComponent();
 		submitterEntry.setResource(funeralDirector);
 		submitterEntry.setFullUrl(submitterUrl);
@@ -820,13 +834,13 @@ public class ServerOperations {
 
 		// Create Message Bundle for DCR Document Bundle
 		BundleMessageDeathCertificateReview dcrMessageBundle = new BundleMessageDeathCertificateReview(BundleType.MESSAGE, mhDcr);
-		String mhRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+		String mhRefUrl = makeFullUrl(mhDcr);
 		BundleEntryComponent mhDcrEntry = dcrMessageBundle.getEntryFirstRep();
         mhDcrEntry.setFullUrl(mhRefUrl);
 
 		// Add DCR bundle to focus and add to the entry
 		BundleEntryComponent bDcrEntry = new BundleEntryComponent();
-        String bDcrRefUrl = "urn:uuid:" + UUID.randomUUID().toString();
+        String bDcrRefUrl = makeFullUrl(dcrBundle);
         bDcrEntry.setFullUrl(bDcrRefUrl);
         bDcrEntry.setResource(dcrBundle);
         dcrMessageBundle.addEntry(bDcrEntry);
