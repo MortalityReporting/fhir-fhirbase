@@ -66,6 +66,7 @@ import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.ResourceType;
 import org.hl7.fhir.r4.model.ServiceRequest;
 import org.hl7.fhir.r4.model.Specimen;
+import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.UriType;
 import org.slf4j.Logger;
@@ -542,8 +543,9 @@ public class ServerOperations {
 	private String makeFullUrl(Resource resource) {
 		String fullUrl = resource.getIdPart();
 		if (fullUrl == null || fullUrl.isEmpty()) {
-			fullUrl = "urn:uuid:" + UUID.randomUUID().toString();
-			resource.setId(fullUrl);
+			String idUuid = UUID.randomUUID().toString();
+			fullUrl = "urn:uuid:" + idUuid;
+			resource.setId(idUuid);
 		} else {
 			fullUrl = "urn:uuid:" + fullUrl;
 		}
@@ -588,6 +590,11 @@ public class ServerOperations {
 		// construct Decedent
 		Decedent decedent = new Decedent();
 		String decedentRefUrl = makeFullUrl(decedent);
+		
+		Identifier decedentIdentifier = new Identifier();
+		decedentIdentifier.setSystem("urn:raven:dcr");
+		decedentIdentifier.setValue(UUID.randomUUID().toString());
+		decedent.addIdentifier(decedentIdentifier);
 
 		HumanName name = new HumanName();
 
@@ -631,18 +638,19 @@ public class ServerOperations {
 			for (StringParam theDecedentRace : theDecedentOrRace.getValuesAsQueryTokens()) {
 				Extension ext = new Extension("http://hl7.org/fhir/us/core/StructureDefinition/us-core-race");
 				String raceCode = theDecedentRace.getValue();
-				ext.addExtension("ombCategory", CodeableConceptUtil.usCoreRaceConceptFromCode(raceCode));
-
+				Coding raceCoding = CodeableConceptUtil.usCoreRaceConceptFromCode(raceCode);
+				ext.addExtension("ombCategory", raceCoding);
+				ext.addExtension("text", new StringType(raceCoding.getDisplay()));
 				decedent.addExtension(ext);
 			}
-		}
-		
+		}		
 
 		if (theDecedentEthnicity != null) {
 			String ethnicityCode = theDecedentEthnicity.getValue();
 			Extension ext = new Extension("http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity");
-			ext.addExtension("ombCategory", CodeableConceptUtil.usCoreEthnicityConceptFromCode(ethnicityCode));
-
+			Coding ethnicityCoding = CodeableConceptUtil.usCoreEthnicityConceptFromCode(ethnicityCode);
+			ext.addExtension("ombCategory", ethnicityCoding);
+			ext.addExtension("text", new StringType(ethnicityCoding.getDisplay()));
 			decedent.addExtension(ext);
 		}
 
@@ -774,6 +782,7 @@ public class ServerOperations {
 		dcrIdentifier.setValue(UUID.randomUUID().toString());
 
 		BundleDocumentMDIDCR dcrBundle = new BundleDocumentMDIDCR(dcrIdentifier, compositionMdiDcr);
+		dcrBundle.setTimestamp(new Date());
 		dcrBundle.getEntryFirstRep().setFullUrl("urn:uuid:" + compositionMdiDcr.getIdPart());
 
 		// Add resources to the bundle and add any references here
