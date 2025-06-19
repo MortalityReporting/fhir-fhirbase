@@ -634,20 +634,32 @@ public class ServerOperations {
 		}
 
 		List<StringOrListParam> theDecedentAndRaces = theDecedentRaces.getValuesAsQueryTokens();
-		for (StringOrListParam theDecedentOrRace : theDecedentAndRaces) {
-			for (StringParam theDecedentRace : theDecedentOrRace.getValuesAsQueryTokens()) {
-				Extension ext = new Extension("http://hl7.org/fhir/us/core/StructureDefinition/us-core-race");
-				String raceCode = theDecedentRace.getValue();
-				Coding raceCoding = CodeableConceptUtil.usCoreRaceConceptFromCode(raceCode);
-				ext.addExtension("ombCategory", raceCoding);
-				ext.addExtension("text", new StringType(raceCoding.getDisplay()));
-				decedent.addExtension(ext);
+		if (!theDecedentAndRaces.isEmpty()) {
+			Extension ext = new Extension("http://hl7.org/fhir/us/core/StructureDefinition/us-core-race");
+			String raceText = new String();
+			for (StringOrListParam theDecedentOrRace : theDecedentAndRaces) {
+				for (StringParam theDecedentRace : theDecedentOrRace.getValuesAsQueryTokens()) {
+					String raceCode = theDecedentRace.getValue();
+					Coding raceCoding = CodeableConceptUtil.usCoreRaceConceptFromCode(raceCode);
+					ext.addExtension("ombCategory", raceCoding);
+					if (raceText == null || raceText.isBlank()) {
+						raceText = raceCoding.getDisplay();
+					} else {
+						raceText += raceCoding.getDisplay();
+					}
+				}
 			}
-		}		
+			if (raceText != null && !raceText.isBlank()) {
+				ext.addExtension("text", new StringType(raceText));
+			} else {
+				ext.addExtension("text", new StringType("Not Available"));
+			}
+			decedent.addExtension(ext);
+		}
 
 		if (theDecedentEthnicity != null) {
-			String ethnicityCode = theDecedentEthnicity.getValue();
 			Extension ext = new Extension("http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity");
+			String ethnicityCode = theDecedentEthnicity.getValue();
 			Coding ethnicityCoding = CodeableConceptUtil.usCoreEthnicityConceptFromCode(ethnicityCode);
 			ext.addExtension("ombCategory", ethnicityCoding);
 			ext.addExtension("text", new StringType(ethnicityCoding.getDisplay()));
