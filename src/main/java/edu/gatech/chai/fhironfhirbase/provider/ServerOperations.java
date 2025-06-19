@@ -587,6 +587,8 @@ public class ServerOperations {
 		// construct dcr-message bundle
 		// construct Decedent
 		Decedent decedent = new Decedent();
+		String decedentRefUrl = makeFullUrl(decedent);
+
 		HumanName name = new HumanName();
 
 		if (theDecedentLastName == null) { // required
@@ -650,9 +652,6 @@ public class ServerOperations {
 			throw new FHIRException("funeralHomeName, funeralHomeAddrLine1, funeralHomeAddrCity, funeralHomeAddrState, funeralHomeAddrZip, funeralHomeAddrCountry must exist");
 		}
 
-		FuneralHome fh = new FuneralHome();
-		fh.setName(theFuneralHomeName.getValue());
-
 		Address funeralAddress = new Address();
 		funeralAddress.addLine(theFuneralHomeAddrLine1.getValue());
 
@@ -665,7 +664,7 @@ public class ServerOperations {
 		funeralAddress.setPostalCode(theFuneralHomeAddrZip.getValue());
 		funeralAddress.setCountry(theFuneralHomeAddrCountry.getValue());
 
-		fh.addAddress(funeralAddress);
+		FuneralHome fh = new FuneralHome(theFuneralHomeName.getValue(), funeralAddress);
 
 		if (theFuneralHomeAddrPhone == null) {
 			throw new FHIRException("funeralHomeAddrPhone must exist");
@@ -681,6 +680,9 @@ public class ServerOperations {
 			cp.setValue(theFuneralHomeAddrFax.getValue());
 			fh.addTelecom(cp);
 		}
+
+		fh.setActive(true);
+
 
 		// Funeral Director (or staff) Info
 		Practitioner funeralDirector = new Practitioner();
@@ -714,6 +716,7 @@ public class ServerOperations {
 
 		Date dateOfDeath = theDateOfDeath.getValue();
 		DeathDate deathDate = new DeathDate(new Date(), dateOfDeath, thePlaceOfDeath.getValue());
+		deathDate.setSubject(new Reference(decedentRefUrl));
 
 		if ("OTH".equals(thePlaceOfDeath.getValue()) && thePlaceOfDeathOther != null) {
 			CodeableConcept pDvalue = deathDate.getPlaceOfDeathComponentValue();
@@ -764,7 +767,7 @@ public class ServerOperations {
 		compositionMdiDcr.setDate(new Date());
 		compositionMdiDcr.setStatus(CompositionStatus.FINAL);
 		compositionMdiDcr.setTitle("Cremation Clearance Request");
-		
+
 		// DCR Document Bundle
 		Identifier dcrIdentifier = new Identifier();
 		dcrIdentifier.setSystem("urn:raven:dcr");
@@ -775,7 +778,6 @@ public class ServerOperations {
 
 		// Add resources to the bundle and add any references here
 		// DCR Decedent Domgraphic Sectin
-		String decedentRefUrl = makeFullUrl(decedent);
 		BundleEntryComponent decedentEntry = new BundleEntryComponent();
 		decedentEntry.setResource(decedent);
 		decedentEntry.setFullUrl(decedentRefUrl);
