@@ -645,7 +645,7 @@ public class ServerOperations {
 					if (raceText == null || raceText.isBlank()) {
 						raceText = raceCoding.getDisplay();
 					} else {
-						raceText += raceCoding.getDisplay();
+						raceText += ", " + raceCoding.getDisplay();
 					}
 				}
 			}
