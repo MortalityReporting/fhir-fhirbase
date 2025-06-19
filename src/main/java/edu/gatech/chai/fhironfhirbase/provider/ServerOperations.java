@@ -41,6 +41,7 @@ import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Composition;
+import org.hl7.fhir.r4.model.Composition.CompositionStatus;
 import org.hl7.fhir.r4.model.Composition.SectionComponent;
 import org.hl7.fhir.r4.model.ContactPoint.ContactPointSystem;
 import org.hl7.fhir.r4.model.DocumentReference.DocumentReferenceContentComponent;
@@ -760,6 +761,10 @@ public class ServerOperations {
 		CompositionMDIDCR compositionMdiDcr = new CompositionMDIDCR();
 		CommonUtil.setUUID(compositionMdiDcr);
 
+		compositionMdiDcr.setDate(new Date());
+		compositionMdiDcr.setStatus(CompositionStatus.FINAL);
+		compositionMdiDcr.setTitle("Cremation Clearance Request");
+		
 		// DCR Document Bundle
 		Identifier dcrIdentifier = new Identifier();
 		dcrIdentifier.setSystem("urn:raven:dcr");
