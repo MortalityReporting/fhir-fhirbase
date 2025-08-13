@@ -97,6 +97,7 @@ import edu.gatech.chai.VRDR.model.DeathLocation;
 import edu.gatech.chai.VRDR.model.Decedent;
 import edu.gatech.chai.VRDR.model.FuneralHome;
 import edu.gatech.chai.fhironfhirbase.utilities.CodeableConceptUtil;
+import edu.gatech.chai.fhironfhirbase.utilities.MdiProfileUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.OperationUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 
@@ -493,10 +494,7 @@ public class ServerOperations {
 				Type eventType = messageHeader.getEvent();
 				if (eventType instanceof Coding) {
 					Coding event = (Coding) eventType;
-					if ("http://hl7.org/fhir/us/mdi/CodeSystem/CodeSystem-mdi-codes".equals(event.getSystem())
-						&& "tox-result-report".equals(event.getCode())) {
-						
-						
+					if (CodeableConceptUtil.compareCodings(MdiProfileUtil.TOXICOLOGY_LAB_RESULT, event) == 0) {
 						// This is tox lab report. Resources are all to be added to the server.
 						OperationOutcome oo = processPostResources(client, entries);
 						if (oo != null) {
@@ -517,7 +515,7 @@ public class ServerOperations {
 						updateReference(references.get(0));
 						createMessageHeader(client, messageHeader);
 					} else {
-						ThrowFHIRExceptions.unprocessableEntityException("We currently support only observation-provided Message event");
+						ThrowFHIRExceptions.unprocessableEntityException("We currently support only toxicology Lab Result Message event");
 					}
 				} else {
 					ThrowFHIRExceptions
