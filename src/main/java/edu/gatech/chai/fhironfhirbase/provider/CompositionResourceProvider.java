@@ -49,8 +49,12 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.model.api.IElement;
 import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.model.api.annotation.SearchParamDefinition;
+import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
+import ca.uhn.fhir.model.primitive.StringDt;
+import ca.uhn.fhir.model.primitive.UriDt;
 import ca.uhn.fhir.model.valueset.BundleTypeEnum;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
@@ -74,6 +78,7 @@ import ca.uhn.fhir.rest.param.DateOrListParam;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.param.ParamPrefixEnum;
+import ca.uhn.fhir.rest.param.ParameterUtil;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.StringOrListParam;
 import ca.uhn.fhir.rest.param.StringParam;
@@ -259,7 +264,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Composition.SP_TYPE) TokenOrListParam theOrTypes,
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
-			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED) DateRangeParam theDeathDatePronounced,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE) DateRangeParam theDeathDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) TokenOrListParam theTrackingNumber,
 			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", 
@@ -305,21 +309,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 		}
 
-		if (theDeathLocations != null || theDeathDate != null || theDeathDatePronounced != null) {
-			// join observation and composition tables on subject reference
-			fromStatement += " join observation o on comp.resource->'subject'->>'reference' = o.resource->'subject'->>'reference'";
-		}
-
-		if (theDeathLocations != null) {
-			fromStatement += " join location l on o.resource->'extension'->0->>'url' = 'http://hl7.org/fhir/us/vrdr/StructureDefinition/vrdr-death-location' " 
-				+ "and o.resource->'extension'->0->'valueReference'->>'reference' = concat('Location/', l.resource->>'id')";
-		}
-
-		if (theDeathDate != null || theDeathDatePronounced != null) {
-			// the pronunced death date is available in the component section
-			fromStatement += ", jsonb_array_elements(o.resource->'component') component, jsonb_array_elements(component->'code'->'coding') component_codings";
-		}
-
 		boolean returnAll = true;
 
 		if (theSubjects != null || thePatients != null) {
@@ -343,70 +332,49 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 
 		if (theDeathLocations != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
-			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
-			String districtOrWhere = "";
+			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
+			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
+			fromStatement += " join location l on entries->>'reference' = concat('Location/', l.id)";
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
+
+			// We only want a section for circumstance where we keep death location reference.
+			whereParameters.add("codings @> '{\"code\": \"circumstances\", \"system\": \""+MdiProfileUtil.CS_MDI_CODES+"\"}'");
+
+			String districtOrWhere = null;
 			for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
+				String districtOrWhere_ = "lower(l.resource->'address'->>'city') like lower('%" + theDeathLocation.getValue() + "%')";
+				districtOrWhere_ += " or lower(l.resource->'address'->>'state') like lower('%" + theDeathLocation.getValue() + "%')";
+				districtOrWhere_ += " or lower(l.resource->'address'->>'district') like lower('%" + theDeathLocation.getValue() + "%')";
+				districtOrWhere_ += " or lower(l.resource->'address'->>'postalCode') like lower('%" + theDeathLocation.getValue() + "%')";
+				districtOrWhere_ += " or lower(l.resource->'address'->>'country') like lower('%" + theDeathLocation.getValue() + "%')";
 				if (districtOrWhere == null || districtOrWhere.isEmpty()) {
-					districtOrWhere = "lower(l.resource->'address'->>'district') like lower('%" + theDeathLocation.getValue() + "%')";
+					districtOrWhere = districtOrWhere_;
 				} else {
-					districtOrWhere += " or lower(l.resource->'address'->>'district') like lower('%" + theDeathLocation.getValue() + "%')";
+					districtOrWhere += " or " + districtOrWhere_;
 				}
 			}
 
-			whereParameters.add(districtOrWhere);
+			if (districtOrWhere != null && !districtOrWhere.isBlank()) {
+				whereParameters.add(districtOrWhere);
+			}
 		}
 
 		if (theDeathDate != null) {
-			// add presumed date to path
+			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
+			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
+			fromStatement += " join observation o on entries->>'reference' = concat('Observation/', o.id)";
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
+			fromStatement += ", jsonb_array_elements(o.resource->'component') component, jsonb_array_elements(component->'code'->'coding') component_codings";
 			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
+
+			// We only want a section for circumstance where we keep death location reference.
+			whereParameters.add("codings @> '{\"code\": \"jurisdiction\", \"system\": \""+MdiProfileUtil.CS_MDI_CODES+"\"}'");
+
+			// we want Death Date observation. So, check the code of Observations and choose one for death date.
 			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
 			
-			// check observation.valueDateTime
-			String deathDateWhere = constructDateRangeWhereParameter(theDeathDate, "o", "valueDateTime");
-
-			String componentWhere = "";
-			String prouncedDateWhere = constructDateRangeAliasPathWhere(theDeathDate, "component", "valueDateTime");
-			if (prouncedDateWhere != null && !prouncedDateWhere.isEmpty()) {
-				componentWhere = "(component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb and " + prouncedDateWhere + ")";
-			}
-
-			if (componentWhere != null && !componentWhere.isEmpty()) {
-				if (deathDateWhere != null && !deathDateWhere.isEmpty()) {
-					deathDateWhere += " or " + componentWhere;
-				} else {
-					deathDateWhere = componentWhere;
-				}
-			}
-
-			if (deathDateWhere != null && !deathDateWhere.isEmpty()) {
-				whereParameters.add(deathDateWhere);
-			}
-		} else {
-			// If theDeathDate is selected, then presumed and pronunced both will be examined with 'OR'. Thus, presumed
-			// and pronounced will only be examined when deathdate search is not used. 
-			// if (theDeathDatePresumed != null) {
-			// 	// add presumed date to path
-			// 	fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
-			// 	addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
-				
-			// 	// check observation.valueDateTime
-			// 	String deathDateWhere = constructDateRangeWhereParameter(theDeathDate, "o", "valueDateTime");
-			// 	if (deathDateWhere != null && !deathDateWhere.isEmpty()) {
-			// 		whereParameters.add(deathDateWhere);
-			// 	}
-			// }
-	
-			if (theDeathDatePronounced != null) {
-				// check pronounced death tiem component valueDate
-				// Add component code in where statement
-				whereParameters.add("component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb");
-				String prouncedDateWhere = constructDateRangeAliasPathWhere(theDeathDate, "component", "valueDateTime");
-				if (prouncedDateWhere != null && !prouncedDateWhere.isEmpty()) {
-					whereParameters.add(prouncedDateWhere);
-				}
-			}	
-		}
+			whereParameters.add("component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb");
+		} 
 
 		if (theOrTypes != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "types", "comp.resource->'type'->'coding'");
@@ -749,37 +717,190 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	// 	return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
 	// }
 
-	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
+	@Operation(name = "$document", idempotent = true)
 	public Bundle generateMdiDocumentOperation(RequestDetails theRequestDetails, 
-			@IdParam(optional=true) IdType theCompositionId,
-			@OperationParam(name = "id") UriOrListParam theIds, 
+			@IdParam IdType theId,
+			@OperationParam(name = "persist") BooleanType thePersist,
+			@OperationParam(name = "graph") UriParam theGraph) {
+
+		return generateDocumentOperation(theRequestDetails, theId, null, thePersist, theGraph);
+	}
+
+	@Operation(name = "$document", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
+	public IBundleProvider generateMdiDocumentOperation(RequestDetails theRequestDetails, 
 			@OperationParam(name = "persist") BooleanType thePersist,
 			@OperationParam(name = "graph") UriParam theGraph,
 			@OperationParam(name = Composition.SP_PATIENT) List<ParametersParameterComponent> thePatients,
 			@OperationParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber,
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
-			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED, max = 2) DateOrListParam theDeathDatePronounced,
-			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE, max = 2) DateOrListParam theProfileDeathDateRange) {
+			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE, max = 2) DateOrListParam theDeathDate) {
 
-		if (theCompositionId != null) {
-			return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
+
+		List<String> whereParameters = new ArrayList<String>();
+		String fromStatement = getTableName() + " comp";
+
+		// Set up join statements.
+		if (thePatients != null) {
+			// join patient and composition subject tables
+			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 		}
 
-		// We want DCR Type document.
-		TokenOrListParam theTypes = new TokenOrListParam(MdiProfileUtil.MDI_EDRS_DC.getSystem(), MdiProfileUtil.MDI_EDRS_DC.getCode());
+		if (thePatients != null) {
+			for (ParametersParameterComponent thePatient : thePatients) {
+				for (ParametersParameterComponent patientParam : thePatient.getPart()) {
+					String wheres = null;
+					if (Patient.SP_FAMILY.equals(patientParam.getName())) {
+						// we have family value. Add name field to from statement
+						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_FAMILY);
+						StringType theFamilies = (StringType) patientParam.getValue();
+						if (theFamilies != null && !theFamilies.isEmpty()) {
+							String[] familyStrings = theFamilies.asStringValue().split(",");
+							for (String family : familyStrings) {
+								if (wheres == null) {
+									wheres = "lower(names::text)::jsonb @> lower('{\"family\":\""+ family +"\"}')::jsonb";
+								} else {
+									wheres += "or lower(names::text)::jsonb @> lower('{\"family\":\""+ family +"\"}')::jsonb";
+								}
+							}
+						}
+					} else if (Patient.SP_GIVEN.equals(patientParam.getName())) {
+						// we have family value. Add name field to from statement
+						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_GIVEN);
+						StringType theGivens = (StringType) patientParam.getValue();
+						if (theGivens != null && !theGivens.isEmpty()) {
+							String[] givenStrings = theGivens.asStringValue().split(",");
+							for (String given : givenStrings) {
+								if (wheres == null) {
+									wheres = "lower(names::text)::jsonb @> lower('{\"given\":[\""+ given + "\"]}')::jsonb";
+								} else {
+									wheres += " or lower(names::text)::jsonb @> lower('{\"given\":[\""+ given + "\"]}')::jsonb";
+								}
+							}
+						}
+					} else if (Patient.SP_GENDER.equals(patientParam.getName())) {
+						// we have gender value. Add name field to from statement
+						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_GENDER);
+						StringType theGenders = (StringType) patientParam.getValue();
+						if (theGenders != null && !theGenders.isEmpty()) {
+							String[] genderStrings = theGenders.asStringValue().split(",");
+							for (String gender : genderStrings) {
+								if (wheres == null) {
+									wheres = "p.resource->>'gender' = " + "'" + gender + "'";
+								} else {
+									wheres += " or p.resource->>'gender' = " + "'" + gender + "'";
+								}
+							}
+						}
+					} else if (Patient.SP_BIRTHDATE.equals(patientParam.getName())) {
+						StringType birthDate = (StringType) patientParam.getValue();
+						DateParam date = getDateParam(birthDate.asStringValue());
+						wheres = constructDateWhereParameter(date, "p", "birthDate");
+					}
 
-		return addMessageWrapperToBundleDocument(false, 
-			theRequestDetails, 
-			theCompositionId, 
-			theIds, 
-			thePersist, 
-			theGraph, 
-			thePatients, 
-			theTrackingNumber, 
-			theDeathLocations, 
-			theDeathDatePronounced, 
-			theProfileDeathDateRange,
-			theTypes);
+					if (wheres != null) {
+						whereParameters.add(wheres);
+					}
+				}
+			}
+		}
+
+		if (theTrackingNumber != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
+
+			String wheres = null;
+			for (StringParam tokenParam : theTrackingNumber.getValuesAsQueryTokens()) {
+				String token = tokenParam.getValue();
+				int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
+				String system = null;
+				String value = null;
+				if (barIndex != -1) {
+					system = token.substring(0, barIndex);
+					value = ParameterUtil.unescape(token.substring(barIndex + 1));
+				} else {
+					value = ParameterUtil.unescape(token);
+				}
+
+				String whereItem;
+				if (system == null || system.isBlank()) {
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+				} else if (value == null || value.isBlank()) {
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"system\": \"" + system + "\"}}'::jsonb";
+				} else {
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+				}
+
+				if (wheres == null) {
+					wheres = whereItem;
+				} else {
+					wheres += " or " + whereItem;
+				}
+			}
+
+			whereParameters.add(wheres);
+		}
+
+		if (theDeathLocations != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
+			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
+			fromStatement += " join location l on entries->>'reference' = concat('Location/', l.id)";
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
+
+			// We only want a section for circumstance where we keep death location reference.
+			whereParameters.add("codings @> '{\"code\": \"circumstances\", \"system\": \""+MdiProfileUtil.CS_MDI_CODES+"\"}'");
+
+			String districtOrWhere = null;
+			for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
+				String districtOrWhere_ = "lower(l.resource->'address'->>'city') like lower('%" + theDeathLocation.getValue() + "%')";
+				districtOrWhere_ += " or lower(l.resource->'address'->>'state') like lower('%" + theDeathLocation.getValue() + "%')";
+				districtOrWhere_ += " or lower(l.resource->'address'->>'district') like lower('%" + theDeathLocation.getValue() + "%')";
+				districtOrWhere_ += " or lower(l.resource->'address'->>'postalCode') like lower('%" + theDeathLocation.getValue() + "%')";
+				districtOrWhere_ += " or lower(l.resource->'address'->>'country') like lower('%" + theDeathLocation.getValue() + "%')";
+				if (districtOrWhere == null || districtOrWhere.isEmpty()) {
+					districtOrWhere = districtOrWhere_;
+				} else {
+					districtOrWhere += " or " + districtOrWhere_;
+				}
+			}
+
+			if (districtOrWhere != null && !districtOrWhere.isBlank()) {
+				whereParameters.add(districtOrWhere);
+			}
+		}
+
+		// Death Date Pronounced
+		if (theDeathDate != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
+			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
+			fromStatement += " join observation o on entries->>'reference' = concat('Observation/', o.id)";
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
+			fromStatement += ", jsonb_array_elements(o.resource->'component') component, jsonb_array_elements(component->'code'->'coding') component_codings";
+			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
+
+			// We only want a section for circumstance where we keep death location reference.
+			whereParameters.add("codings @> '{\"code\": \"jurisdiction\", \"system\": \""+MdiProfileUtil.CS_MDI_CODES+"\"}'");
+
+			// we want Death Date observation. So, check the code of Observations and choose one for death date.
+			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+			
+			whereParameters.add("component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb");
+		}
+
+		fromStatement = constructFromStatementPath(fromStatement, "typeCodings", "comp.resource->'type'->'coding'");
+		String whereMdiDocument = "typeCodings @> '{\"system\": \""+MdiProfileUtil.MDI_EDRS_DC.getSystem()+"\", \"code\": \""+MdiProfileUtil.MDI_EDRS_DC.getCode()+"\"}'::jsonb";
+		whereParameters.add(whereMdiDocument);
+
+		String whereStatement = constructWhereStatement(whereParameters, null);
+
+		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
+		String query = "SELECT comp.resource as resource FROM " + fromStatement + whereStatement;
+
+		logger.debug("query count:" + queryCount + "\nquery:" + query);
+
+		MyDocumentBundle myDocumentBundleProvider = new MyDocumentBundle(query, theRequestDetails, null, null);
+		myDocumentBundleProvider.setTotalSize(getTotalSize(queryCount));
+		myDocumentBundleProvider.setPreferredPageSize(preferredPageSize);
+
+		return myDocumentBundleProvider;
 	}
 
 	private Bundle addMessageWrapper (IGenericClient client, Bundle compositionBundle) {
@@ -844,290 +965,397 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		return retMessageBundle;
 	}
 
-	private Bundle addMessageWrapperToBundleDocument(boolean addMessageWrapper, 
-			RequestDetails theRequestDetails, IdType theCompositionId,
-			UriOrListParam theIds,
-			BooleanType thePersist,
-			UriParam theGraph,
-			List<ParametersParameterComponent> thePatients,
-			StringOrListParam theTrackingNumber,
-			StringOrListParam theDeathLocations,
-			DateOrListParam theDeathDatePronounced,
-			DateOrListParam theProfileDeathDateRange,
-			TokenOrListParam theOrTypes) {
+	// private Bundle addMessageWrapperToBundleDocument(boolean addMessageWrapper, 
+	// 		RequestDetails theRequestDetails, IdType theCompositionId,
+	// 		UriOrListParam theIds,
+	// 		BooleanType thePersist,
+	// 		UriParam theGraph,
+	// 		List<ParametersParameterComponent> thePatients,
+	// 		StringOrListParam theTrackingNumber,
+	// 		StringOrListParam theDeathLocations,
+	// 		DateOrListParam theDeathDatePronounced,
+	// 		DateOrListParam theProfileDeathDateRange,
+	// 		TokenOrListParam theOrTypes) {
 
+	// 	String myFhirServerBase = theRequestDetails.getFhirServerBase();
+	// 	IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
+	// 	OperationUtil.setupClientForAuth(client);
+
+	// 	int totalSize = 0;
+
+	// 	Bundle retBundle = new Bundle();
+
+	// 	boolean saveIt = false;
+	// 	if (thePersist != null && !thePersist.isEmpty() && thePersist.getValue().booleanValue()) {
+	// 		saveIt = true;
+	// 	}
+
+	// 	// if (theCompositionId != null) {
+	// 	// 	return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
+
+	// 	// 	// return client
+	// 	// 	// 	.operation()
+	// 	// 	// 	.onInstance(theCompositionId)
+	// 	// 	// 	.named("")
+	// 	// 	// 	.withParameter(Parameters.class, "persist", thePersist)
+	// 	// 	// 	.useHttpGet()
+	// 	// 	// 	.returnResourceType(Bundle.class)
+	// 	// 	// 	.execute();
+	// 	// }
+
+	// 	// We construct where statement...
+	// 	retBundle.setType(BundleType.SEARCHSET);
+	// 	retBundle.setId(UUID.randomUUID().toString());
+	// 	retBundle.setTotal(totalSize);
+	// 	BundleLinkComponent bundleLinkComponent = new BundleLinkComponent(new StringType("self"), new UriType (theRequestDetails.getCompleteUrl()));
+	// 	retBundle.addLink(bundleLinkComponent);
+
+	// 	if (theIds != null) {
+	// 		// Composition ID tokens. This is to retrieve documents for the IDs.
+	// 		// This will ignore other search parameters.
+	// 		for (UriParam theId: theIds.getValuesAsQueryTokens()) {
+	// 			// String id = theId.getValue();
+	// 			Bundle compositionBundle = generateDocumentOperation(theRequestDetails, null, theId, thePersist, theGraph);
+				
+	// 			BundleEntryComponent entryComponent = new BundleEntryComponent();
+	// 			if (addMessageWrapper) {
+	// 				Bundle retMessageBundle = addMessageWrapper(client, compositionBundle);
+			
+	// 				entryComponent.setFullUrl(retMessageBundle.getId());
+	// 				entryComponent.setResource(retMessageBundle);
+	// 			} else {
+	// 				// client
+	// 				// 	.operation().onInstance(new IdType("Composition", id))
+	// 				// 	.named("")
+	// 				// 	.withNoParameters(Parameters.class)
+	// 				// 	.returnResourceType(Bundle.class)
+	// 				// 	.execute();
+					
+	// 				entryComponent.setFullUrl(compositionBundle.getId());
+	// 				entryComponent.setResource(compositionBundle);
+	// 			}
+
+	// 			retBundle.addEntry(entryComponent);
+	// 			totalSize++;
+
+	// 		}
+
+	// 		retBundle.setTotal(totalSize);
+
+	// 		if (saveIt) {
+	// 			client.create().resource(retBundle).encodedJson().prettyPrint().execute();
+	// 		}
+	
+	// 		return retBundle;
+	// 	}
+		
+	// 	// boolean shouldQuery = true;
+
+	// 	Bundle compositionsBundle = null;
+	// 	IQuery<IBaseBundle> query = client.search().forResource(Composition.class);
+
+	// 	addTokenToIdentifierQuery(query, TRACKING_NUMBER, theTrackingNumber);
+
+	// 	if (theOrTypes != null) {
+	// 		List<TokenParam> types = theOrTypes.getValuesAsQueryTokens();
+	// 		// ICriterion<TokenClientParam> subQuery = null;
+	// 		List<Coding> codings = new ArrayList<Coding>();
+	// 		for (TokenParam type : types) {
+	// 			String system = type.getSystem();
+	// 			String value = type.getValue();
+	// 			Coding newCoding = new Coding();
+	// 			newCoding.setSystem(system);
+	// 			newCoding.setCode(value);
+	// 			codings.add(newCoding);
+	// 		}
+
+	// 		query = query.and(Composition.TYPE.exactly().codings(codings.toArray(new Coding[0])));
+	// 	}
+
+	// 	if (thePatients != null) {
+	// 		for (ParametersParameterComponent thePatient : thePatients) {
+	// 			for (ParametersParameterComponent patientParam : thePatient.getPart()) {
+	// 				if (Patient.SP_FAMILY.equals(patientParam.getName())) {
+	// 					StringType theFamilies = (StringType) patientParam.getValue();
+	// 					if (theFamilies != null && !theFamilies.isEmpty()) {
+	// 						String[] familyStrings = theFamilies.asStringValue().split(",");
+	// 						List<String> familySearchParams = new ArrayList<String>();
+	// 						for (String family : familyStrings) {
+	// 							familySearchParams.add(family);
+	// 						}
+	// 						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
+	// 					}		
+	// 				} else if (Patient.SP_GIVEN.equals(patientParam.getName())) {
+	// 					StringType theGivens = (StringType) patientParam.getValue();
+	// 					if (theGivens != null && !theGivens.isEmpty()) {
+	// 						String[] givenStrings = theGivens.asStringValue().split(",");
+	// 						List<String> givenSearchParams = new ArrayList<String>();
+	// 						for (String given : givenStrings) {
+	// 							givenSearchParams.add(given);
+	// 						}
+	// 						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));	
+	// 					}
+	// 				} else if (Patient.SP_GENDER.equals(patientParam.getName())) {
+	// 					StringType theGenders = (StringType) patientParam.getValue();
+	// 					if (theGenders != null && !theGenders.isEmpty()) {
+	// 						String[] genderStrings = theGenders.asStringValue().split(",");
+	// 						List<String> genderSearchParams = new ArrayList<String>();
+	// 						for (String gender : genderStrings) {
+	// 							genderSearchParams.add(gender);
+	// 						}
+	// 						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
+	// 					}
+	// 				} else if (Patient.SP_BIRTHDATE.equals(patientParam.getName())) {
+	// 					StringType birthDate = (StringType) patientParam.getValue();
+	// 					DateParam date = getDateParam(birthDate.asStringValue());
+	// 					ParamPrefixEnum prefix = date.getPrefix();
+	// 					if (prefix == null) {
+	// 						query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
+	// 					} else {
+	// 						if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == prefix) {
+	// 							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(date.getValue())));
+	// 						} else if (ParamPrefixEnum.GREATERTHAN == prefix) {
+	// 							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.after().day(date.getValue())));
+	// 						} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == prefix) {
+	// 							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(date.getValue())));
+	// 						} else if (ParamPrefixEnum.LESSTHAN == prefix) {
+	// 							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.before().day(date.getValue())));
+	// 						} else {
+	// 							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
+	// 						}						
+	// 					}
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+
+	// 	// Death Location is ONLY referenced from Death Date Observation. 
+	// 	// Thus, we need to search Death Date and Location at the same time.
+	// 	List<String> deathLocationSearchParams = new ArrayList<String>();
+	// 	if (theDeathLocations != null) {
+	// 		for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
+	// 			deathLocationSearchParams.add(theDeathLocation.getValue());
+	// 		}
+	// 		query = query.and(
+	// 			(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_DEATH_LOCATION))
+	// 				.matches()
+	// 				.values(deathLocationSearchParams)
+	// 			);
+	// 	}
+
+	// 	// Death Date Pronounced
+	// 	if (theDeathDatePronounced != null) {
+	// 		IQuery<IBaseBundle> queryDates = queryForDates(query, theDeathDatePronounced);
+	// 		if (queryDates != null) {
+	// 			query = queryDates;
+	// 		}
+	// 	}
+
+	// 	// Death Date Presumed
+	// 	// if (theDeathDatePresumed != null) {
+	// 	// 	IQuery<IBaseBundle> queryDates = queryForDates(query, theDeathDatePresumed);
+	// 	// 	if (queryDates != null) {
+	// 	// 		query = queryDates;
+	// 	// 		shouldQuery = true;
+	// 	// 	}
+	// 	// }
+
+	// 	// Death Date 
+	// 	if (theProfileDeathDateRange != null) {
+	// 		IQuery<IBaseBundle> queryDates = queryForDates(query, theProfileDeathDateRange);
+	// 		if (queryDates != null) {
+	// 			query = queryDates;
+	// 		}
+	// 	}
+
+	// 	compositionsBundle = query.returnBundle(Bundle.class).execute();
+
+	// 	if (compositionsBundle != null && !compositionsBundle.isEmpty()) {
+	// 		List<BundleEntryComponent> entries = compositionsBundle.getEntry();
+	// 		for (BundleEntryComponent entry : entries) {
+	// 			String compositionId = entry.getResource().getIdElement().getIdPart();
+
+	// 			Bundle documentBundle = generateDocumentOperation(theRequestDetails, new IdType(BundleResourceProvider.getType(), compositionId), null, thePersist, theGraph);
+
+	// 			BundleEntryComponent entryComponent = new BundleEntryComponent();
+	// 			if (addMessageWrapper) {
+	// 				Bundle retMessageBundle = addMessageWrapper(client, documentBundle);
+			
+	// 				entryComponent.setFullUrl(retMessageBundle.getId());
+	// 				entryComponent.setResource(retMessageBundle);
+	// 			} else {
+	// 				// client
+	// 				// 	.operation().onInstance(new IdType("Composition", compositionId))
+	// 				// 	.named("$document")
+	// 				// 	.withNoParameters(Parameters.class)
+	// 				// 	.returnResourceType(Bundle.class)
+	// 				// 	.execute();
+	// 				entryComponent.setFullUrl(documentBundle.getId());
+	// 				entryComponent.setResource(documentBundle);
+	// 			}
+	// 			retBundle.addEntry(entryComponent);
+
+	// 			totalSize++;
+	// 		}
+
+	// 		if (saveIt) {
+	// 			client.create().resource(retBundle).encodedJson().prettyPrint().execute();
+	// 		}
+	
+	// 		retBundle.setTotal(totalSize);
+	// 	} else {
+	// 		throwSimulatedOO("Invalid null bundle received from server. Contact developer.");
+	// 	}
+
+	// 	return retBundle;
+	// }
+	
+	@Operation(name = "$dcr-message", idempotent = true)
+	public Bundle generateDcrMessageReadOperation(RequestDetails theRequestDetails, 
+			@IdParam IdType theId,
+			@OperationParam(name = "persist") BooleanType thePersist,
+			@OperationParam(name = "graph") UriParam theGraph) {
+
+		Bundle dcrDocumentBundle = generateDocumentOperation(theRequestDetails, theId, null, thePersist, theGraph);
+		if (dcrDocumentBundle == null || dcrDocumentBundle.isEmpty()) {
+			ThrowFHIRExceptions.unprocessableEntityException("$dcr-message operation failed to generate dcr document bundle for id = " + theId.asStringValue() + ".");
+		}
+
+		// DCR Message wraps the DCR document bundle in the Message Bundle.
 		String myFhirServerBase = theRequestDetails.getFhirServerBase();
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
 		OperationUtil.setupClientForAuth(client);
 
-		int totalSize = 0;
+		return addMessageWrapper(client, dcrDocumentBundle);
+	}
 
-		Bundle retBundle = new Bundle();
+	@Operation(name = "$dcr-message", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
+	public IBundleProvider generateDcrMessageOperation(RequestDetails theRequestDetails, 
+			@OperationParam(name = "persist") BooleanType thePersist,
+			@OperationParam(name = "graph") UriParam theGraph,
+			@OperationParam(name = Composition.SP_PATIENT) List<ParametersParameterComponent> thePatients,
+			@OperationParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber) {
 
-		boolean saveIt = false;
-		if (thePersist != null && !thePersist.isEmpty() && thePersist.getValue().booleanValue()) {
-			saveIt = true;
-		}
+		List<String> whereParameters = new ArrayList<String>();
+		String fromStatement = getTableName() + " comp";
 
-		// if (theCompositionId != null) {
-		// 	return generateDocumentOperation(theRequestDetails, theCompositionId, null, thePersist, theGraph);
-
-		// 	// return client
-		// 	// 	.operation()
-		// 	// 	.onInstance(theCompositionId)
-		// 	// 	.named("")
-		// 	// 	.withParameter(Parameters.class, "persist", thePersist)
-		// 	// 	.useHttpGet()
-		// 	// 	.returnResourceType(Bundle.class)
-		// 	// 	.execute();
-		// }
-
-		// We construct where statement...
-		retBundle.setType(BundleType.SEARCHSET);
-		retBundle.setId(UUID.randomUUID().toString());
-		retBundle.setTotal(totalSize);
-		BundleLinkComponent bundleLinkComponent = new BundleLinkComponent(new StringType("self"), new UriType (theRequestDetails.getCompleteUrl()));
-		retBundle.addLink(bundleLinkComponent);
-
-		if (theIds != null) {
-			// Composition ID tokens. This is to retrieve documents for the IDs.
-			// This will ignore other search parameters.
-			for (UriParam theId: theIds.getValuesAsQueryTokens()) {
-				// String id = theId.getValue();
-				Bundle compositionBundle = generateDocumentOperation(theRequestDetails, null, theId, thePersist, theGraph);
-				
-				BundleEntryComponent entryComponent = new BundleEntryComponent();
-				if (addMessageWrapper) {
-					Bundle retMessageBundle = addMessageWrapper(client, compositionBundle);
-			
-					entryComponent.setFullUrl(retMessageBundle.getId());
-					entryComponent.setResource(retMessageBundle);
-				} else {
-					// client
-					// 	.operation().onInstance(new IdType("Composition", id))
-					// 	.named("")
-					// 	.withNoParameters(Parameters.class)
-					// 	.returnResourceType(Bundle.class)
-					// 	.execute();
-					
-					entryComponent.setFullUrl(compositionBundle.getId());
-					entryComponent.setResource(compositionBundle);
-				}
-
-				retBundle.addEntry(entryComponent);
-				totalSize++;
-
-			}
-
-			retBundle.setTotal(totalSize);
-
-			if (saveIt) {
-				client.create().resource(retBundle).encodedJson().prettyPrint().execute();
-			}
-	
-			return retBundle;
-		}
-		
-		// boolean shouldQuery = true;
-
-		Bundle compositionsBundle = null;
-		IQuery<IBaseBundle> query = client.search().forResource(Composition.class);
-
-		addTokenToIdentifierQuery(query, TRACKING_NUMBER, theTrackingNumber);
-
-		if (theOrTypes != null) {
-			List<TokenParam> types = theOrTypes.getValuesAsQueryTokens();
-			// ICriterion<TokenClientParam> subQuery = null;
-			List<Coding> codings = new ArrayList<Coding>();
-			for (TokenParam type : types) {
-				String system = type.getSystem();
-				String value = type.getValue();
-				Coding newCoding = new Coding();
-				newCoding.setSystem(system);
-				newCoding.setCode(value);
-				codings.add(newCoding);
-			}
-
-			query = query.and(Composition.TYPE.exactly().codings(codings.toArray(new Coding[0])));
+		// Set up join statements.
+		if (thePatients != null) {
+			// join patient and composition subject tables
+			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 		}
 
 		if (thePatients != null) {
 			for (ParametersParameterComponent thePatient : thePatients) {
 				for (ParametersParameterComponent patientParam : thePatient.getPart()) {
+					String wheres = null;
 					if (Patient.SP_FAMILY.equals(patientParam.getName())) {
+						// we have family value. Add name field to from statement
+						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_FAMILY);
 						StringType theFamilies = (StringType) patientParam.getValue();
 						if (theFamilies != null && !theFamilies.isEmpty()) {
 							String[] familyStrings = theFamilies.asStringValue().split(",");
-							List<String> familySearchParams = new ArrayList<String>();
 							for (String family : familyStrings) {
-								familySearchParams.add(family);
+								if (wheres == null) {
+									wheres = "lower(names::text)::jsonb @> lower('{\"family\":\""+ family +"\"}')::jsonb";
+								} else {
+									wheres += "or lower(names::text)::jsonb @> lower('{\"family\":\""+ family +"\"}')::jsonb";
+								}
 							}
-							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.FAMILY.matches().values(familySearchParams)));
-						}		
+						}
 					} else if (Patient.SP_GIVEN.equals(patientParam.getName())) {
+						// we have family value. Add name field to from statement
+						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_GIVEN);
 						StringType theGivens = (StringType) patientParam.getValue();
 						if (theGivens != null && !theGivens.isEmpty()) {
 							String[] givenStrings = theGivens.asStringValue().split(",");
-							List<String> givenSearchParams = new ArrayList<String>();
 							for (String given : givenStrings) {
-								givenSearchParams.add(given);
+								if (wheres == null) {
+									wheres = "lower(names::text)::jsonb @> lower('{\"given\":[\""+ given + "\"]}')::jsonb";
+								} else {
+									wheres += " or lower(names::text)::jsonb @> lower('{\"given\":[\""+ given + "\"]}')::jsonb";
+								}
 							}
-							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GIVEN.matches().values(givenSearchParams)));	
 						}
 					} else if (Patient.SP_GENDER.equals(patientParam.getName())) {
+						// we have gender value. Add name field to from statement
+						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_GENDER);
 						StringType theGenders = (StringType) patientParam.getValue();
 						if (theGenders != null && !theGenders.isEmpty()) {
 							String[] genderStrings = theGenders.asStringValue().split(",");
-							List<String> genderSearchParams = new ArrayList<String>();
 							for (String gender : genderStrings) {
-								genderSearchParams.add(gender);
+								if (wheres == null) {
+									wheres = "p.resource->>'gender' = " + "'" + gender + "'";
+								} else {
+									wheres += " or p.resource->>'gender' = " + "'" + gender + "'";
+								}
 							}
-							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.GENDER.exactly().codes(genderSearchParams)));
 						}
 					} else if (Patient.SP_BIRTHDATE.equals(patientParam.getName())) {
 						StringType birthDate = (StringType) patientParam.getValue();
 						DateParam date = getDateParam(birthDate.asStringValue());
-						ParamPrefixEnum prefix = date.getPrefix();
-						if (prefix == null) {
-							query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
-						} else {
-							if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == prefix) {
-								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.afterOrEquals().day(date.getValue())));
-							} else if (ParamPrefixEnum.GREATERTHAN == prefix) {
-								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.after().day(date.getValue())));
-							} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == prefix) {
-								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.beforeOrEquals().day(date.getValue())));
-							} else if (ParamPrefixEnum.LESSTHAN == prefix) {
-								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.before().day(date.getValue())));
-							} else {
-								query = query.and(Composition.PATIENT.hasChainedProperty(Patient.BIRTHDATE.exactly().day(date.getValue())));
-							}						
-						}
+						wheres = constructDateWhereParameter(date, "p", "birthDate");
+					}
+
+					if (wheres != null) {
+						whereParameters.add(wheres);
 					}
 				}
 			}
 		}
 
-		// Death Location is ONLY referenced from Death Date Observation. 
-		// Thus, we need to search Death Date and Location at the same time.
-		List<String> deathLocationSearchParams = new ArrayList<String>();
-		if (theDeathLocations != null) {
-			for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
-				deathLocationSearchParams.add(theDeathLocation.getValue());
-			}
-			query = query.and(
-				(new ca.uhn.fhir.rest.gclient.StringClientParam(CompositionResourceProvider.SP_DEATH_LOCATION))
-					.matches()
-					.values(deathLocationSearchParams)
-				);
-		}
+		if (theTrackingNumber != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
 
-		// Death Date Pronounced
-		if (theDeathDatePronounced != null) {
-			IQuery<IBaseBundle> queryDates = queryForDates(query, theDeathDatePronounced);
-			if (queryDates != null) {
-				query = queryDates;
-			}
-		}
-
-		// Death Date Presumed
-		// if (theDeathDatePresumed != null) {
-		// 	IQuery<IBaseBundle> queryDates = queryForDates(query, theDeathDatePresumed);
-		// 	if (queryDates != null) {
-		// 		query = queryDates;
-		// 		shouldQuery = true;
-		// 	}
-		// }
-
-		// Death Date 
-		if (theProfileDeathDateRange != null) {
-			IQuery<IBaseBundle> queryDates = queryForDates(query, theProfileDeathDateRange);
-			if (queryDates != null) {
-				query = queryDates;
-			}
-		}
-
-		compositionsBundle = query.returnBundle(Bundle.class).execute();
-
-		if (compositionsBundle != null && !compositionsBundle.isEmpty()) {
-			List<BundleEntryComponent> entries = compositionsBundle.getEntry();
-			for (BundleEntryComponent entry : entries) {
-				String compositionId = entry.getResource().getIdElement().getIdPart();
-
-				Bundle documentBundle = generateDocumentOperation(theRequestDetails, new IdType(BundleResourceProvider.getType(), compositionId), null, thePersist, theGraph);
-
-				BundleEntryComponent entryComponent = new BundleEntryComponent();
-				if (addMessageWrapper) {
-					Bundle retMessageBundle = addMessageWrapper(client, documentBundle);
-			
-					entryComponent.setFullUrl(retMessageBundle.getId());
-					entryComponent.setResource(retMessageBundle);
+			String wheres = null;
+			for (StringParam tokenParam : theTrackingNumber.getValuesAsQueryTokens()) {
+				String token = tokenParam.getValue();
+				int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
+				String system = null;
+				String value = null;
+				if (barIndex != -1) {
+					system = token.substring(0, barIndex);
+					value = ParameterUtil.unescape(token.substring(barIndex + 1));
 				} else {
-					// client
-					// 	.operation().onInstance(new IdType("Composition", compositionId))
-					// 	.named("$document")
-					// 	.withNoParameters(Parameters.class)
-					// 	.returnResourceType(Bundle.class)
-					// 	.execute();
-					entryComponent.setFullUrl(documentBundle.getId());
-					entryComponent.setResource(documentBundle);
+					value = ParameterUtil.unescape(token);
 				}
-				retBundle.addEntry(entryComponent);
 
-				totalSize++;
+				String whereItem;
+				if (system == null || system.isBlank()) {
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"value\": \"" + value + "\"}}'::jsonb";
+				} else if (value == null || value.isBlank()) {
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"system\": \"" + system + "\"}}'::jsonb";
+				} else {
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl + "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \"" + ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"system\": \"" + system + "\", \"value\": \"" + value + "\"}}'::jsonb";
+				}
+
+				if (wheres == null) {
+					wheres = whereItem;
+				} else {
+					wheres += " or " + whereItem;
+				}
 			}
 
-			if (saveIt) {
-				client.create().resource(retBundle).encodedJson().prettyPrint().execute();
-			}
-	
-			retBundle.setTotal(totalSize);
-		} else {
-			throwSimulatedOO("Invalid null bundle received from server. Contact developer.");
+			whereParameters.add(wheres);
 		}
 
-		return retBundle;
-	}
-	
-	@Operation(name = "$dcr-message", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
-	public Bundle generateDcrMessageOperation(RequestDetails theRequestDetails, 
-			@IdParam(optional=true) IdType theCompositionId,
-			@OperationParam(name = "id") UriOrListParam theIds, 
-			@OperationParam(name = Composition.SP_PATIENT) List<ParametersParameterComponent> thePatients,
-			@OperationParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber) {
-			
-		if (theCompositionId != null) {
-			// this is read by the id. Get the diagnostic report and construct message bundle.
-			Composition dcrReport = (Composition) readComposition(theCompositionId);
-			if (dcrReport == null) {
-				ThrowFHIRExceptions.unprocessableEntityException("Bundle.id, " + theCompositionId.asStringValue() + " does not exist");
-			}
+		// Composition also has MDI to EDRS document. For DCR document, we only want DCR type. So, add this to wherestatement.
+		fromStatement = constructFromStatementPath(fromStatement, "typeCodings", "comp.resource->'type'->'coding'");
+		String whereMdiDocument = "typeCodings @> '{\"system\": \""+MdiProfileUtil.DCR_REPORT.getSystem()+"\", \"code\": \""+MdiProfileUtil.DCR_REPORT.getCode()+"\"}'::jsonb";
+		whereParameters.add(whereMdiDocument);
 
-			String myFhirServerBase = theRequestDetails.getFhirServerBase();
-			IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
-			OperationUtil.setupClientForAuth(client);
-	
-			Bundle dcrReportDocument = constructDocumentBundleFromComposition(client, dcrReport);
+		String whereStatement = constructWhereStatement(whereParameters, null);
 
-			// return message bundle
-			return addMessageWrapper(client, dcrReportDocument);
-		}
+		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
+		String query = "SELECT comp.resource as resource FROM " + fromStatement + whereStatement;
 
-		// We want DCR Type document.
-		TokenOrListParam theTypes = new TokenOrListParam(MdiProfileUtil.DCR_REPORT.getSystem(), MdiProfileUtil.DCR_REPORT.getCode());
+		logger.debug("query count:" + queryCount + "\nquery:" + query);
 
-		return addMessageWrapperToBundleDocument(true, 
-			theRequestDetails, 
-			null, 
-			theIds, 
-			null, 
-			null, 
-			thePatients, 
-			theTrackingNumber, 
-			null, 
-			null, 
-			null,
-			theTypes);
+		MyDcrMessageBundle myDcrMessageBundle = new MyDcrMessageBundle(query, theRequestDetails, null, null);
+		myDcrMessageBundle.setTotalSize(getTotalSize(queryCount));
+		myDcrMessageBundle.setPreferredPageSize(preferredPageSize);
+
+		return myDcrMessageBundle;
 	}
 
 	public Bundle generateDocumentOperation(RequestDetails theRequestDetails, IdType theCompositionId, UriParam theIdUri, BooleanType thePersist, UriParam theGraph) {
@@ -1586,6 +1814,91 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			}
 
 			return retVal;
+		}
+	}
+
+	class MyDocumentBundle extends FhirbaseBundleProvider {
+		RequestDetails theRequestDetails;
+
+		public MyDocumentBundle(String query, RequestDetails theRequestDetails, Set<Include> theIncludes, Set<Include> theReverseIncludes) {
+			super(query);
+			setPreferredPageSize(preferredPageSize);
+			this.theRequestDetails = theRequestDetails;
+		}
+
+		@Override
+		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> documentBundles = new ArrayList<IBaseResource>();
+			List<IBaseResource> retResources = new ArrayList<IBaseResource>(); 
+
+			String myQuery = query;
+			if (toIndex - fromIndex > 0) {
+				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
+			}
+
+			logger.debug("Generate documents alling database: "+myQuery);
+			try {
+				retResources = getFhirbaseMapping().search(myQuery, getResourceType());
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+
+			// Make the compositions to Document Bundle.
+			String myFhirServerBase = this.theRequestDetails.getFhirServerBase();
+			IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
+			OperationUtil.setupClientForAuth(client);
+
+			for (IBaseResource composition : retResources) {
+				Composition composition_ = (Composition) composition;
+				Bundle retBundle = constructDocumentBundleFromComposition(client, composition_);
+
+				documentBundles.add(retBundle);
+			}
+
+			return documentBundles;
+		}
+	}
+
+		class MyDcrMessageBundle extends FhirbaseBundleProvider {
+		RequestDetails theRequestDetails;
+
+		public MyDcrMessageBundle(String query, RequestDetails theRequestDetails, Set<Include> theIncludes, Set<Include> theReverseIncludes) {
+			super(query);
+			setPreferredPageSize(preferredPageSize);
+			this.theRequestDetails = theRequestDetails;
+		}
+
+		@Override
+		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> messageBundles = new ArrayList<IBaseResource>();
+			List<IBaseResource> retResources = new ArrayList<IBaseResource>(); 
+
+			String myQuery = query;
+			if (toIndex - fromIndex > 0) {
+				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
+			}
+
+			logger.debug("Generate documents alling database: "+myQuery);
+			try {
+				retResources = getFhirbaseMapping().search(myQuery, getResourceType());
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+
+			// Make the compositions to Document Bundle.
+			String myFhirServerBase = this.theRequestDetails.getFhirServerBase();
+			IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
+			OperationUtil.setupClientForAuth(client);
+
+			for (IBaseResource composition : retResources) {
+				Composition composition_ = (Composition) composition;
+				Bundle retBundle = constructDocumentBundleFromComposition(client, composition_);
+
+				Bundle messageBundle = addMessageWrapper(client, retBundle);
+				messageBundles.add(messageBundle);
+			}
+
+			return messageBundles;
 		}
 	}
 }

@@ -16,10 +16,11 @@ public class MdiProfileUtil {
 
 	private MdiProfileUtil() {}
 
+	public static String CS_MDI_CODES = "http://hl7.org/fhir/us/mdi/CodeSystem/cs-mdi-codes";
 	public static Coding MDI_EDRS_DC = new Coding("http://loinc.org", "86807-5", "Death administrative information Document"); 
-	public static Coding TOXICOLOGY_LAB_RESULT = new Coding("http://hl7.org/fhir/us/mdi/CodeSystem/cs-mdi-codes", "tox-result-report", "Toxicology Lab Results"); 
-	public static Coding DCR_REPORT = new Coding("http://hl7.org/fhir/us/mdi/CodeSystem/cs-mdi-codes", "death-certificate-data-review-doc", "Death Certificate Data Review Document"); 
-	public static Coding DCR_REPORT_EVENT = new Coding("http://hl7.org/fhir/us/mdi/CodeSystem/cs-mdi-codes", "death-certificate-review-event", "Death Certificate Review Event"); 
+	public static Coding TOXICOLOGY_LAB_RESULT = new Coding(MdiProfileUtil.CS_MDI_CODES, "tox-result-report", "Toxicology Lab Results"); 
+	public static Coding DCR_REPORT = new Coding(MdiProfileUtil.CS_MDI_CODES, "death-certificate-data-review-doc", "Death Certificate Data Review Document"); 
+	public static Coding DCR_REPORT_EVENT = new Coding(MdiProfileUtil.CS_MDI_CODES, "death-certificate-review-event", "Death Certificate Review Event"); 
 	
 	private static Map<String, String> singletonMap;
 	static {

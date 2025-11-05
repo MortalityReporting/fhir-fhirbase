@@ -368,6 +368,44 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return tableAlias+".resource->>'"+column+"' " + inequality + " '" + dateString + "'";		
 	}
 
+	protected String constructTimeAliasPathWhere(DateParam theDate, String aliasPath, String column) {
+		Format formatter = new SimpleDateFormat("HH:mm:ss");
+		String dateString = formatter.format(theDate.getValue());
+		String inequality = "=";
+		if (ParamPrefixEnum.EQUAL == theDate.getPrefix()) {
+			inequality = "=";
+		} else if (ParamPrefixEnum.GREATERTHAN == theDate.getPrefix()) {
+			inequality = ">";
+		} else if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == theDate.getPrefix()) {
+			inequality = ">=";
+		} else if (ParamPrefixEnum.LESSTHAN == theDate.getPrefix()) {
+			inequality = "<";
+		} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == theDate.getPrefix()) {
+			inequality = "<=";
+		}
+		
+		return aliasPath+"->>'"+column+"' " + inequality + " '" + dateString + "'";		
+	}
+
+	protected String constructDateTimeAliasPathWhere(DateParam theDate, String aliasPath, String column) {
+		Format formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		String dateString = formatter.format(theDate.getValue());
+		String inequality = "=";
+		if (ParamPrefixEnum.EQUAL == theDate.getPrefix()) {
+			inequality = "=";
+		} else if (ParamPrefixEnum.GREATERTHAN == theDate.getPrefix()) {
+			inequality = ">";
+		} else if (ParamPrefixEnum.GREATERTHAN_OR_EQUALS == theDate.getPrefix()) {
+			inequality = ">=";
+		} else if (ParamPrefixEnum.LESSTHAN == theDate.getPrefix()) {
+			inequality = "<";
+		} else if (ParamPrefixEnum.LESSTHAN_OR_EQUALS == theDate.getPrefix()) {
+			inequality = "<=";
+		}
+		
+		return aliasPath+"->>'"+column+"' " + inequality + " '" + dateString + "'";		
+	}
+
 	protected String constructDatePeriodWhereParameter(Date startDate, Date endDate, String tableAlias, String column) {
 		Format formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		String where = "";
