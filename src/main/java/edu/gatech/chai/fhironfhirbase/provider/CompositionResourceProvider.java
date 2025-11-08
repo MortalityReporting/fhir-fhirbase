@@ -531,7 +531,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		Resource resource = null;
 		if (reference != null && !reference.isEmpty()) {
 			String referenceId = reference.getReferenceElement().getValue();
-			if (!addedResource.contains(referenceId)) {
+			if (reference.getReferenceElement().getResourceType() != null 
+				&& !reference.getReferenceElement().getResourceType().isBlank() 
+				&& !addedResource.contains(referenceId)) {
 				resource = (Resource) client.read()
 						.resource(reference.getReferenceElement().getResourceType())
 						.withId(reference.getReferenceElement().getIdPart()).encodedJson()

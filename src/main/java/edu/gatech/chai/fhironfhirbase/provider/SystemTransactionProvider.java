@@ -187,9 +187,10 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		endpoint = (Endpoint) createResource(client, entry, EndpointResourceProvider.getType(), response);
-
+		endpoint = (Endpoint) resource;
 		updateReference(endpoint.getManagingOrganization());
+
+		endpoint = (Endpoint) createResource(client, entry, EndpointResourceProvider.getType(), response);
 
 		return endpoint;
 	}
@@ -208,12 +209,13 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		organization = (Organization) createResource(client, entry, OrganizationResourceProvider.getType(), response);
-
+		organization = (Organization) resource;
 		updateReference(organization.getPartOf());
 		for (Reference endpoint : organization.getEndpoint()) {
 			updateReference(endpoint);
 		}
+
+		organization = (Organization) createResource(client, entry, OrganizationResourceProvider.getType(), response);
 
 		return organization;
 	}
@@ -232,11 +234,12 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		practitioner = (Practitioner) createResource(client, entry, PractitionerResourceProvider.getType(), response);
-
+		practitioner = (Practitioner) resource;
 		for (PractitionerQualificationComponent qualification : practitioner.getQualification()) {
 			updateReference(qualification.getIssuer());
 		}
+
+		practitioner = (Practitioner) createResource(client, entry, PractitionerResourceProvider.getType(), response);
 
 		return practitioner;
 	}
@@ -255,7 +258,7 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		practitionerRole = (PractitionerRole) createResource(client, entry, PractitionerRoleResourceProvider.getType(), response);
+		practitionerRole = (PractitionerRole) resource;
 
 		updateReference(practitionerRole.getPractitioner());
 		updateReference(practitionerRole.getOrganization());
@@ -268,6 +271,8 @@ public class SystemTransactionProvider {
 		for (Reference endpoint : practitionerRole.getEndpoint()) {
 			updateReference(endpoint);
 		}
+
+		practitionerRole = (PractitionerRole) createResource(client, entry, PractitionerRoleResourceProvider.getType(), response);
 
 		return practitionerRole;
 	}
@@ -303,9 +308,11 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		condition = (Condition) createResource(client, entry, ConditionResourceProvider.getType(), response);
+		condition = (Condition) resource;
 		updateReference(condition.getSubject());
 		updateReference(condition.getAsserter());	
+
+		condition = (Condition) createResource(client, entry, ConditionResourceProvider.getType(), response);
 		
 		return condition;
 	}
@@ -329,8 +336,7 @@ public class SystemTransactionProvider {
 		// 	return retSpecimen;
 		// }
 
-		specimen = (Specimen) createResource(client, entry, SpecimenResourceProvider.getType(), response);
-		
+		specimen = (Specimen) resource;
 		updateReference(specimen.getSubject());
 
 		// any parent specimen reference update
@@ -347,6 +353,8 @@ public class SystemTransactionProvider {
 			}
 		}
 
+		specimen = (Specimen) createResource(client, entry, SpecimenResourceProvider.getType(), response);
+		
 		return specimen;
 	}
 
@@ -370,13 +378,14 @@ public class SystemTransactionProvider {
 		// 	return retObservation;
 		// }
 
-		observation = (Observation) createResource(client, entry, ObservationResourceProvider.getType(), response);
-
+		observation = (Observation) resource;
 		updateReference(observation.getSubject());
 		for (Reference reference : observation.getPerformer()) {
 			updateReference(reference);	
 		}
 		
+		observation = (Observation) createResource(client, entry, ObservationResourceProvider.getType(), response);
+
 		return observation;
 	}
 
@@ -398,9 +407,8 @@ public class SystemTransactionProvider {
 		// if (retObservation != null) {
 		// 	return retObservation;
 		// }
-
-		diagnosticReport = (DiagnosticReport) createResource(client, entry, DiagnosticReportResourceProvider.getType(), response);
 		
+		diagnosticReport = (DiagnosticReport) resource;
 		updateReference(diagnosticReport.getSubject());
 		for (Reference reference : diagnosticReport.getPerformer()) {
 			updateReference(reference);	
@@ -412,6 +420,8 @@ public class SystemTransactionProvider {
 		for (Reference reference : diagnosticReport.getResult()) {
 			updateReference(reference);	
 		}
+
+		diagnosticReport = (DiagnosticReport) createResource(client, entry, DiagnosticReportResourceProvider.getType(), response);
 
 		return diagnosticReport;
 	}
@@ -434,15 +444,15 @@ public class SystemTransactionProvider {
 		// if (retProcedure != null) {
 		// 	return retProcedure;
 		// }
-
-		procedure = (Procedure) createResource(client, entry, ProcedureResourceProvider.getType(), response);
-		
+		procedure = (Procedure) resource;
 		updateReference(procedure.getSubject());
 		ProcedurePerformerComponent performer = procedure.getPerformerFirstRep();
 		if (performer != null && !performer.isEmpty()) {
 			updateReference(performer.getActor());
 		}
 		updateReference(procedure.getAsserter());
+
+		procedure = (Procedure) createResource(client, entry, ProcedureResourceProvider.getType(), response);
 
 		return procedure;
 	}
@@ -489,8 +499,15 @@ public class SystemTransactionProvider {
 		String resourceId = outcome.getId().getIdPart();
 		OperationOutcome oo = (OperationOutcome) outcome.getOperationOutcome();
 		if (oo == null) {
-			referenceIds.put(resourceType + "/" + resource.getIdElement().getIdPart(), resourceType +"/" + resourceId);
-
+			// if the reference is in urn:oid format, then we need to store this reference so that this reference can be 
+			// formatted with resourceType/ID format <- this is required as fhirbase stores fhir as json. The reference should not be
+			// urn notation. It should contain resource type for future reference.
+			if (entry.getFullUrl().startsWith("urn:")) {
+				referenceIds.put(entry.getFullUrl(), resourceType +"/" + resourceId);
+			} else {
+				referenceIds.put(resourceType + "/" + resource.getIdElement().getIdPart(), resourceType +"/" + resourceId);
+			}
+			
 			if (entry.getFullUrl() != null && !entry.getFullUrl().isEmpty()) {
 				addReference(entry.getFullUrl(), resourceType, resource.getIdElement().getIdPart(), resourceId);
 			}
@@ -681,14 +698,15 @@ public class SystemTransactionProvider {
 		}
 
 		System.out.println("++++++++++++++++++++++++");
-		
-		// messageHeader = (MessageHeader) resource;
-		messageHeader = (MessageHeader) createResource(client, entry, MessageHeaderResourceProvider.getType(), response);
 
 		// MessageHeaders will not be checked for the duplication (not identifier exists)		
+		messageHeader = (MessageHeader) resource;
 		for (Reference focuseReference : messageHeader.getFocus()) {
 			updateReference(focuseReference);
 		}
+
+		// messageHeader = (MessageHeader) resource;
+		messageHeader = (MessageHeader) createResource(client, entry, MessageHeaderResourceProvider.getType(), response);
 		
 		entry.setRequest(null);
 	
@@ -710,8 +728,6 @@ public class SystemTransactionProvider {
 
 		System.out.println("++++++++++++++++++++++++");
 		
-		// composition = (Composition) resource;
-
 		// Search if this composition exists
 		// Composition existComposition = searchComposition(client, composition);
 		// if (existComposition != null) {
@@ -726,8 +742,7 @@ public class SystemTransactionProvider {
 		// 	return existComposition;
 		// }
 
-		composition = (Composition) createResource(client, entry, CompositionResourceProvider.getType(), response);
-
+		composition = (Composition) resource;
 		updateReference(composition.getSubject());
 		for (Reference author: composition.getAuthor()) {
 			updateReference(author);
@@ -758,6 +773,8 @@ public class SystemTransactionProvider {
 			}
 		}
 		
+		composition = (Composition) createResource(client, entry, CompositionResourceProvider.getType(), response);
+
 		entry.setRequest(null);
 	
 		return composition;
@@ -777,11 +794,12 @@ public class SystemTransactionProvider {
 			return null;
 		}
 		
-		bundle = (Bundle) createResource(client, entry, BundleResourceProvider.getType(), response);
-
 		// Bundle has an entry. If it's not empty, process that
+		bundle = (Bundle) resource;
 		processEntries(client, bundle.getEntry());
 		
+		bundle = (Bundle) createResource(client, entry, BundleResourceProvider.getType(), response);
+
 		entry.setRequest(null);
 	
 		return bundle;
@@ -855,10 +873,10 @@ public class SystemTransactionProvider {
 				continue;
 			}
 			
-			String originalFullUrl = entry.getFullUrl();
+			// String originalFullUrl = entry.getFullUrl();
 			
-			int idPartIndex = originalFullUrl.lastIndexOf("/");
-			String originalFullUrlIdPart = originalFullUrl.substring(idPartIndex+1);
+			// int idPartIndex = originalFullUrl.lastIndexOf("/");
+			// String originalFullUrlIdPart = originalFullUrl.substring(idPartIndex+1);
 
 			BundleEntryRequestComponent request = entry.getRequest();
 			HTTPVerb requestMethod;
@@ -1009,17 +1027,6 @@ public class SystemTransactionProvider {
 				}
 			}
 		}		
-		
-		// MessageHeader
-		for (BundleEntryComponent entry : postEntries) {
-			response = entry.getResponse();
-			Resource resource = entry.getResource();
-			if (resource != null && !resource.isEmpty()) {
-				if (resource instanceof MessageHeader) {
-					processPostMessageHeader(client, entry);
-				}
-			}
-		}		
 
 		// Bundle
 		for (BundleEntryComponent entry : postEntries) {
@@ -1031,6 +1038,17 @@ public class SystemTransactionProvider {
 				}
 			}
 		}		
+
+		// MessageHeader
+		for (BundleEntryComponent entry : postEntries) {
+			response = entry.getResponse();
+			Resource resource = entry.getResource();
+			if (resource != null && !resource.isEmpty()) {
+				if (resource instanceof MessageHeader) {
+					processPostMessageHeader(client, entry);
+				}
+			}
+		}
 		
 	}
 

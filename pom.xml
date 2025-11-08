@@ -17,7 +17,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 	<groupId>edu.gatech.chai</groupId>
 	<artifactId>fhir-fhirbase</artifactId>
 	<packaging>jar</packaging>
-	<version>2.1.6</version>
+	<version>2.1.7</version>
 	<name>fhir-fhirbase</name>
 	<description>FHIR Wrapper for Fhirbase</description>
 	<url>http://maven.apache.org</url>
