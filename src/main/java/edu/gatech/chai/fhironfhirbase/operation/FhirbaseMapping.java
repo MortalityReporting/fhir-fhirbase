@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,6 +14,7 @@ import org.hl7.fhir.r4.model.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Component;
 
 import ca.uhn.fhir.context.FhirContext;
@@ -37,6 +39,28 @@ public class FhirbaseMapping implements IResourceMapping {
 		this.ctx = ctx;
 	}
 
+	public void closeConnection(Connection connection) throws SQLException {
+		if (connection != null) {
+			connection.commit();
+			// connection.close();
+		}
+		DataSourceUtils.releaseConnection(connection, databaseConfiguration.getDataSource());
+	}
+
+	public Connection getConnection() throws SQLException {
+		Connection connection = DataSourceUtils.getConnection(databaseConfiguration.getDataSource());
+		// ds.getConnection();
+		if (connection.getAutoCommit()) {
+			try {
+				connection.setAutoCommit(false);
+			} catch (SQLFeatureNotSupportedException ignored) {
+				logger.debug("SetAutoCommit failed.");
+			}
+		}
+
+		return connection;
+	}
+
 	@Override
 	public IBaseResource create(IBaseResource fhirResource, Class<? extends Resource> fhirClass) throws SQLException {
 		IBaseResource retVal = null;
@@ -46,7 +70,8 @@ public class FhirbaseMapping implements IResourceMapping {
 
 		Connection connection = null;
 		try {
-			connection = databaseConfiguration.getDataSource().getConnection();
+			// connection = databaseConfiguration.getDataSource().getConnection();
+			connection = getConnection();
 
 			String query = "SELECT fhirbase_create('" + serialized + "'::jsonb);";
 			logger.debug("Query to create: " + query);
@@ -62,7 +87,8 @@ public class FhirbaseMapping implements IResourceMapping {
 //			retVal = idValue.getAsString();
 			}
 
-			connection.close();
+			// connection.close();
+			closeConnection(connection);
 
 		} catch (SQLException e) {
 			if (connection != null) connection.close();
@@ -79,7 +105,8 @@ public class FhirbaseMapping implements IResourceMapping {
 		Connection connection = null;
 
 		try {
-			connection = databaseConfiguration.getDataSource().getConnection();
+			// connection = databaseConfiguration.getDataSource().getConnection();
+			connection = getConnection();
 			String query = "SELECT resource FROM " + tableName + " where id = ? limit 1";
 
 			logger.debug("Query to read: " + query);
@@ -94,7 +121,8 @@ public class FhirbaseMapping implements IResourceMapping {
 				retVal = parser.parseResource(fhirClass, resource);
 			}
 
-			connection.close();
+			// connection.close();
+			closeConnection(connection);
 		} catch (SQLException e) {
 			if (connection != null) connection.close();
 			throw e;
@@ -113,7 +141,8 @@ public class FhirbaseMapping implements IResourceMapping {
 		Connection connection = null;
 
 		try {
-			connection = databaseConfiguration.getDataSource().getConnection();
+			// connection = databaseConfiguration.getDataSource().getConnection();
+			connection = getConnection();
 
 			String query = "SELECT fhirbase_create('" + serialized + "'::jsonb);";
 			PreparedStatement stmt = connection.prepareStatement(query);
@@ -133,7 +162,8 @@ public class FhirbaseMapping implements IResourceMapping {
 				retVal = parser.parseResource(fhirClass, updatedResource);
 			}
 
-			connection.close();
+			// connection.close();
+			closeConnection(connection);
 		} catch (SQLException e) {
 			if (connection != null) connection.close();
 			throw e;
@@ -152,7 +182,8 @@ public class FhirbaseMapping implements IResourceMapping {
 		Connection connection = null;
 
 		try {
-			connection = databaseConfiguration.getDataSource().getConnection();
+			// connection = databaseConfiguration.getDataSource().getConnection();
+			connection = getConnection();
 
 			String query = "SELECT fhirbase_delete('" + tableName + "', '" + idString + "');";
 			PreparedStatement stmt = connection.prepareStatement(query);
@@ -169,7 +200,8 @@ public class FhirbaseMapping implements IResourceMapping {
 				retVal = parser.parseResource(fhirClass, deletedResource);
 			}
 
-			connection.close();
+			// connection.close();
+			closeConnection(connection);
 		} catch (SQLException e) {
 			if (connection != null) connection.close();
 			throw e;

@@ -1068,7 +1068,12 @@ public class SystemTransactionProvider {
 			return null;
 		}
 
-		IGenericClient client = ctx.newRestfulGenericClient(OperationUtil.myHostUrl());
+		// IGenericClient client = ctx.newRestfulGenericClient(OperationUtil.myHostUrl());
+		String requestUrl = System.getenv("INTERNAL_FHIR_REQUEST_URL");
+		if (requestUrl == null || requestUrl.isEmpty()) {
+			requestUrl = "http://localhost:8080/fhir";
+		}
+		IGenericClient client = ctx.newRestfulGenericClient(requestUrl);
 
 		String authBasic = System.getenv("AUTH_BASIC");
 		String authBearer = System.getenv("AUTH_BEARER");
