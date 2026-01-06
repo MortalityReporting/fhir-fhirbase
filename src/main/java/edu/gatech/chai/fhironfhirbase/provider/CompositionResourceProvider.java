@@ -180,6 +180,26 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 	 */
 	public static final ca.uhn.fhir.rest.gclient.TokenClientParam TRACKING_NUMBER = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_TRACKING_NUMBER);	
 
+	/**
+	 * Search parameter: <b>manner-of-death</b>
+	 * <p>
+	 * Description: <b>Composition has a reference to the manner of death observation. Search observation </b><br>
+	 * Type: <b>token</b><br>
+	 * Path: <b>Composition.tracking-number</b><br>
+	 * </p>
+	 */
+	@SearchParamDefinition(name="manner-of-death", path="Observation.valueCodeableConcept", description="Manner of Death Concept Value for the Decedent", type="token" )
+	public static final String SP_MANNER_OF_DEATH = "manner-of-death";
+	/**
+	 * <b>Fluent Client</b> search parameter constant for <b>manner-of-death</b>
+	 * <p>
+	 * Description: <b>A observation value for manner-of-death</b><br>
+	 * Type: <b>token</b><br>
+	 * Path: <b>Observation.valueCodeableConcept</b><br>
+	 * </p>
+	 */
+	public static final ca.uhn.fhir.rest.gclient.TokenClientParam MANNER_OF_DEATH = new ca.uhn.fhir.rest.gclient.TokenClientParam(SP_MANNER_OF_DEATH);	
+
 	public CompositionResourceProvider(FhirContext ctx) {
 		super(ctx);
 		
@@ -265,6 +285,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OptionalParam(name = Composition.SP_DATE) DateParam theDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
 			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE) DateRangeParam theDeathDate,
+			@OptionalParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED) DateOrListParam thePronouncedDeathDate,
 			@OptionalParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) TokenOrListParam theTrackingNumber,
 			@OptionalParam(name = Composition.SP_PATIENT, chainWhitelist = { "", 
 					USCorePatient.SP_ADDRESS_CITY,
@@ -359,7 +380,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			}
 		}
 
-		if (theDeathDate != null) {
+		// Death Date Pronounced
+		if (thePronouncedDeathDate != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
 			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
 			fromStatement += " join observation o on entries->>'reference' = concat('Observation/', o.id)";
@@ -367,13 +389,38 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			fromStatement += ", jsonb_array_elements(o.resource->'component') component, jsonb_array_elements(component->'code'->'coding') component_codings";
 			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
 
-			// We only want a section for circumstance where we keep death location reference.
+			// We only want a section for jurisdiction where we keep death date reference.
 			whereParameters.add("codings @> '{\"code\": \"jurisdiction\", \"system\": \""+MdiProfileUtil.CS_MDI_CODES+"\"}'");
 
 			// we want Death Date observation. So, check the code of Observations and choose one for death date.
 			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
 			
 			whereParameters.add("component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb");
+
+			// where value of input dates.
+			for (DateParam dateParam : thePronouncedDeathDate.getValuesAsQueryTokens()) {
+				whereParameters.add(constructDateWhereParameter(dateParam, "component", "valueDateTime"));
+			}			
+
+		}
+				
+		if (theDeathDate != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
+			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
+			fromStatement += " join observation o on entries->>'reference' = concat('Observation/', o.id)";
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
+
+			// We only want a section for circumstance where we keep death location reference.
+			whereParameters.add("codings @> '{\"code\": \"jurisdiction\", \"system\": \""+MdiProfileUtil.CS_MDI_CODES+"\"}'");
+
+			// we want Death Date observation. So, check the code of Observations and choose one for death date.
+			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+
+			// where value of input dates.
+			for (DateParam dateParam : theDeathDate.getValuesAsQueryTokens()) {
+				whereParameters.add(constructDateWhereParameter(dateParam, "o", "valueDateTime"));
+			}			
 		} 
 
 		if (theOrTypes != null) {
@@ -735,7 +782,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = Composition.SP_PATIENT) List<ParametersParameterComponent> thePatients,
 			@OperationParam(name = CompositionResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber,
 			@OperationParam(name = CompositionResourceProvider.SP_DEATH_LOCATION) StringOrListParam theDeathLocations,
-			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE, max = 2) DateOrListParam theDeathDate) {
+			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE, max = 2) DateOrListParam theDeathDate,
+			@OperationParam(name = CompositionResourceProvider.SP_DEATH_DATE_PRONOUNCED, max = 2) DateOrListParam thePronouncedDeathDate,
+			@OperationParam(name = CompositionResourceProvider.SP_MANNER_OF_DEATH) StringOrListParam theMannerOfDeath) {
 
 
 		List<String> whereParameters = new ArrayList<String>();
@@ -870,7 +919,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 
 		// Death Date Pronounced
-		if (theDeathDate != null) {
+		if (thePronouncedDeathDate != null) {
 			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
 			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
 			fromStatement += " join observation o on entries->>'reference' = concat('Observation/', o.id)";
@@ -878,13 +927,86 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			fromStatement += ", jsonb_array_elements(o.resource->'component') component, jsonb_array_elements(component->'code'->'coding') component_codings";
 			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
 
-			// We only want a section for circumstance where we keep death location reference.
+			// We only want a section for jurisdiction where we keep death date reference.
 			whereParameters.add("codings @> '{\"code\": \"jurisdiction\", \"system\": \""+MdiProfileUtil.CS_MDI_CODES+"\"}'");
 
 			// we want Death Date observation. So, check the code of Observations and choose one for death date.
 			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
 			
 			whereParameters.add("component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb");
+
+			// where value of input dates.
+			for (DateParam dateParam : thePronouncedDeathDate.getValuesAsQueryTokens()) {
+				whereParameters.add(constructDateWhereParameter(dateParam, "component", "valueDateTime"));
+			}			
+
+		}
+
+		// Death Date
+		if (theDeathDate != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
+			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
+			fromStatement += " join observation o on entries->>'reference' = concat('Observation/', o.id)";
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
+
+			// We only want a section for jurisdiction where we keep death date reference.
+			whereParameters.add("codings @> '{\"code\": \"jurisdiction\", \"system\": \""+MdiProfileUtil.CS_MDI_CODES+"\"}'");
+			
+			// we want Death Date observation. So, check the code of Observations and choose one for death date.
+			addToWhereParemters(whereParameters, "deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+
+			// where value of input dates.
+			for (DateParam dateParam : theDeathDate.getValuesAsQueryTokens()) {
+				whereParameters.add(constructDateWhereParameter(dateParam, "o", "valueDateTime"));
+			}			
+		}
+
+		// Manner of Death
+		if (theMannerOfDeath != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
+			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
+			fromStatement += " join observation o_mod on entries->>'reference' = concat('Observation/', o_mod.id)";
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "mannerOfDeath", "o_mod.resource->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "mannerOfDeathValue", "o_mod.resource->'valueCodeableConcept'->'coding'");
+
+			// We only want a section for cause-manner where we keep manner of death observation reference.
+			whereParameters.add("codings @> '{\"code\": \"cause-manner\", \"system\": \""+MdiProfileUtil.CS_MDI_CODES+"\"}'");
+
+			// we want manner of death observation. So, check the code of Observations and choose one for manner of death.
+			addToWhereParemters(whereParameters, "mannerOfDeath @> '{\"system\": \"http://loinc.org\", \"code\": \"69449-7\"}'::jsonb");
+
+			String wheres = null;
+			for (StringParam tokenParam : theMannerOfDeath.getValuesAsQueryTokens()) {
+				String token = tokenParam.getValue();
+				int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
+				String system = null;
+				String code = null;
+				if (barIndex != -1) {
+					system = token.substring(0, barIndex);
+					code = ParameterUtil.unescape(token.substring(barIndex + 1));
+				} else {
+					code = ParameterUtil.unescape(token);
+				}
+
+				String whereItem;
+				if (system == null || system.isBlank()) {
+					whereItem = "mannerOfDeathValue @> '{\"code\": \"" + code + "\"}'::jsonb";
+				} else if (code == null || code.isBlank()) {
+					whereItem = "mannerOfDeathValue @> '{\"system\": \"" + system + "\"}'::jsonb";
+				} else {
+					whereItem = "mannerOfDeathValue @> '{\"system\": \"" + system + "\", \"code\": \"" + code + "\"}'::jsonb";
+				}
+
+				if (wheres == null) {
+					wheres = whereItem;
+				} else {
+					wheres += " or " + whereItem;
+				}
+			}
+
+			whereParameters.add(wheres);
 		}
 
 		fromStatement = constructFromStatementPath(fromStatement, "typeCodings", "comp.resource->'type'->'coding'");
