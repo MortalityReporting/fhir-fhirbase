@@ -2093,7 +2093,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		warningParam.setName("warning");
 
 		outcome.addIssue().setSeverity(IssueSeverity.WARNING)
-			.setDetails((new CodeableConcept()).setText("This operation is for simple demonstration of updaet-api. This just replaced entire existing document."));
+			.setDetails((new CodeableConcept()).setText("This operation is for simple demonstration of update-mdi API. This just replaced entire existing document."));
 
 		warningParam.setResource(outcome);
 		responseParameter.addParameter(warningParam);
