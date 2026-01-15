@@ -15,9 +15,7 @@
  *******************************************************************************/
 package edu.gatech.chai.fhironfhirbase.utilities;
 
-import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
-import org.hl7.fhir.validation.cli.utils.Common;
 
 import edu.gatech.chai.MDI.model.resource.util.CommonUtil;
 
