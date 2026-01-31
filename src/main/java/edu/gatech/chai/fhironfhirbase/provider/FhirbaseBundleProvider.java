@@ -16,17 +16,21 @@
 package edu.gatech.chai.fhironfhirbase.provider;
 
 import java.util.Date;
+import java.util.List;
 
+import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.instance.model.api.IPrimitiveType;
 import org.hl7.fhir.r4.model.InstantType;
 
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.server.method.ResponsePage.ResponsePageBuilder;
 
 public abstract class FhirbaseBundleProvider implements IBundleProvider {
 	InstantType searchTime;
 	String query;
 	Integer preferredPageSize;
 	Integer totalSize;
+	String bundleId;
 
 	protected FhirbaseBundleProvider (String query) {
 		this.searchTime = InstantType.withCurrentTime();
@@ -48,8 +52,7 @@ public abstract class FhirbaseBundleProvider implements IBundleProvider {
 
 	@Override
 	public String getUuid() {
-		// TODO Auto-generated method stub
-		return null;
+		return this.bundleId;
 	}
 
 	@Override
@@ -60,6 +63,15 @@ public abstract class FhirbaseBundleProvider implements IBundleProvider {
 	@Override
 	public Integer size() {
 		return this.totalSize;
+	}
+
+	@Override
+	public List<IBaseResource> getResources(int fromIndex, int toIndex, ResponsePageBuilder theResponsePageBuilder) {
+		return getResources(fromIndex, toIndex);
+	}
+
+	public void setUuid(String bundleId) {
+		this.bundleId = bundleId;
 	}
 
 }
