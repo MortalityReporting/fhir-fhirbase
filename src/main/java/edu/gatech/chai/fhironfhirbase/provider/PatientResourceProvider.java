@@ -314,7 +314,7 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 		if (theGender != null) {
-			whereParameters.add("pract.resource->>'gender' = '" + theGender.getValue() + "'");
+			whereParameters.add("p.resource->>'gender' = '" + theGender.getValue() + "'");
 			returnAll = false;
 		}
 		if (theBirthDate != null) {
