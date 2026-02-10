@@ -7,9 +7,11 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +20,7 @@ import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Component;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.model.api.Include;
 import ca.uhn.fhir.parser.IParser;
 import edu.gatech.chai.fhironfhirbase.database.DatabaseConfiguration;
 import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
@@ -202,6 +205,52 @@ public class FhirbaseMapping implements IResourceMapping {
 
 			// connection.close();
 			closeConnection(connection);
+		} catch (SQLException e) {
+			if (connection != null) connection.close();
+			throw e;
+		}
+		
+		return retVal;
+	}
+
+	@Override
+	public List<IBaseResource> search(String sql, Set<Include> theIncludes, Set<Include> theRevIncludes, Class<? extends Resource> fhirClass) throws SQLException {
+		List<IBaseResource> retVal = new ArrayList<IBaseResource>();
+		IParser parser = ctx.newJsonParser();
+
+		Connection connection = null;
+
+		try {
+			connection = databaseConfiguration.getDataSource().getConnection();
+
+			logger.debug("search(): " + sql);
+			PreparedStatement stmt = connection.prepareStatement(sql);
+
+			ResultSet rs = stmt.executeQuery();
+			while (rs.next()) {
+				String resourceString = rs.getString("resource");
+				if (resourceString == null || resourceString.isEmpty()) {
+					connection.close();
+					throw ThrowFHIRExceptions.internalErrorException("Empty resource body for search (2)");
+				}
+
+				Resource resource = parser.parseResource(fhirClass, resourceString);
+				retVal.add(resource);
+
+				if (theIncludes != null && !theIncludes.isEmpty()) {
+					for (Include include : theIncludes) {
+						if ("subject".equals(include.getParamName())) {
+							String subjectString = rs.getString("subject");
+							if (subjectString != null && !subjectString.isEmpty()) {
+								Resource subject = parser.parseResource(Patient.class, subjectString);
+								retVal.add(subject);
+							}
+						}
+					}
+				}
+			}
+
+			connection.close();
 		} catch (SQLException e) {
 			if (connection != null) connection.close();
 			throw e;

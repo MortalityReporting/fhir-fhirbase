@@ -696,4 +696,42 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDetails(detailCode);
 		throw new InvalidRequestException(errorCode, outcome);
 	}
+
+	protected DateParam getDateParam(String date) {
+		if (date == null || date.isEmpty())
+			return null;
+
+		// check first two characters for prefix.
+		ParamPrefixEnum prefix = null;
+
+		if (date.startsWith("eq")) {
+			prefix = ParamPrefixEnum.EQUAL;
+			date = date.substring(2);
+		} else if (date.startsWith("lt")) {
+			prefix = ParamPrefixEnum.LESSTHAN;
+			date = date.substring(2);
+		} else if (date.startsWith("gt")) {
+			prefix = ParamPrefixEnum.GREATERTHAN;
+			date = date.substring(2);
+		} else if (date.startsWith("le")) {
+			prefix = ParamPrefixEnum.LESSTHAN_OR_EQUALS;
+			date = date.substring(2);
+		} else if (date.startsWith("ge")) {
+			prefix = ParamPrefixEnum.GREATERTHAN_OR_EQUALS;
+			date = date.substring(2);
+		} else if (date.startsWith("sa")) {
+			prefix = ParamPrefixEnum.STARTS_AFTER;
+			date = date.substring(2);
+		} else if (date.startsWith("eb")) {
+			prefix = ParamPrefixEnum.ENDS_BEFORE;
+			date = date.substring(2);
+		} else if (date.startsWith("ap")) {
+			prefix = ParamPrefixEnum.APPROXIMATE;
+			date = date.substring(2);
+		}
+
+		DateParam dateParam = new DateParam(prefix, date);
+
+		return dateParam;
+	}
 }

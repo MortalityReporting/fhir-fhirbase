@@ -53,6 +53,7 @@ import ca.uhn.fhir.model.valueset.BundleTypeEnum;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.Delete;
 import ca.uhn.fhir.rest.annotation.IdParam;
+import ca.uhn.fhir.rest.annotation.IncludeParam;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
@@ -260,11 +261,19 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 	@Search()
 	public IBundleProvider findCompositionsById(
-			@RequiredParam(name = Composition.SP_RES_ID) TokenOrListParam theCompositionIds, @Sort SortSpec theSort) {
+			@RequiredParam(name = Composition.SP_RES_ID) TokenOrListParam theCompositionIds, @Sort SortSpec theSort,
+			@IncludeParam(allow = { "Composition:subject" }) final Set<Include> theIncludes) {
 
 		if (theCompositionIds == null) {
 			return null;
 		}
+
+		String selectStatement = "comp.resource as resource ";
+		String fromStatement = getTableName() + " comp ";
+		if (theIncludes != null && theIncludes.contains(new Include("Composition:subject"))) {
+			selectStatement += ", p.resource as subject ";
+			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id') ";
+		} 
 
 		String whereStatement = "WHERE ";
 		for (TokenParam theComposition : theCompositionIds.getValuesAsQueryTokens()) {
@@ -273,10 +282,10 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		whereStatement = whereStatement.substring(0, whereStatement.length() - 4);
 
-		String queryCount = "SELECT count(*) FROM " + getTableName() + " comp " + whereStatement;
-		String query = "SELECT * FROM " + getTableName() + " comp " + whereStatement;
+		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
+		String query = "SELECT " + selectStatement + "FROM " + fromStatement + whereStatement;
 
-		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
+		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
 		return myBundleProvider;
@@ -322,15 +331,23 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					USCorePatient.SP_PHONE,
 					USCorePatient.SP_TELECOM,
 					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam theSubjects,
-			@Sort SortSpec theSort) {
+			@Sort SortSpec theSort,
+			@IncludeParam(allow = { "Composition:subject" }) final Set<Include> theIncludes) {
 
 		List<String> whereParameters = new ArrayList<String>();
 		String fromStatement = getTableName() + " comp";
+		String selectStatement = "comp.resource as resource ";
+		if (theIncludes != null && theIncludes.contains(new Include("Composition:subject"))) {
+			selectStatement += ", p.resource as subject ";
+			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id') ";
+		} 
 
 		// Set up join statements.
 		if (theSubjects != null || thePatients != null) {
 			// join patient and composition subject tables
-			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+			if (!fromStatement.contains(" p ")) {
+				fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+			}
 		}
 
 		boolean returnAll = true;
@@ -504,11 +521,11 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 
 		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
-		String query = "SELECT comp.resource as resource FROM " + fromStatement + whereStatement;
+		String query = "SELECT " + selectStatement + "FROM " + fromStatement + whereStatement;
 
 		logger.debug("query count:" + queryCount + "\nquery:" + query);
 
-		MyBundleProvider myBundleProvider = new MyBundleProvider(query, null, null);
+		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, null);
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
 		return myBundleProvider;
@@ -686,44 +703,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		myBundleProvider.setTotalSize(getTotalSize(queryCount));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
 		return myBundleProvider;
-	}
-
-	DateParam getDateParam(String date) {
-		if (date == null || date.isEmpty())
-			return null;
-
-		// check first two characters for prefix.
-		ParamPrefixEnum prefix = null;
-
-		if (date.startsWith("eq")) {
-			prefix = ParamPrefixEnum.EQUAL;
-			date = date.substring(2);
-		} else if (date.startsWith("lt")) {
-			prefix = ParamPrefixEnum.LESSTHAN;
-			date = date.substring(2);
-		} else if (date.startsWith("gt")) {
-			prefix = ParamPrefixEnum.GREATERTHAN;
-			date = date.substring(2);
-		} else if (date.startsWith("le")) {
-			prefix = ParamPrefixEnum.LESSTHAN_OR_EQUALS;
-			date = date.substring(2);
-		} else if (date.startsWith("ge")) {
-			prefix = ParamPrefixEnum.GREATERTHAN_OR_EQUALS;
-			date = date.substring(2);
-		} else if (date.startsWith("sa")) {
-			prefix = ParamPrefixEnum.STARTS_AFTER;
-			date = date.substring(2);
-		} else if (date.startsWith("eb")) {
-			prefix = ParamPrefixEnum.ENDS_BEFORE;
-			date = date.substring(2);
-		} else if (date.startsWith("ap")) {
-			prefix = ParamPrefixEnum.APPROXIMATE;
-			date = date.substring(2);
-		}
-
-		DateParam dateParam = new DateParam(prefix, date);
-
-		return dateParam;
 	}
 
 	private IQuery<IBaseBundle> queryForDates(IQuery<IBaseBundle> query, DateOrListParam dateRange) {
@@ -2116,9 +2095,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
 			List<IBaseResource> retVal = new ArrayList<IBaseResource>();
 
-			// _Include
-			List<String> includes = new ArrayList<String>();
-
 			String myQuery = query;
 			if (toIndex - fromIndex > 0) {
 				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
@@ -2126,7 +2102,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 			logger.debug("calling database: " + myQuery);
 			try {
-				retVal.addAll(getFhirbaseMapping().search(myQuery, getResourceType()));
+				retVal.addAll(getFhirbaseMapping().search(myQuery, theIncludes, theReverseIncludes, getResourceType()));
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}

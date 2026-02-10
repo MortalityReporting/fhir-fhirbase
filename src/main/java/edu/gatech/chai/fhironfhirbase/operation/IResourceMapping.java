@@ -17,10 +17,13 @@ package edu.gatech.chai.fhironfhirbase.operation;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Set;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Resource;
+
+import ca.uhn.fhir.model.api.Include;
 
 public interface IResourceMapping {
 	public IBaseResource create(IBaseResource fhirResource, Class<? extends Resource> fhirClass) throws SQLException;
@@ -29,6 +32,7 @@ public interface IResourceMapping {
 	public IBaseResource delete (IdType id, Class<? extends Resource> fhirClass, String tableName) throws SQLException;
 	
 	public List<IBaseResource> search(String sql, Class<? extends Resource> fhirClass) throws Exception;
+	public List<IBaseResource> search(String sql, Set<Include> theIncludes, Set<Include> theRevIncludes, Class<? extends Resource> fhirClass) throws Exception;
 	
 	public int getSize(String sql) throws Exception;
 }

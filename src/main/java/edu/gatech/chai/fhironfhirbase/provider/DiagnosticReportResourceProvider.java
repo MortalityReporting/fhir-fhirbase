@@ -32,12 +32,17 @@ import org.hl7.fhir.r4.model.MessageHeader;
 import org.hl7.fhir.r4.model.PractitionerRole;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
+import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.UrlType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleType;
+import org.hl7.fhir.r4.model.Composition;
 import org.hl7.fhir.r4.model.DiagnosticReport.DiagnosticReportMediaComponent;
 import org.hl7.fhir.r4.model.MessageHeader.MessageSourceComponent;
 import org.hl7.fhir.r4.model.Parameters.ParametersParameterComponent;
+import org.hl7.fhir.r4.model.Patient;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
@@ -64,14 +69,18 @@ import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.IQuery;
+import ca.uhn.fhir.rest.param.DateParam;
+import ca.uhn.fhir.rest.param.ParameterUtil;
 import ca.uhn.fhir.rest.param.ReferenceAndListParam;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.StringOrListParam;
+import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.param.UriOrListParam;
 import ca.uhn.fhir.rest.param.UriParam;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
+import edu.gatech.chai.fhironfhirbase.provider.CompositionResourceProvider.MyDocumentBundle;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.MdiProfileUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.OperationUtil;
@@ -80,6 +89,7 @@ import edu.gatech.chai.fhironfhirbase.utilities.ThrowFHIRExceptions;
 @Service
 @Scope("prototype")
 public class DiagnosticReportResourceProvider extends BaseResourceProvider {
+	private static final Logger logger = LoggerFactory.getLogger(DiagnosticReportResourceProvider.class);
 
 	/**
 	 * Search parameter: <b>tox-lab-case-number</b>
@@ -570,82 +580,160 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		return retMessageBundle;
 	}
 
-	@Operation(name = "$toxicology-message", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
-	public Bundle generateToxicologyMessageOperation(RequestDetails theRequestDetails, 
-			@IdParam(optional = true) IdType theDiagnosticReportId,
-			@OperationParam(name = "id") UriOrListParam theIds, 
-			@OperationParam(name = DiagnosticReport.SP_PATIENT) ParametersParameterComponent thePatient,
-			@OperationParam(name = DiagnosticReportResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber) {
-				
-		String myFhirServerBase = theRequestDetails.getFhirServerBase();
+	@Operation(name = "$toxicology-message", idempotent = true)
+	public Bundle generateToxicologyMessageOperation(RequestDetails theRequestDetails, @IdParam IdType theId) {
+		if (theId == null) {
+			ThrowFHIRExceptions.unprocessableEntityException("DiagnosticReport.id is required for this operation.");
+		}
+
+		String myFhirServerBase = System.getenv("INTERNAL_FHIR_REQUEST_URL");
+		if (myFhirServerBase == null || myFhirServerBase.isEmpty()) {
+			myFhirServerBase = "http://localhost:8080/fhir";
+		}
 		IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
 		OperationUtil.setupClientForAuth(client);
-		
-		int totalSize = 0;
 
-		Bundle retMessageBundle = new Bundle();
-		if (theDiagnosticReportId != null) {
-			// this is read by the id. Get the diagnostic report and construct message bundle.
-			DiagnosticReport diagnosticReport = (DiagnosticReport) readDiagnosticReport(theDiagnosticReportId);
+		DiagnosticReport diagnosticReport = (DiagnosticReport) readDiagnosticReport(theId);
 			if (diagnosticReport == null) {
-				ThrowFHIRExceptions.unprocessableEntityException("DiagnosticReport.id, " + theDiagnosticReportId.asStringValue() + " does not exist");
+				ThrowFHIRExceptions.unprocessableEntityException("DiagnosticReport.id, " + theId.asStringValue() + " does not exist");
 			}
 
-			return  constructMessageBundleFromDiagnosticReport(client, diagnosticReport);
+		return  constructMessageBundleFromDiagnosticReport(client, diagnosticReport);
+	}
+
+	@Operation(name = "$toxicology-message", idempotent = true, bundleType = BundleTypeEnum.SEARCHSET)
+	public IBundleProvider generateToxicologyMessageOperation(RequestDetails theRequestDetails, 
+			@OperationParam(name = DiagnosticReport.SP_PATIENT) List<ParametersParameterComponent> thePatients,
+			@OperationParam(name = DiagnosticReportResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber) {
+
+		List<String> whereParameters = new ArrayList<String>();
+		String fromStatement = getTableName() + " diag";
+
+		// Set up join statements.
+		if (thePatients != null) {
+			// join patient and composition subject tables
+			fromStatement += " join patient p on diag.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
 		}
 
-		if (theIds != null) {
-			// We search on IDs
-			retMessageBundle.setType(BundleType.SEARCHSET);
-			for (UriParam theId : theIds.getValuesAsQueryTokens()) {
-				IdType myId = new IdType(theId.getValue());
-				DiagnosticReport diagnosticReport = (DiagnosticReport) readDiagnosticReport(myId);
-				if (diagnosticReport != null) {
-					Bundle messageBundle = constructMessageBundleFromDiagnosticReport(client, diagnosticReport);
-					BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(messageBundle.getIdElement().asStringValue()).setResource(messageBundle);
-					retMessageBundle.addEntry(bundleEntryComponent);
-				
-					totalSize++;
+		if (thePatients != null) {
+			for (ParametersParameterComponent thePatient : thePatients) {
+				for (ParametersParameterComponent patientParam : thePatient.getPart()) {
+					String wheres = null;
+					if (Patient.SP_FAMILY.equals(patientParam.getName())) {
+						// we have family value. Add name field to from statement
+						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_FAMILY);
+						StringType theFamilies = (StringType) patientParam.getValue();
+						if (theFamilies != null && !theFamilies.isEmpty()) {
+							String[] familyStrings = theFamilies.asStringValue().split(",");
+							for (String family : familyStrings) {
+								if (wheres == null) {
+									wheres = "lower(names::text)::jsonb @> lower('{\"family\":\"" + family
+											+ "\"}')::jsonb";
+								} else {
+									wheres += "or lower(names::text)::jsonb @> lower('{\"family\":\"" + family
+											+ "\"}')::jsonb";
+								}
+							}
+						}
+					} else if (Patient.SP_GIVEN.equals(patientParam.getName())) {
+						// we have family value. Add name field to from statement
+						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_GIVEN);
+						StringType theGivens = (StringType) patientParam.getValue();
+						if (theGivens != null && !theGivens.isEmpty()) {
+							String[] givenStrings = theGivens.asStringValue().split(",");
+							for (String given : givenStrings) {
+								if (wheres == null) {
+									wheres = "lower(names::text)::jsonb @> lower('{\"given\":[\"" + given
+											+ "\"]}')::jsonb";
+								} else {
+									wheres += " or lower(names::text)::jsonb @> lower('{\"given\":[\"" + given
+											+ "\"]}')::jsonb";
+								}
+							}
+						}
+					} else if (Patient.SP_GENDER.equals(patientParam.getName())) {
+						// we have gender value. Add name field to from statement
+						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_GENDER);
+						StringType theGenders = (StringType) patientParam.getValue();
+						if (theGenders != null && !theGenders.isEmpty()) {
+							String[] genderStrings = theGenders.asStringValue().split(",");
+							for (String gender : genderStrings) {
+								if (wheres == null) {
+									wheres = "p.resource->>'gender' = " + "'" + gender + "'";
+								} else {
+									wheres += " or p.resource->>'gender' = " + "'" + gender + "'";
+								}
+							}
+						}
+					} else if (Patient.SP_BIRTHDATE.equals(patientParam.getName())) {
+						StringType birthDate = (StringType) patientParam.getValue();
+						DateParam date = getDateParam(birthDate.asStringValue());
+						wheres = constructDateWhereParameter(date, "p", "birthDate");
+					}
+
+					if (wheres != null) {
+						whereParameters.add(wheres);
+					}
+				}
+			}
+		}
+
+		if (theTrackingNumber != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
+
+			String wheres = null;
+			for (StringParam tokenParam : theTrackingNumber.getValuesAsQueryTokens()) {
+				String token = tokenParam.getValue();
+				int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
+				String system = null;
+				String value = null;
+				if (barIndex != -1) {
+					system = token.substring(0, barIndex);
+					value = ParameterUtil.unescape(token.substring(barIndex + 1));
+				} else {
+					value = ParameterUtil.unescape(token);
+				}
+
+				String whereItem;
+				if (system == null || system.isBlank()) {
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl
+							+ "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \""
+							+ ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"value\": \"" + value
+							+ "\"}}'::jsonb";
+				} else if (value == null || value.isBlank()) {
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl
+							+ "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \""
+							+ ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"system\": \"" + system
+							+ "\"}}'::jsonb";
+				} else {
+					whereItem = "extensions @> '{\"url\": \"" + ExtensionUtil.extTrackingNumberUrl
+							+ "\", \"valueIdentifier\": {\"type\": {\"coding\": [{\"system\": \""
+							+ ExtensionUtil.extTrackingNumberTypeSystem + "\"}]}, \"system\": \"" + system
+							+ "\", \"value\": \"" + value + "\"}}'::jsonb";
+				}
+
+				if (wheres == null) {
+					wheres = whereItem;
+				} else {
+					wheres += " or " + whereItem;
 				}
 			}
 
-			retMessageBundle.setTotal(totalSize);
-
-			return retMessageBundle;
+			whereParameters.add(wheres);
 		}
 
-		boolean shouldQuery = false;
+		String whereStatement = constructWhereStatement(whereParameters, null);
 
-		IQuery<IBaseBundle> query = client.search().forResource(DiagnosticReport.class);
+		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
+		String query = "SELECT diag.resource as resource FROM " + fromStatement + whereStatement;
 
- 		if (addTokenToIdentifierQuery(query, TRACKING_NUMBER, theTrackingNumber) == true) {
-			shouldQuery = true;
-		}
+		logger.debug("query count:" + queryCount + "\nquery:" + query);
 
-		Bundle diagnosticReportBundle = null;
-		if (shouldQuery) {
-			diagnosticReportBundle = query.returnBundle(Bundle.class).execute();
-		}
+		MyMessageBundle myMessageBundleProvider = new MyMessageBundle(query, theRequestDetails, null, null);
+		myMessageBundleProvider.setTotalSize(getTotalSize(queryCount));
+		myMessageBundleProvider.setPreferredPageSize(preferredPageSize);
 
-		retMessageBundle.setType(BundleType.SEARCHSET);
-		if (diagnosticReportBundle != null && !diagnosticReportBundle.isEmpty()) {
-			List<BundleEntryComponent> entries = diagnosticReportBundle.getEntry();
-			for (BundleEntryComponent entry : entries) {
-				DiagnosticReport diagnosticReport = (DiagnosticReport) entry.getResource();
-				if (diagnosticReport != null && !diagnosticReport.isEmpty()) {
-					Bundle messageBundle = constructMessageBundleFromDiagnosticReport(client, diagnosticReport);
-					BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(messageBundle.getIdElement().asStringValue()).setResource(messageBundle);
-					retMessageBundle.addEntry(bundleEntryComponent);
-	
-					totalSize++;
-				}
-			}
-	
-		}
-
-		retMessageBundle.setTotal(totalSize);
-
-		return retMessageBundle;
+		return myMessageBundleProvider;
 	}
 
 
@@ -691,6 +779,52 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			}
 			
 			return retVal;
+		}
+	}
+
+	class MyMessageBundle extends FhirbaseBundleProvider {
+		RequestDetails theRequestDetails;
+
+		public MyMessageBundle(String query, RequestDetails theRequestDetails, Set<Include> theIncludes,
+				Set<Include> theReverseIncludes) {
+			super(query);
+			setPreferredPageSize(preferredPageSize);
+			this.theRequestDetails = theRequestDetails;
+		}
+
+		@Override
+		public List<IBaseResource> getResources(int fromIndex, int toIndex) {
+			List<IBaseResource> messageBundles = new ArrayList<IBaseResource>();
+			List<IBaseResource> retResources = new ArrayList<IBaseResource>();
+
+			String myQuery = query;
+			if (toIndex - fromIndex > 0) {
+				myQuery += " LIMIT " + (toIndex - fromIndex) + " OFFSET " + fromIndex;
+			}
+
+			logger.debug("Generate diagnostic report message from database: " + myQuery);
+			try {
+				retResources = getFhirbaseMapping().search(myQuery, getResourceType());
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+
+			// Make the diagnosticReport to Message Bundle.
+			String myFhirServerBase = System.getenv("INTERNAL_FHIR_REQUEST_URL");
+			if (myFhirServerBase == null || myFhirServerBase.isEmpty()) {
+				myFhirServerBase = "http://localhost:8080/fhir";
+			}
+			IGenericClient client = getFhirContext().newRestfulGenericClient(myFhirServerBase);
+			OperationUtil.setupClientForAuth(client);
+
+			for (IBaseResource diagnosticReport : retResources) {
+				DiagnosticReport diagnosticReport_ = (DiagnosticReport) diagnosticReport;
+				Bundle retBundle = constructMessageBundleFromDiagnosticReport(client, diagnosticReport_);
+
+				messageBundles.add(retBundle);
+			}
+
+			return messageBundles;
 		}
 	}
 
