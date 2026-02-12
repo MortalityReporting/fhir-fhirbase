@@ -331,6 +331,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 					USCorePatient.SP_PHONE,
 					USCorePatient.SP_TELECOM,
 					USCorePatient.SP_IDENTIFIER }) ReferenceAndListParam theSubjects,
+			@OptionalParam(name = CompositionResourceProvider.SP_MANNER_OF_DEATH) TokenOrListParam theMannerOfDeath,
 			@Sort SortSpec theSort,
 			@IncludeParam(allow = { "Composition:subject" }) final Set<Include> theIncludes) {
 
@@ -512,6 +513,62 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 			whereParameters.add(where);
 			returnAll = false;
+		}
+
+				// Manner of Death
+		if (theMannerOfDeath != null) {
+			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
+			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
+			fromStatement += " join observation o_mod on entries->>'reference' = concat('Observation/', o_mod.id)";
+			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "mannerOfDeath",
+					"o_mod.resource->'code'->'coding'");
+			fromStatement = constructFromStatementPath(fromStatement, "mannerOfDeathValue",
+					"o_mod.resource->'valueCodeableConcept'->'coding'");
+
+			// We only want a section for cause-manner where we keep manner of death
+			// observation reference.
+			whereParameters.add(
+					"codings @> '{\"code\": \"cause-manner\", \"system\": \"" + MdiProfileUtil.CS_MDI_CODES + "\"}'");
+
+			// we want manner of death observation. So, check the code of Observations and
+			// choose one for manner of death.
+			addToWhereParemters(whereParameters,
+					"mannerOfDeath @> '{\"system\": \"http://loinc.org\", \"code\": \"69449-7\"}'::jsonb");
+
+			String wheres = null;
+			for (TokenParam tokenParam : theMannerOfDeath.getValuesAsQueryTokens()) {
+				// String token = tokenParam.getValue();
+				// int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
+				// String system = null;
+				// String code = null;
+				// if (barIndex != -1) {
+				// 	system = token.substring(0, barIndex);
+				// 	code = ParameterUtil.unescape(token.substring(barIndex + 1));
+				// } else {
+				// 	code = ParameterUtil.unescape(token);
+				// }
+				String system = tokenParam.getSystem();
+				String code = tokenParam.getValue();
+
+				String whereItem;
+				if (system == null || system.isBlank()) {
+					whereItem = "mannerOfDeathValue @> '{\"code\": \"" + code + "\"}'::jsonb";
+				} else if (code == null || code.isBlank()) {
+					whereItem = "mannerOfDeathValue @> '{\"system\": \"" + system + "\"}'::jsonb";
+				} else {
+					whereItem = "mannerOfDeathValue @> '{\"system\": \"" + system + "\", \"code\": \"" + code
+							+ "\"}'::jsonb";
+				}
+
+				if (wheres == null) {
+					wheres = whereItem;
+				} else {
+					wheres += " or " + whereItem;
+				}
+			}
+
+			whereParameters.add(wheres);
 		}
 
 		String whereStatement = constructWhereStatement(whereParameters, theSort);
