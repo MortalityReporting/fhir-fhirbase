@@ -426,10 +426,9 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			String myStatement = "";
 			// where value of input dates.
 			for (DateParam dateParam : thePronouncedDeathDate.getValuesAsQueryTokens()) {
-				myStatement += constructDateWhereParameter(dateParam, "o", "valueDateTime");
-				myStatement += constructDateWhereParameter(dateParam, "component", "valueDateTime");
+				myStatement += constructDateWhereParameter(dateParam, "component", "valueDateTime") + " AND ";
 			}
-
+			myStatement = myStatement.substring(0, myStatement.length() - 5);
 
 			// we want manner of death observation. So, check the code of Observations and
 			// choose one for manner of death.
@@ -459,8 +458,10 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 			// where value of input dates.
 			for (DateParam dateParam : theDeathDate.getValuesAsQueryTokens()) {
-				myStatement +=(constructDateWhereParameter(dateParam, "o", "valueDateTime"));
+				myStatement +=(constructDateWhereParameter(dateParam, "o", "valueDateTime")) + " AND ";
 			}
+
+			myStatement = myStatement.substring(0, myStatement.length() - 5);
 
 			// we want manner of death observation. So, check the code of Observations and
 			// choose one for manner of death.
