@@ -182,6 +182,15 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 		return fromStatement;
 	}
 
+	protected String constructCrossJoinLateralFromStatementPath(String fromStatement, String alias, String path) {
+		if (!fromStatement.contains(alias)) {
+			fromStatement += "CROSS JOIN LATERAL jsonb_array_elements("+path+") " + alias + " ";
+		}
+		
+		return fromStatement;
+	}
+
+
 	protected String constructFromWherePatients(String fromStatement, List<String> whereParameters, ReferenceAndListParam theReferenceParts) {
 		if (theReferenceParts != null) {
 			for (ReferenceOrListParam theReferences : theReferenceParts.getValuesAsQueryTokens()) {

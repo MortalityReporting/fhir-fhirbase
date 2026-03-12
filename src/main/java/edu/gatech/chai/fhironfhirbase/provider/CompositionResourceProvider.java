@@ -10,6 +10,7 @@ import java.util.UUID;
 import jakarta.annotation.PostConstruct;
 
 import org.apache.commons.lang3.StringUtils;
+import org.hibernate.mapping.Array;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.BooleanType;
@@ -335,57 +336,58 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			@Sort SortSpec theSort,
 			@IncludeParam(allow = { "Composition:subject" }) final Set<Include> theIncludes) {
 
-		List<String> whereParameters = new ArrayList<String>();
-		String fromStatement = getTableName() + " comp";
-		String selectStatement = "comp.resource as resource ";
-		if (theIncludes != null && theIncludes.contains(new Include("Composition:subject"))) {
-			selectStatement += ", p.resource as subject ";
-			fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id') ";
-		} 
+		List<String> withStatements = new ArrayList<String>();
+
+		List<String> withCompWhereParameters = new ArrayList<String>();
+		// String withCompSelectStatement = "SELECT DISTINCT comp.id, comp.resource, comp.resource->'subject'->>'reference' as subject_ref";
+		String withCompFromStatement = getTableName() + " comp ";
 
 		// Set up join statements.
-		if (theSubjects != null || thePatients != null) {
-			// join patient and composition subject tables
-			if (!fromStatement.contains(" p ")) {
-				fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
-			}
-		}
+		// if (theSubjects != null || thePatients != null) {
+		// 	// join patient and composition subject tables
+		// 	if (!fromStatement.contains(" p ")) {
+		// 		fromStatement += " join patient p on comp.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+		// 	}
+		// }
 
-		boolean returnAll = true;
+		// boolean returnAll = true;
 
 		if (theSubjects != null || thePatients != null) {
-			String updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, theSubjects);
+			String myFromStatement = "FROM patient p";
+			List<String> myWhereParameters = new ArrayList<String>();
+			String updatedFromStatement = constructFromWherePatients(myFromStatement, myWhereParameters, theSubjects);
 			if (updatedFromStatement.isEmpty()) {
 				// This means that we have unsupported resource. Since this is to search, we
 				// should discard all and
 				// return null.
 				return null;
 			}
-			fromStatement = updatedFromStatement;
 
-			updatedFromStatement = constructFromWherePatients(fromStatement, whereParameters, thePatients);
+			updatedFromStatement = constructFromWherePatients(updatedFromStatement, myWhereParameters, thePatients);
 			if (updatedFromStatement.isEmpty()) {
 				// This means that we have unsupported resource. Since this is to search, we
 				// should discard all and
 				// return null.
 				return null;
 			}
-			fromStatement = updatedFromStatement;
 
-			returnAll = false;
+			String myWhereStatement = "WHERE ";
+			for (String myWhereParameter : myWhereParameters) {
+				myWhereStatement += myWhereParameter + " AND ";
+			}
+
+			myWhereStatement = myWhereStatement.substring(0, myWhereStatement.length() - 5);
+			
+			withStatements.add("filtered_patients AS (" + //
+					"    SELECT DISTINCT p.id" + //
+					"    FROM patient p " + //
+					myWhereStatement + ")");
+
+			withCompWhereParameters.add("EXISTS ( SELECT 1 FROM filtered_patients fp WHERE comp.resource->'subject'->>'reference' = 'Patient/' || fp.id)");
+			// returnAll = false;
 		}
 
 		if (theDeathLocations != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
-			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
-			fromStatement += " join location l on entries->>'reference' = concat('Location/', l.id)";
-			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
-
-			// We only want a section for circumstance where we keep death location
-			// reference.
-			whereParameters.add(
-					"codings @> '{\"code\": \"circumstances\", \"system\": \"" + MdiProfileUtil.CS_MDI_CODES + "\"}'");
-
 			String districtOrWhere = null;
 			for (StringParam theDeathLocation : theDeathLocations.getValuesAsQueryTokens()) {
 				String districtOrWhere_ = "lower(l.resource->'address'->>'city') like lower('%"
@@ -405,83 +407,102 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				}
 			}
 
-			if (districtOrWhere != null && !districtOrWhere.isBlank()) {
-				whereParameters.add(districtOrWhere);
-			}
+			withStatements.add("filtered_dl_locations AS (" + 
+					"    SELECT DISTINCT l.id" + 
+					"    FROM location l" + 
+					"    WHERE " + districtOrWhere + ")");
+
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "sections", "comp.resource->'section'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "codings", "sections->'code'->'coding'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "entries", "sections->'entry'");
+
+			withCompWhereParameters.add("codings @> '{\"code\": \"circumstances\", \"system\": \"" + MdiProfileUtil.CS_MDI_CODES + "\"}'::jsonb");
+			withCompWhereParameters.add("EXISTS (SELECT 1 FROM filtered_dl_locations fdll WHERE entries->>'reference' = 'Location/' || fdll.id)");
+
 		}
 
 		// Death Date Pronounced
 		if (thePronouncedDeathDate != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
-			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
-			fromStatement += " join observation o on entries->>'reference' = concat('Observation/', o.id)";
-			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
-			fromStatement += ", jsonb_array_elements(o.resource->'component') component, jsonb_array_elements(component->'code'->'coding') component_codings";
-			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
-
-			// We only want a section for jurisdiction where we keep death date reference.
-			whereParameters.add(
-					"codings @> '{\"code\": \"jurisdiction\", \"system\": \"" + MdiProfileUtil.CS_MDI_CODES + "\"}'");
-
-			// we want Death Date observation. So, check the code of Observations and choose
-			// one for death date.
-			addToWhereParemters(whereParameters,
-					"deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
-
-			whereParameters
-					.add("component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb");
-
+			String myStatement = "";
 			// where value of input dates.
 			for (DateParam dateParam : thePronouncedDeathDate.getValuesAsQueryTokens()) {
-				whereParameters.add(constructDateWhereParameter(dateParam, "component", "valueDateTime"));
+				myStatement += constructDateWhereParameter(dateParam, "o", "valueDateTime");
+				myStatement += constructDateWhereParameter(dateParam, "component", "valueDateTime");
 			}
 
+
+			// we want manner of death observation. So, check the code of Observations and
+			// choose one for manner of death.
+			withStatements.add("filtered_pdd_observations AS (" + 
+					"    SELECT DISTINCT o.id" + 
+					"    FROM observation o" + 
+					"         CROSS JOIN LATERAL jsonb_array_elements(o.resource->'component') component" +
+					"         CROSS JOIN LATERAL jsonb_array_elements(component->'code'->'coding') component_codings" +
+					"    WHERE EXISTS (" + 
+					"        SELECT 1" + 
+					"        FROM jsonb_array_elements(o.resource->'code'->'coding') c" + 
+					"        WHERE c @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb" + 
+					"          ) AND (" + "component_codings @> '{\"system\": \"http://loinc.org\", \"code\": \"80616-6\"}'::jsonb" +
+					"          } AND (" + myStatement + "))");
+
+
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "sections", "comp.resource->'section'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "codings", "sections->'code'->'coding'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "entries", "sections->'entry'");
+			
+			withCompWhereParameters.add("codings @> '{\"code\": \"jurisdiction\", \"system\": \"" + MdiProfileUtil.CS_MDI_CODES + "\"}'::jsonb");
+			withCompWhereParameters.add("EXISTS (SELECT 1 FROM filtered_pdd_observations fddo WHERE entries->>'reference' = 'Observation/' || fddo.id)");
 		}
 
 		if (theDeathDate != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
-			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
-			fromStatement += " join observation o on entries->>'reference' = concat('Observation/', o.id)";
-			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
-			fromStatement = constructFromStatementPath(fromStatement, "deathdate", "o.resource->'code'->'coding'");
-
-			// We only want a section for circumstance where we keep death location
-			// reference.
-			whereParameters.add(
-					"codings @> '{\"code\": \"jurisdiction\", \"system\": \"" + MdiProfileUtil.CS_MDI_CODES + "\"}'");
-
-			// we want Death Date observation. So, check the code of Observations and choose
-			// one for death date.
-			addToWhereParemters(whereParameters,
-					"deathdate @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb");
+			String myStatement = "";
 
 			// where value of input dates.
 			for (DateParam dateParam : theDeathDate.getValuesAsQueryTokens()) {
-				whereParameters.add(constructDateWhereParameter(dateParam, "o", "valueDateTime"));
+				myStatement +=(constructDateWhereParameter(dateParam, "o", "valueDateTime"));
 			}
+
+			// we want manner of death observation. So, check the code of Observations and
+			// choose one for manner of death.
+			withStatements.add("filtered_dd_observations AS (" + //
+					"    SELECT DISTINCT o.id" + //
+					"    FROM observation o" + //
+					"    WHERE EXISTS (" + //
+					"        SELECT 1" + //
+					"        FROM jsonb_array_elements(o.resource->'code'->'coding') c" + //
+					"        WHERE c @> '{\"system\": \"http://loinc.org\", \"code\": \"81956-5\"}'::jsonb" + //
+					"    ) AND (" + myStatement + "))");
+
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "sections", "comp.resource->'section'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "codings", "sections->'code'->'coding'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "entries", "sections->'entry'");
+
+			withCompWhereParameters.add("codings @> '{\"code\": \"jurisdiction\", \"system\": \"" + MdiProfileUtil.CS_MDI_CODES + "\"}'::jsonb");
+			withCompWhereParameters.add("EXISTS (SELECT 1 FROM filtered_dd_observations fddo WHERE entries->>'reference' = 'Observation/' || fddo.id)");
 		}
 
 		if (theOrTypes != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "types", "comp.resource->'type'->'coding'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "types", "comp.resource->'type'->'coding'");
+
 			String where = constructTypesWhereParameter(theOrTypes);
 			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
+				withCompWhereParameters.add(where);
 			}
 
-			returnAll = false;
+			// returnAll = false;
 		}
 
 		if (theDate != null) {
 			String where = constructDateWhereParameter(theDate, "comp", "date");
 			if (where != null && !where.isEmpty()) {
-				whereParameters.add(where);
+				withCompWhereParameters.add(where);
 			}
 
-			returnAll = false;
+			// returnAll = false;
 		}
 
 		if (theTrackingNumber != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "extensions", "comp.resource->'extension'");
 
 			String where = "";
 			for (TokenParam trackingNumberToken : theTrackingNumber.getValuesAsQueryTokens()) {
@@ -511,79 +532,96 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 				}
 			}
 
-			whereParameters.add(where);
-			returnAll = false;
+			withCompWhereParameters.add(where);
+
+			// returnAll = false;
 		}
 
-				// Manner of Death
+		// Manner of Death
 		if (theMannerOfDeath != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "sections", "comp.resource->'section'");
-			fromStatement = constructFromStatementPath(fromStatement, "entries", "sections->'entry'");
-			fromStatement += " join observation o_mod on entries->>'reference' = concat('Observation/', o_mod.id)";
-			fromStatement = constructFromStatementPath(fromStatement, "codings", "sections->'code'->'coding'");
-			fromStatement = constructFromStatementPath(fromStatement, "mannerOfDeath",
-					"o_mod.resource->'code'->'coding'");
-			fromStatement = constructFromStatementPath(fromStatement, "mannerOfDeathValue",
-					"o_mod.resource->'valueCodeableConcept'->'coding'");
-
-			// We only want a section for cause-manner where we keep manner of death
-			// observation reference.
-			whereParameters.add(
-					"codings @> '{\"code\": \"cause-manner\", \"system\": \"" + MdiProfileUtil.CS_MDI_CODES + "\"}'");
-
-			// we want manner of death observation. So, check the code of Observations and
-			// choose one for manner of death.
-			addToWhereParemters(whereParameters,
-					"mannerOfDeath @> '{\"system\": \"http://loinc.org\", \"code\": \"69449-7\"}'::jsonb");
-
-			String wheres = null;
+			// Manner of Death information is in the observation. So, set up the filtered observation.
+			String myStatement = "";
 			for (TokenParam tokenParam : theMannerOfDeath.getValuesAsQueryTokens()) {
-				// String token = tokenParam.getValue();
-				// int barIndex = ParameterUtil.nonEscapedIndexOf(token, '|');
-				// String system = null;
-				// String code = null;
-				// if (barIndex != -1) {
-				// 	system = token.substring(0, barIndex);
-				// 	code = ParameterUtil.unescape(token.substring(barIndex + 1));
-				// } else {
-				// 	code = ParameterUtil.unescape(token);
-				// }
 				String system = tokenParam.getSystem();
 				String code = tokenParam.getValue();
 
 				String whereItem;
 				if (system == null || system.isBlank()) {
-					whereItem = "mannerOfDeathValue @> '{\"code\": \"" + code + "\"}'::jsonb";
+					whereItem = "'{\"code\": \"" + code + "\"}'::jsonb";
 				} else if (code == null || code.isBlank()) {
-					whereItem = "mannerOfDeathValue @> '{\"system\": \"" + system + "\"}'::jsonb";
+					whereItem = "'{\"system\": \"" + system + "\"}'::jsonb";
 				} else {
-					whereItem = "mannerOfDeathValue @> '{\"system\": \"" + system + "\", \"code\": \"" + code
-							+ "\"}'::jsonb";
+					whereItem = "'{\"system\": \"" + system + "\", \"code\": \"" + code + "\"}'::jsonb";
 				}
 
-				if (wheres == null) {
-					wheres = whereItem;
-				} else {
-					wheres += " or " + whereItem;
+				if (myStatement != null && !myStatement.isEmpty()) {
+					myStatement += " OR ";
 				}
+				myStatement += "EXISTS (" +
+						"    SELECT 1" + //
+						"    FROM jsonb_array_elements(o.resource->'valueCodeableConcept'->'coding') v" + //
+						"    WHERE v @> " + whereItem + //
+						")";
 			}
 
-			whereParameters.add(wheres);
+			// we want manner of death observation. So, check the code of Observations and
+			// choose one for manner of death.
+			withStatements.add("filtered_mod_observations AS (" + //
+					"    SELECT DISTINCT o.id" + //
+					"    FROM observation o" + //
+					"    WHERE EXISTS (" + //
+					"        SELECT 1" + //
+					"        FROM jsonb_array_elements(o.resource->'code'->'coding') c" + //
+					"        WHERE c @> '{\"system\": \"http://loinc.org\", \"code\": \"69449-7\"}'::jsonb" + //
+					"    ) AND (" + myStatement + ")" +
+					")");
+
+			// Now construct with statement for Composition.
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "sections", "comp.resource->'section'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "codings", "sections->'code'->'coding'");
+			withCompFromStatement = constructCrossJoinLateralFromStatementPath(withCompFromStatement, "entries", "sections->'entry'");
+
+			// We only want a section for cause-manner where we keep manner of death
+			// observation reference.
+			withCompWhereParameters.add("codings @> '{\"code\": \"cause-manner\", \"system\": \"" + MdiProfileUtil.CS_MDI_CODES + "\"}'::jsonb");
+			withCompWhereParameters.add("EXISTS (SELECT 1 FROM filtered_mod_observations fmodo WHERE entries->>'reference' = 'Observation/' || fmodo.id)");
+		}
+		
+		// Final SQL statement of Composition.
+		String finalCompositionQuery = "filtered_compositions AS (" +
+			"  SELECT DISTINCT comp.id, comp.resource, comp.resource->'subject'->>'reference' as subject_ref " +
+			"  FROM " + withCompFromStatement + " " + constructWhereStatement(withCompWhereParameters, null) + ")";
+
+		withStatements.add(finalCompositionQuery);
+
+		// Final Query
+		String finalQueryCountStatement = " SELECT count(*) FROM filtered_compositions fc";
+
+		String finalQueryStatement = "";
+		if (theIncludes != null && theIncludes.contains(new Include("Composition:subject"))) {
+			finalQueryStatement = " SELECT fc.resource as resource, p.resource as subject " +
+				"FROM filtered_compositions fc JOIN patient p ON fc.subject_ref = 'Patient/' || (p.resource->>'id')";
+		} else {
+			finalQueryStatement = " SELECT fc.resource as resource FROM filtered_compositions fc)";
 		}
 
-		String whereStatement = constructWhereStatement(whereParameters, theSort);
-
-		if (!returnAll && (whereStatement == null || whereStatement.isEmpty())) {
-			return null;
+		String finalCountQuery = "With ";
+		String finalQuery = "With ";
+		for (String withStatement : withStatements) {
+			finalCountQuery += withStatement + ", ";
+			finalQuery += withStatement + ", ";
 		}
 
-		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
-		String query = "SELECT " + selectStatement + "FROM " + fromStatement + whereStatement;
+		finalCountQuery = finalCountQuery.substring(0, finalCountQuery.length()-2);
+		finalQuery = finalQuery.substring(0, finalQuery.length()-2);
 
-		logger.debug("query count:" + queryCount + "\nquery:" + query);
+		finalCountQuery += finalQueryCountStatement;
+		finalQuery += finalQueryStatement;
+		
+		logger.debug("query count:" + finalQueryCountStatement + "\nquery:" + finalQueryStatement);
 
-		MyBundleProvider myBundleProvider = new MyBundleProvider(query, theIncludes, null);
-		myBundleProvider.setTotalSize(getTotalSize(queryCount));
+		MyBundleProvider myBundleProvider = new MyBundleProvider(finalQuery, theIncludes, null);
+		myBundleProvider.setTotalSize(getTotalSize(finalCountQuery));
 		myBundleProvider.setPreferredPageSize(preferredPageSize);
 		return myBundleProvider;
 	}
