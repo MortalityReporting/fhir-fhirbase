@@ -603,7 +603,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			finalQueryStatement = " SELECT fc.resource as resource, p.resource as subject " +
 				"FROM filtered_compositions fc JOIN patient p ON fc.subject_ref = 'Patient/' || (p.resource->>'id')";
 		} else {
-			finalQueryStatement = " SELECT fc.resource as resource FROM filtered_compositions fc)";
+			finalQueryStatement = " SELECT fc.resource as resource FROM filtered_compositions fc";
 		}
 
 		String finalCountQuery = "With ";
