@@ -356,13 +356,6 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 			String myFromStatement = "FROM patient p";
 			List<String> myWhereParameters = new ArrayList<String>();
 			String updatedFromStatement = constructFromWherePatients(myFromStatement, myWhereParameters, theSubjects);
-			if (updatedFromStatement.isEmpty()) {
-				// This means that we have unsupported resource. Since this is to search, we
-				// should discard all and
-				// return null.
-				return null;
-			}
-
 			updatedFromStatement = constructFromWherePatients(updatedFromStatement, myWhereParameters, thePatients);
 			if (updatedFromStatement.isEmpty()) {
 				// This means that we have unsupported resource. Since this is to search, we

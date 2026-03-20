@@ -606,22 +606,28 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 			@OperationParam(name = DiagnosticReport.SP_PATIENT) List<ParametersParameterComponent> thePatients,
 			@OperationParam(name = DiagnosticReportResourceProvider.SP_TRACKING_NUMBER) StringOrListParam theTrackingNumber) {
 
-		List<String> whereParameters = new ArrayList<String>();
-		String fromStatement = getTableName() + " diag";
+		// List<String> whereParameters = new ArrayList<String>();
+		// String fromStatement = getTableName() + " diag";
+
+		List<String> withStatements = new ArrayList<String>();
+		List<String> withDiagWhereParameters = new ArrayList<String>();
+		String withDiagFromStatement = getTableName() + " diag";
 
 		// Set up join statements.
-		if (thePatients != null) {
-			// join patient and composition subject tables
-			fromStatement += " join patient p on diag.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
-		}
+		// if (thePatients != null) {
+		// 	// join patient and composition subject tables
+		// 	fromStatement += " join patient p on diag.resource->'subject'->>'reference' = concat('Patient/', p.resource->>'id')";
+		// }
 
 		if (thePatients != null) {
+			String myFromStatement = "FROM patient p";
+			List<String> myWhereParameters = new ArrayList<String>();
 			for (ParametersParameterComponent thePatient : thePatients) {
 				for (ParametersParameterComponent patientParam : thePatient.getPart()) {
 					String wheres = null;
 					if (Patient.SP_FAMILY.equals(patientParam.getName())) {
 						// we have family value. Add name field to from statement
-						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_FAMILY);
+						myFromStatement = constructFromStatementPatientChain(myFromStatement, Patient.SP_FAMILY);
 						StringType theFamilies = (StringType) patientParam.getValue();
 						if (theFamilies != null && !theFamilies.isEmpty()) {
 							String[] familyStrings = theFamilies.asStringValue().split(",");
@@ -637,7 +643,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 						}
 					} else if (Patient.SP_GIVEN.equals(patientParam.getName())) {
 						// we have family value. Add name field to from statement
-						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_GIVEN);
+						myFromStatement = constructFromStatementPatientChain(myFromStatement, Patient.SP_GIVEN);
 						StringType theGivens = (StringType) patientParam.getValue();
 						if (theGivens != null && !theGivens.isEmpty()) {
 							String[] givenStrings = theGivens.asStringValue().split(",");
@@ -653,7 +659,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 						}
 					} else if (Patient.SP_GENDER.equals(patientParam.getName())) {
 						// we have gender value. Add name field to from statement
-						fromStatement = constructFromStatementPatientChain(fromStatement, Patient.SP_GENDER);
+						myFromStatement = constructFromStatementPatientChain(myFromStatement, Patient.SP_GENDER);
 						StringType theGenders = (StringType) patientParam.getValue();
 						if (theGenders != null && !theGenders.isEmpty()) {
 							String[] genderStrings = theGenders.asStringValue().split(",");
@@ -672,14 +678,28 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 					}
 
 					if (wheres != null) {
-						whereParameters.add(wheres);
+						myWhereParameters.add(wheres);
 					}
 				}
 			}
+
+			String myWhereStatement = "WHERE ";
+			for (String myWhereParameter : myWhereParameters) {
+				myWhereStatement += myWhereParameter + " AND ";
+			}
+
+			myWhereStatement = myWhereStatement.substring(0, myWhereStatement.length() - 5);
+
+			withStatements.add("filtered_patients AS (" +
+				"    SELECT DISTINCT p.id" + //
+					"    FROM patient p " + //
+					myWhereStatement + ")");
+			
+			withDiagWhereParameters.add("EXISTS ( SELECT 1 FROM filtered_patients fp WHERE diag.resource->'subject'->>'reference' = 'Patient/' || fp.id)");
 		}
 
 		if (theTrackingNumber != null) {
-			fromStatement = constructFromStatementPath(fromStatement, "extensions", "comp.resource->'extension'");
+			withDiagFromStatement = constructFromStatementPath(withDiagFromStatement, "extensions", "diag.resource->'extension'");
 
 			String wheres = null;
 			for (StringParam tokenParam : theTrackingNumber.getValuesAsQueryTokens()) {
@@ -719,18 +739,40 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 				}
 			}
 
-			whereParameters.add(wheres);
+			withDiagWhereParameters.add(wheres);
 		}
 
-		String whereStatement = constructWhereStatement(whereParameters, null);
+		String finalDiagReportQuery = "filtered_diag_reports AS (" +
+			"    SELECT DISTINCT diag.id, diag.resource, diag.resource->'subject'->>'reference' as subject_ref " + //
+			"    FROM " + withDiagFromStatement + " " + constructWhereStatement(withDiagWhereParameters, null) + ")";
 
-		String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
-		String query = "SELECT diag.resource as resource FROM " + fromStatement + whereStatement;
+		withStatements.add(finalDiagReportQuery);
 
-		logger.debug("query count:" + queryCount + "\nquery:" + query);
+		String finalQueryCountStatement = " SELECT count(*) FROM filtered_diag_reports fdr";
+		String finalQueryStatement = " SELECT fdr.resource as resource FROM filtered_diag_reports fdr";
 
-		MyMessageBundle myMessageBundleProvider = new MyMessageBundle(query, theRequestDetails, null, null);
-		myMessageBundleProvider.setTotalSize(getTotalSize(queryCount));
+		String finalCountQuery = "With ";
+		String finalQuery = "With ";
+		for (String withStatement : withStatements) {
+			finalCountQuery += withStatement + ", ";
+			finalQuery += withStatement + ", ";
+		}
+
+		finalCountQuery = finalCountQuery.substring(0, finalCountQuery.length() - 2);
+		finalQuery = finalQuery.substring(0, finalQuery.length() - 2);
+
+		finalCountQuery += finalQueryCountStatement;
+		finalQuery += finalQueryStatement;
+
+		// String whereStatement = constructWhereStatement(whereParameters, null);
+
+		// String queryCount = "SELECT count(*) FROM " + fromStatement + whereStatement;
+		// String query = "SELECT diag.resource as resource FROM " + fromStatement + whereStatement;
+
+		logger.debug("query count:" + finalCountQuery + "\nquery:" + finalQuery);
+
+		MyMessageBundle myMessageBundleProvider = new MyMessageBundle(finalQuery, theRequestDetails, null, null);
+		myMessageBundleProvider.setTotalSize(getTotalSize(finalCountQuery));
 		myMessageBundleProvider.setPreferredPageSize(preferredPageSize);
 
 		return myMessageBundleProvider;
