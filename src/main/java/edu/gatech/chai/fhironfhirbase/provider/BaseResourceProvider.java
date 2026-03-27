@@ -153,7 +153,8 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 			|| USCorePatient.SP_ADDRESS_USE.equals(chainName)) {
 			fromStatement = constructFromStatementPath(fromStatement, "addresses", "p.resource->'address'");
 		} else if (USCorePatient.SP_FAMILY.equals(chainName)
-			|| USCorePatient.SP_GIVEN.equals(chainName)) {
+			|| USCorePatient.SP_GIVEN.equals(chainName)
+			|| USCorePatient.SP_NAME.equals(chainName)) {
 			fromStatement = constructFromStatementPath(fromStatement, "names", "p.resource->'name'");
 		} else if (USCorePatient.SP_EMAIL.equals(chainName)
 			|| USCorePatient.SP_PHONE.equals(chainName)
