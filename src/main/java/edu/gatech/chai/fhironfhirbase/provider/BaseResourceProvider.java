@@ -465,13 +465,13 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 			String theValue = thePatient.getValue();
 
 			String patientChain = thePatient.getChain();
-			String[] patientChainWithModifier = patientChain.split(":");
-			String modifier = null;
-			if (patientChainWithModifier.length > 1) {
-				patientChain = patientChainWithModifier[0];
-				modifier = patientChainWithModifier[1];
-			}
 			if (patientChain != null) {
+				String[] patientChainWithModifier = patientChain.split(":");
+				String modifier = null;
+				if (patientChainWithModifier.length > 1) {
+					patientChain = patientChainWithModifier[0];
+					modifier = patientChainWithModifier[1];
+				}
 				if (USCorePatient.SP_NAME.equals(patientChain)) {
 					// check if we have modifier.
 					String nameSearching = "";
