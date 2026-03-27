@@ -146,6 +146,11 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 	}
 	
 	protected String constructFromStatementPatientChain(String fromStatement, String chainName) {
+		String[] chainWithModifier = chainName.split(":");
+		if (chainWithModifier.length > 1) {
+			chainName = chainWithModifier[0];
+		}
+
 		if (USCorePatient.SP_ADDRESS_CITY.equals(chainName)
 			|| USCorePatient.SP_ADDRESS_COUNTRY.equals(chainName)
 			|| USCorePatient.SP_ADDRESS_POSTALCODE.equals(chainName)
@@ -460,15 +465,42 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 			String theValue = thePatient.getValue();
 
 			String patientChain = thePatient.getChain();
+			String[] patientChainWithModifier = patientChain.split(":");
+			String modifier = null;
+			if (patientChainWithModifier.length > 1) {
+				patientChain = patientChainWithModifier[0];
+				modifier = patientChainWithModifier[1];
+			}
 			if (patientChain != null) {
 				if (USCorePatient.SP_NAME.equals(patientChain)) {
-					String nameSearching = 
-						"lower(names->>'family') like lower('%" + theValue + "%') OR " +
-						"lower(names->>'given') like lower('%" + theValue + "%') OR " +
-						"lower(names->>'text') like lower('%" + theValue + "%') OR " +
-						"lower(names->>'prefix') like lower('%" + theValue + "%') OR " +
-						"lower(names->>'suffix') like lower('%" + theValue + "%')";
-
+					// check if we have modifier.
+					String nameSearching = "";
+					if ("missing".equalsIgnoreCase(modifier)) {
+						if ("true".equalsIgnoreCase(theValue)) {
+							nameSearching = "p.resource->'name' is null OR (" +
+								"COALESCE(TRIM(names->>'family'), '') = '' AND " +
+								"COALESCE(TRIM(names->>'given'), '') = '' AND " +
+								"COALESCE(TRIM(names->>'text'), '') = '' AND " +
+								"COALESCE(TRIM(names->>'prefix'), '') = '' AND " +
+								"COALESCE(TRIM(names->>'suffix'), '') = ''" +
+								")";
+						} else {
+							nameSearching = "p.resource->'name' is not null AND (" +
+								"COALESCE(TRIM(names->>'family'), '') != '' OR " +
+								"COALESCE(TRIM(names->>'given'), '') != '' OR " +
+								"COALESCE(TRIM(names->>'text'), '') != '' OR " +
+								"COALESCE(TRIM(names->>'prefix'), '') != '' OR " +
+								"COALESCE(TRIM(names->>'suffix'), '') != ''" +
+								")";
+						}
+					} else {
+						nameSearching = 
+							"lower(names->>'family') like lower('%" + theValue + "%') OR " +
+							"lower(names->>'given') like lower('%" + theValue + "%') OR " +
+							"lower(names->>'text') like lower('%" + theValue + "%') OR " +
+							"lower(names->>'prefix') like lower('%" + theValue + "%') OR " +
+							"lower(names->>'suffix') like lower('%" + theValue + "%')";
+					}
 					if (where.isEmpty()) {
 						where = "("+ nameSearching +")";
  					} else {
