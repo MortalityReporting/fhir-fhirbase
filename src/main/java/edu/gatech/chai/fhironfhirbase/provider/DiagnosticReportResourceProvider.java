@@ -620,14 +620,14 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		// }
 
 		if (thePatients != null) {
-			String myFromStatement = "FROM patient p";
+			// String myFromStatement = "FROM patient p";
 			List<String> myWhereParameters = new ArrayList<String>();
 			for (ParametersParameterComponent thePatient : thePatients) {
 				for (ParametersParameterComponent patientParam : thePatient.getPart()) {
 					String wheres = null;
 					if (Patient.SP_FAMILY.equals(patientParam.getName())) {
 						// we have family value. Add name field to from statement
-						myFromStatement = constructFromStatementPatientChain(myFromStatement, Patient.SP_FAMILY);
+						// myFromStatement = constructFromStatementPatientChain(myFromStatement, Patient.SP_FAMILY);
 						StringType theFamilies = (StringType) patientParam.getValue();
 						if (theFamilies != null && !theFamilies.isEmpty()) {
 							String[] familyStrings = theFamilies.asStringValue().split(",");
@@ -643,7 +643,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 						}
 					} else if (Patient.SP_GIVEN.equals(patientParam.getName())) {
 						// we have family value. Add name field to from statement
-						myFromStatement = constructFromStatementPatientChain(myFromStatement, Patient.SP_GIVEN);
+						// myFromStatement = constructFromStatementPatientChain(myFromStatement, Patient.SP_GIVEN);
 						StringType theGivens = (StringType) patientParam.getValue();
 						if (theGivens != null && !theGivens.isEmpty()) {
 							String[] givenStrings = theGivens.asStringValue().split(",");
@@ -659,7 +659,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 						}
 					} else if (Patient.SP_GENDER.equals(patientParam.getName())) {
 						// we have gender value. Add name field to from statement
-						myFromStatement = constructFromStatementPatientChain(myFromStatement, Patient.SP_GENDER);
+						// myFromStatement = constructFromStatementPatientChain(myFromStatement, Patient.SP_GENDER);
 						StringType theGenders = (StringType) patientParam.getValue();
 						if (theGenders != null && !theGenders.isEmpty()) {
 							String[] genderStrings = theGenders.asStringValue().split(",");

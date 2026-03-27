@@ -461,10 +461,17 @@ public abstract class BaseResourceProvider implements IResourceProvider {
 			String patientChain = thePatient.getChain();
 			if (patientChain != null) {
 				if (USCorePatient.SP_NAME.equals(patientChain)) {
+					String nameSearching = 
+						"lower(names->>'family') like lower('%" + theValue + "%') OR " +
+						"lower(names->>'given') like lower('%" + theValue + "%') OR " +
+						"lower(names->>'text') like lower('%" + theValue + "%') OR " +
+						"lower(names->>'prefix') like lower('%" + theValue + "%') OR " +
+						"lower(names->>'suffix') like lower('%" + theValue + "%')";
+
 					if (where.isEmpty()) {
-						where = "lower(p.resource->>'name') like " + "lower('%" + theValue + "%')";
+						where = "("+ nameSearching +")";
  					} else {
-						where += " and lower(p.resource->>'name') like " + "lower('%" + theValue + "%')";
+						where += " and ("+ nameSearching +")";
 					}
 				} else if (USCorePatient.SP_ADDRESS_CITY.equals(patientChain)) {
 					if (where.isEmpty()) {

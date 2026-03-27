@@ -302,7 +302,42 @@ public class PatientResourceProvider extends BaseResourceProvider {
 			returnAll = false;
 		}
 		if (theName != null) {
-			whereParameters.add("p.resource->>'name' like '%" + theName.getValue() + "%'");
+			if (!fromStatement.contains("names")) {
+				fromStatement += ", jsonb_array_elements(p.resource->'name') names";
+			}
+
+			if (theName.getValue() != null && !theName.getValue().isEmpty()) {
+				String nameSearching = 
+					"lower(names->>'family') like lower('%" + theName.getValue() + "%') OR " +
+					"lower(names->>'given') like lower('%" + theName.getValue() + "%') OR " +
+					"lower(names->>'text') like lower('%" + theName.getValue() + "%') OR " +
+					"lower(names->>'prefix') like lower('%" + theName.getValue() + "%') OR " +
+					"lower(names->>'suffix') like lower('%" + theName.getValue() + "%')";
+				whereParameters.add(nameSearching);
+			}
+
+			if (theName.getMissing() != null) {
+				String nameSearching = "";
+				if (theName.getMissing()) {
+					nameSearching = "p.resource->'name' is null OR (" +
+						"COALESCE(TRIM(names->>'family'), '') = '' AND " +
+						"COALESCE(TRIM(names->>'given'), '') = '' AND " +
+						"COALESCE(TRIM(names->>'text'), '') = '' AND " +
+						"COALESCE(TRIM(names->>'prefix'), '') = '' AND " +
+						"COALESCE(TRIM(names->>'suffix'), '') = ''" +
+						")";
+					whereParameters.add(nameSearching);
+				} else {
+					nameSearching = "p.resource->'name' is not null AND (" +
+						"COALESCE(TRIM(names->>'family'), '') != '' OR " +
+						"COALESCE(TRIM(names->>'given'), '') != '' OR " +
+						"COALESCE(TRIM(names->>'text'), '') != '' OR " +
+						"COALESCE(TRIM(names->>'prefix'), '') != '' OR " +
+						"COALESCE(TRIM(names->>'suffix'), '') != ''" +
+						")";
+					whereParameters.add(nameSearching);
+				}
+			}
 			returnAll = false;
 		}
 		if (theGivenName != null) {
