@@ -10,7 +10,6 @@ import java.util.UUID;
 import jakarta.annotation.PostConstruct;
 
 import org.apache.commons.lang3.StringUtils;
-import org.hibernate.mapping.Array;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.BooleanType;

@@ -29,7 +29,6 @@ import java.util.UUID;
 
 import org.hl7.fhir.r4.model.HumanName;
 import org.apache.commons.text.WordUtils;
-import org.hibernate.hql.internal.ast.tree.IdentNode;
 import org.hl7.fhir.r4.model.ContactPoint;
 import org.hl7.fhir.exceptions.FHIRException;
 import org.hl7.fhir.r4.model.Address;
