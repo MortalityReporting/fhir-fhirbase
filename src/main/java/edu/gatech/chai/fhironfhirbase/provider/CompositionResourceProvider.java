@@ -82,6 +82,7 @@ import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.param.UriParam;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import ca.uhn.fhir.util.OperationOutcomeUtil;
 import edu.gatech.chai.fhironfhirbase.model.USCorePatient;
 import edu.gatech.chai.fhironfhirbase.utilities.ExtensionUtil;
 import edu.gatech.chai.fhironfhirbase.utilities.MdiProfileUtil;
@@ -701,7 +702,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		}
 
 		BundleEntryComponent bundleEntry = new BundleEntryComponent();
-		bundleEntry.setFullUrl(referenceUrl);
+		// bundleEntry.setFullUrl(referenceUrl);
+		bundleEntry.setFullUrl(OperationUtil.myFullUri(referenceUrl));
 		bundleEntry.setResource(resource);
 
 		return bundleEntry;
@@ -1257,7 +1259,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		// Create a message bundle and add to messageheader to the entry
 		String messageHeaderLocalUrl = MessageHeaderResourceProvider.getType() + "/"
 				+ messageHeader.getIdElement().getIdPart();
-		BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(messageHeaderLocalUrl)
+		BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(OperationUtil.myFullUri(messageHeaderLocalUrl))
 				.setResource(messageHeader);
 		retMessageBundle.addEntry(bundleEntryComponent);
 
@@ -1267,7 +1269,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		// Add diagnosticreport to Bundle.entry
 		String dcrReportLocalUrl = BundleResourceProvider.getType() + "/"
 				+ compositionBundle.getIdElement().getIdPart();
-		bundleEntryComponent = new BundleEntryComponent().setFullUrl(dcrReportLocalUrl).setResource(compositionBundle);
+		bundleEntryComponent = new BundleEntryComponent().setFullUrl(OperationUtil.myFullUri(dcrReportLocalUrl)).setResource(compositionBundle);
 		retMessageBundle.addEntry(bundleEntryComponent);
 
 		if (originalMessageBundle != null) {
@@ -1722,7 +1724,7 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 		OperationOutcome outcome = new OperationOutcome();
 
 		boolean saveIt = false;
-		if (thePersist != null && !thePersist.isEmpty() && thePersist.getValue().booleanValue()) {
+		if (thePersist != null && !thePersist.isEmpty() && thePersist.getValue()) {
 			saveIt = true;
 		}
 
@@ -1813,7 +1815,8 @@ public class CompositionResourceProvider extends BaseResourceProvider {
 
 		// First entry must be composition.
 		BundleEntryComponent bundleEntry = new BundleEntryComponent();
-		bundleEntry.setFullUrlElement(composition.getIdElement());
+		// bundleEntry.setFullUrlElement(composition.getIdElement());
+		bundleEntry.setFullUrl(OperationUtil.myFullUri(composition.getIdElement()));
 		bundleEntry.setResource(composition);
 		bundleEntries.add(bundleEntry);
 

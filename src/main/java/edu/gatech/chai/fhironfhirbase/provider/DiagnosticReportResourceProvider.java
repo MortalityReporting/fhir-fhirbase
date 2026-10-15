@@ -364,7 +364,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 		.execute();
 
 		BundleEntryComponent bundleEntryComponent = new BundleEntryComponent();
-		bundleEntryComponent.setFullUrl(reference.getReference());
+		bundleEntryComponent.setFullUrl(OperationUtil.myFullUri(reference.getReference()));
 		bundleEntryComponent.setResource(resource);
 	
 		return bundleEntryComponent;
@@ -408,7 +408,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 
 		// Create a message bundle and add to messageheader to the entry
 		String messageHeaderLocalUrl = MessageHeaderResourceProvider.getType() + "/" + messageHeader.getIdElement().getIdPart();
-		BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(messageHeaderLocalUrl).setResource(messageHeader);
+		BundleEntryComponent bundleEntryComponent = new BundleEntryComponent().setFullUrl(OperationUtil.myFullUri(messageHeaderLocalUrl)).setResource(messageHeader);
 		retMessageBundle.addEntry(bundleEntryComponent); 
 
 		// fill out other required fields
@@ -416,7 +416,7 @@ public class DiagnosticReportResourceProvider extends BaseResourceProvider {
 
 		// Add diagnosticreport to Bundle.entry
 		String diagnosticReportLocalUrl = DiagnosticReportResourceProvider.getType() + "/" + diagnosticReport.getIdElement().getIdPart();
-		bundleEntryComponent = new BundleEntryComponent().setFullUrl(diagnosticReportLocalUrl).setResource(diagnosticReport);
+		bundleEntryComponent = new BundleEntryComponent().setFullUrl(OperationUtil.myFullUri(diagnosticReportLocalUrl)).setResource(diagnosticReport);
 		retMessageBundle.addEntry(bundleEntryComponent);
 
 		// list of references added.

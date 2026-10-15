@@ -47,6 +47,23 @@ public class OperationUtil {
 		return myUrl;
 	}
 
+	public static String myFullUri(String id) {
+		String myUrl = myHostUrl();
+		if (myUrl.endsWith("/")) {
+			return myUrl + id;
+		} else {
+			return myUrl + "/" + id;
+		}
+	}
+
+	public static String myFullUri(IdType id) {
+		return myFullUri(id.getValue());
+	}
+
+	public static String myFullUri(Resource resource) {
+		return myFullUri(resource.getIdElement());
+	}
+
 	public static String RAVEN_SYSTEM = "urn:mdi:raven";
 
 	public static Identifier generateIdentifier(String system) {
